@@ -37,10 +37,22 @@
     -webkit-user-select: none;
     user-select: none;
     height: 100%;
+    /* Disable pull-to-refresh and overscroll glow */
+    overscroll-behavior-y: none;
+    /* Hide scrollbars globally */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+  }
+
+  /* Hide scrollbars for Chrome, Safari and Opera */
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar {
+    display: none;
   }
 
   body {
     @apply bg-background text-foreground font-body antialiased;
+    /* Disable pull-to-refresh and overscroll glow */
     overscroll-behavior-y: none;
     -webkit-user-select: none;
     user-select: none;
@@ -76,7 +88,7 @@
   }
 }
 
-/* Custom Scrollbars */
+/* Custom Scrollbars utility if needed elsewhere */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
