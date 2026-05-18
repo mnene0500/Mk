@@ -1,17 +1,140 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useEffect } from "react"
+import { useUser, useDoc, useFirestore } from "@/firebase"
+import { doc } from "firebase/firestore"
+import { Button } from "@/components/ui/button"
+import { ChevronLeft, ShieldCheck, Loader2, RefreshCw, AlertCircle, Copy, Check } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 /**
- * @fileOverview Redirects users away from the PesaPal admin diagnostic page.
+ * @fileOverview PesaPal Admin Dashboard.
+ * Allows administrators to run diagnostics, register IPNs, and retrieve the IPN ID.
  */
 export default function PesaPalAdminPage() {
   const router = useRouter()
+  const { user } = useUser()
+  const db = useFirestore()
+  const { toast } = useToast()
   
-  useEffect(() => {
-    router.push("/home")
-  }, [router])
+  const [diagnostics, setDiagnostics] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
 
-  return null
+  const { data: profile } = useDoc<any>(user?.uid ? doc(db, "users", user.uid) : null)
+
+  const runDiagnostics = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch('/api/pesapal/setup')
+      const data = await response.json()
+      setDiagnostics(data)
+    } catch (error) {
+      toast({ variant: "destructive", title: "Diagnostic Error", description: "Failed to connect to setup API." })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (profile && !profile.isAdmin) {
+      router.push("/home")
+    }
+  }, [profile, router])
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    toast({ title: "Copied to clipboard" })
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  if (!profile?.isAdmin) return null
+
+  return (
+    <div className="flex-1 bg-white min-h-screen flex flex-col select-none">
+      <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-50">
+        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full">
+          <ChevronLeft className="w-6 h-6 text-black" />
+        </Button>
+        <h1 className="text-sm font-black text-black uppercase tracking-widest">PesaPal Setup</h1>
+        <div className="w-10" />
+      </header>
+
+      <main className="flex-1 p-6 space-y-8">
+        <div className="bg-blue-50 p-6 rounded-[2rem] border border-blue-100 flex items-start gap-4">
+          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm shrink-0">
+            <ShieldCheck className="w-6 h-6 text-[#00A2FF]" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="font-bold text-black">IPN Registration Tool</h2>
+            <p className="text-[11px] text-gray-500 font-medium leading-relaxed">
+              This tool helps you register your production domain with PesaPal. Run diagnostics once your app is live to get your IPN ID.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <Button 
+            onClick={runDiagnostics} 
+            disabled={loading}
+            className="w-full h-14 rounded-full bg-[#00A2FF] text-white font-bold uppercase tracking-widest text-xs shadow-xl shadow-blue-100 active:scale-95 transition-all"
+          >
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+              <div className="flex items-center gap-2">
+                <RefreshCw className="w-4 h-4" />
+                Run Diagnostics & Register
+              </div>
+            )}
+          </Button>
+
+          {diagnostics && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="p-5 bg-gray-50 rounded-3xl border border-gray-100 space-y-4">
+                <div className="flex justify-between items-center">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</p>
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${diagnostics.status === 'Connected' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                    {diagnostics.status}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Target Callback URL</p>
+                  <code className="block p-3 bg-white rounded-xl text-[10px] font-bold text-black border break-all">
+                    {diagnostics.target_url}
+                  </code>
+                </div>
+
+                {diagnostics.recommended_ipn_id && diagnostics.recommended_ipn_id !== "Not found yet - check list below" ? (
+                  <div className="space-y-2 pt-2">
+                    <p className="text-[10px] font-bold text-[#00A2FF] uppercase tracking-[0.2em]">Copy this to your Environment Variables</p>
+                    <div className="flex gap-2">
+                      <code className="flex-1 p-4 bg-[#00A2FF]/5 rounded-xl text-xs font-black text-[#00A2FF] border border-[#00A2FF]/20 flex items-center justify-between">
+                        PESAPAL_IPN_ID={diagnostics.recommended_ipn_id}
+                        <button onClick={() => copyToClipboard(diagnostics.recommended_ipn_id)} className="ml-2 hover:opacity-50">
+                          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </code>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3">
+                    <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-[10px] font-medium text-amber-700">
+                      IPN ID not found. Ensure your app is deployed to a public URL and reachable by PesaPal.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+
+      <footer className="p-8 text-center opacity-30">
+        <p className="text-[9px] font-bold uppercase tracking-[0.3em]">QIVO Payment Authority</p>
+      </footer>
+    </div>
+  )
 }
