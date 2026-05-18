@@ -12,7 +12,7 @@ import Link from "next/link"
 
 /**
  * @fileOverview Welcome / Auth Entry Page.
- * Replaced Fast Login with Google Authentication.
+ * Replaced Fast Login with Google Authentication and matched styling to user screenshot.
  */
 export default function WelcomePage() {
   const [mounted, setMounted] = useState(false)
@@ -36,13 +36,8 @@ export default function WelcomePage() {
           if (snap.exists() && snap.data().onboardingComplete) {
             router.replace("/home")
           } else {
-            // Google and Email users go to full onboarding
-            // Anonymous users (legacy) go to fast setup
-            if (user.isAnonymous) {
-              router.replace("/fastonboard")
-            } else {
-              router.replace("/onboarding")
-            }
+            // Google and Email users go to standard onboarding
+            router.replace("/onboarding")
           }
         } catch (e) {
           router.replace("/onboarding")
@@ -57,7 +52,7 @@ export default function WelcomePage() {
     try {
       const provider = new GoogleAuthProvider()
       await signInWithPopup(auth, provider)
-      // Redirection is handled by the useEffect above once the auth state changes
+      // Redirection is handled by the useEffect above
     } catch (error: any) {
       console.error("Google Sign-In Error:", error)
       setLoading(false)
@@ -101,12 +96,23 @@ export default function WelcomePage() {
           </div>
         </div>
 
-        {/* Action Buttons */}
+        {/* Action Buttons Swapped to match screenshot priority */}
         <div className="w-full max-w-sm space-y-4 animate-in fade-in slide-in-from-bottom-10 duration-1000">
+          <Button 
+            onClick={() => router.push("/auth")}
+            className="w-full h-16 rounded-3xl bg-white text-black hover:bg-white/90 font-bold text-sm tracking-widest uppercase shadow-2xl active:scale-95 transition-all"
+          >
+            <div className="flex items-center justify-center gap-3">
+              <Mail className="w-5 h-5" />
+              Continue with Email
+            </div>
+          </Button>
+
           <Button 
             disabled={loading}
             onClick={handleGoogleLogin}
-            className="w-full h-16 rounded-3xl bg-white text-black hover:bg-white/90 font-bold text-sm tracking-widest uppercase shadow-2xl active:scale-95 transition-all"
+            variant="ghost"
+            className="w-full h-16 rounded-3xl border border-white/20 bg-white/5 backdrop-blur-xl text-white hover:bg-white/10 font-bold text-sm tracking-widest uppercase active:scale-95 transition-all"
           >
             <div className="flex items-center justify-center gap-3">
               {loading ? (
@@ -132,17 +138,6 @@ export default function WelcomePage() {
                 </svg>
               )}
               Continue with Google
-            </div>
-          </Button>
-
-          <Button 
-            onClick={() => router.push("/auth")}
-            variant="ghost"
-            className="w-full h-16 rounded-3xl border border-white/20 bg-white/5 backdrop-blur-xl text-white hover:bg-white/10 font-bold text-sm tracking-widest uppercase active:scale-95 transition-all"
-          >
-            <div className="flex items-center justify-center gap-3">
-              <Mail className="w-5 h-5" />
-              Use Email
             </div>
           </Button>
 
