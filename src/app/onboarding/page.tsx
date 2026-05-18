@@ -50,9 +50,9 @@ function OnboardingContent() {
 
   const generateRandomDOB = () => {
     const currentYear = new Date().getFullYear();
-    const maxYear = currentYear - 19;
-    const minYear = currentYear - 40;
-    const year = Math.floor(Math.random() * (maxYear - minYear + 1) + minYear);
+    // Random age between 21 and 50 to satisfy "above 20 yrs"
+    const age = Math.floor(Math.random() * 30) + 21; 
+    const year = currentYear - age;
     const month = Math.floor(Math.random() * 12);
     const day = Math.floor(Math.random() * 28) + 1;
     return new Date(year, month, day).toISOString().split('T')[0];
@@ -75,9 +75,10 @@ function OnboardingContent() {
 
       const mId = existingData?.matchFlowId || generateMatchFlowId()
       
-      const finalName = isFast ? `Guest ${mId.substring(0, 3)}` : name;
+      // Fast Login Logic: Use Guest name with digits and random DOB > 20
+      const finalName = isFast ? `Guest ${mId.slice(-4)}` : name;
       const finalDob = isFast ? generateRandomDOB() : dob;
-      const finalLookingFor = isFast ? LOOKING_FOR_OPTIONS[Math.floor(Math.random() * LOOKING_FOR_OPTIONS.length)] : lookingFor;
+      const finalLookingFor = isFast ? "Dating" : lookingFor;
 
       const initialCoins = gender === 'male' ? 150 : 0
       const initialDiamonds = gender === 'female' ? 150 : 0
@@ -228,7 +229,7 @@ function OnboardingContent() {
             <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-start gap-3">
               <Globe className="w-5 h-5 text-[#00A2FF] shrink-0 mt-0.5" />
               <p className="text-[10px] font-medium text-[#00A2FF]/80 leading-relaxed">
-                We use this to show you people nearby. You can update your profile details later in settings.
+                Fast setup gets you matched in seconds. You can customize your full profile later in the Me tab.
               </p>
             </div>
           </div>
