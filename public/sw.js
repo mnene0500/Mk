@@ -1,8 +1,7 @@
 const CACHE_NAME = 'matchflow-v1';
 const ASSETS_TO_CACHE = [
   '/',
-  '/manifest.json',
-  '/favicon.ico'
+  '/manifest.json'
 ];
 
 self.addEventListener('install', (event) => {
