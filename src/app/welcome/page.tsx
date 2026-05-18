@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast"
 
 /**
  * @fileOverview Welcome / Auth Entry Page.
- * Implements standard Google and Email authentication flows with standard onboarding.
+ * Implements standard Google and Email authentication flows for QIVO.
  */
 export default function WelcomePage() {
   const [mounted, setMounted] = useState(false)
@@ -27,7 +27,6 @@ export default function WelcomePage() {
     setMounted(true)
   }, [])
 
-  // Intelligence: Redirect users based on their onboarding status if already logged in
   useEffect(() => {
     if (isInitialized && user) {
       const checkRedirect = async () => {
@@ -37,7 +36,6 @@ export default function WelcomePage() {
           if (snap.exists() && snap.data().onboardingComplete) {
             router.replace("/home")
           } else {
-            // New users or incomplete profiles go to standard onboarding
             router.replace("/onboarding")
           }
         } catch (e) {
@@ -53,11 +51,15 @@ export default function WelcomePage() {
     try {
       const provider = new GoogleAuthProvider()
       await signInWithPopup(auth, provider)
-      // Redirection is handled by the intelligent useEffect above
     } catch (error: any) {
-      // Handle the case where the user closes the popup manually
       if (error.code === 'auth/popup-closed-by-user') {
-        // Reset state silently as this is expected user behavior
+        // Silent
+      } else if (error.code === 'auth/network-request-failed') {
+        toast({
+          variant: "destructive",
+          title: "Network Error",
+          description: "Please ensure 'qivo-gamma.vercel.app' is added to Authorized Domains in Firebase Console Settings."
+        })
       } else {
         console.error("Google Sign-In Error:", error)
         toast({
@@ -70,14 +72,12 @@ export default function WelcomePage() {
     }
   }
 
-  // Prevent flash of content during initialization
   if (!mounted || authLoading || !isInitialized || user) {
     return <div className="flex-1 bg-black min-h-screen" />
   }
 
   return (
     <div className="relative flex-1 flex flex-col min-h-screen bg-black overflow-hidden select-none">
-      {/* Cinematic Video Background - Removed scale-105 to stop movement */}
       <div className="absolute inset-0 z-0 overflow-hidden">
         <video
           autoPlay
@@ -93,7 +93,6 @@ export default function WelcomePage() {
       </div>
 
       <div className="relative z-10 flex-1 flex flex-col px-8 pt-48 pb-16 justify-between items-center text-center">
-        {/* Branding Section - Removed animate-in classes */}
         <div className="flex flex-col items-center space-y-6">
           <div className="space-y-3">
             <h1 className="text-6xl font-logo font-black text-white drop-shadow-2xl tracking-tight">
@@ -109,7 +108,6 @@ export default function WelcomePage() {
           </div>
         </div>
 
-        {/* Primary Auth Actions - Removed animate-in classes */}
         <div className="w-full max-w-sm space-y-4">
           <Button 
             onClick={() => router.push("/auth")}

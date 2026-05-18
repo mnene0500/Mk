@@ -46,8 +46,25 @@ export default function UnifiedAuthPage() {
     return "Strong"
   }, [passwordStrength, password])
 
-  const generateMatchFlowId = () => {
+  const generateQivoId = () => {
     return Math.floor(1000000 + Math.random() * 900000000).toString();
+  }
+
+  const handleAuthError = (error: any, type: 'Login' | 'Registration') => {
+    console.error(`[${type} Error]:`, error.code, error.message);
+    
+    let description = error.message;
+    if (error.code === 'auth/network-request-failed') {
+      description = "Network error. Please ensure this domain is added to 'Authorized Domains' in Firebase Console Settings.";
+    } else if (error.code === 'auth/operation-not-allowed') {
+      description = "Email/Password sign-in is not enabled in your Firebase Console.";
+    }
+
+    toast({
+      variant: "destructive",
+      title: `${type} failed`,
+      description: description,
+    })
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -67,12 +84,7 @@ export default function UnifiedAuthPage() {
         router.push("/onboarding")
       }
     } catch (error: any) {
-      console.error("[Login Error]:", error.code, error.message);
-      toast({
-        variant: "destructive",
-        title: "Login failed",
-        description: error.message || "Invalid credentials. Please ensure Email/Password is enabled in Firebase Console.",
-      })
+      handleAuthError(error, 'Login')
     } finally {
       setLoading(false)
     }
@@ -96,7 +108,7 @@ export default function UnifiedAuthPage() {
       const userData = {
         uid: user.uid,
         email: user.email,
-        matchFlowId: generateMatchFlowId(),
+        matchFlowId: generateQivoId(), // Stored as matchFlowId for schema compatibility
         onboardingComplete: false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -105,12 +117,7 @@ export default function UnifiedAuthPage() {
       await setDoc(doc(db, "users", user.uid), userData, { merge: true })
       router.push("/onboarding")
     } catch (error: any) {
-      console.error("[Registration Error]:", error.code, error.message);
-      toast({
-        variant: "destructive",
-        title: "Registration failed",
-        description: error.message || "Could not create account. Ensure Email/Password provider is enabled.",
-      })
+      handleAuthError(error, 'Registration')
     } finally {
       setLoading(false)
     }
@@ -122,7 +129,7 @@ export default function UnifiedAuthPage() {
         <Button variant="ghost" size="icon" onClick={() => router.push("/")} className="rounded-full">
           <ChevronLeft className="w-6 h-6 text-black" />
         </Button>
-        <h2 className="text-xl font-bold text-[#00A2FF] flex-1 text-center pr-10">Account Access</h2>
+        <h2 className="text-xl font-bold text-[#00A2FF] flex-1 text-center pr-10 uppercase tracking-tighter">QIVO Access</h2>
       </header>
 
       <div className="flex-1 flex flex-col justify-center space-y-8 max-w-sm mx-auto w-full">

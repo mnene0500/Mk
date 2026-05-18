@@ -38,7 +38,6 @@ export default function OnboardingPage() {
 
   const totalSteps = 3
 
-  // Pre-fill name from auth profile (Google/Email)
   useEffect(() => {
     if (user?.displayName && !name) {
       setName(user.displayName)
@@ -51,7 +50,7 @@ export default function OnboardingPage() {
     return d.toISOString().split('T')[0]
   }, [])
 
-  const generateMatchFlowId = () => {
+  const generateQivoId = () => {
     const min = 1000000; 
     const max = 999999999; 
     return Math.floor(Math.random() * (max - min + 1) + min).toString();
@@ -66,13 +65,12 @@ export default function OnboardingPage() {
       const userSnap = await getDoc(userRef)
       const existingData = userSnap.data()
 
-      const mId = existingData?.matchFlowId || generateMatchFlowId()
+      const qId = existingData?.matchFlowId || generateQivoId()
       
       const initialCoins = gender === 'male' ? 150 : 0
       const initialDiamonds = gender === 'female' ? 150 : 0
       const timestamp = Date.now()
 
-      // Use Google photo if available, otherwise fallback to placeholder
       const profilePhoto = user.photoURL || `https://picsum.photos/seed/${user.uid}/400/400`
 
       const updateData: any = {
@@ -87,7 +85,7 @@ export default function OnboardingPage() {
         photoURL: profilePhoto,
         updatedAt: serverTimestamp(),
         createdAt: existingData?.createdAt || serverTimestamp(),
-        matchFlowId: mId,
+        matchFlowId: qId,
         isDeleted: false,
         isVerified: false,
         isAdmin: false,
@@ -179,7 +177,7 @@ export default function OnboardingPage() {
                 className="rounded-2xl h-14 border-gray-100 bg-gray-50 focus:bg-white text-lg font-bold"
               />
               {user?.displayName && (
-                <p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest ml-1">Imported from profile</p>
+                <p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest ml-1">Imported from Google</p>
               )}
             </div>
             <div className="space-y-2">
