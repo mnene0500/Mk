@@ -77,7 +77,7 @@ export default function OnboardingPage() {
 
       const updateData: any = {
         uid: user.uid,
-        email: user.email || `anon_${user.uid}@matchflow.app`,
+        email: user.email || `anon_${user.uid}@qivo.app`,
         name: name,
         gender,
         dob: dob,

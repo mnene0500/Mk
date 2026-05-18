@@ -20,14 +20,14 @@ export default function TermsOfServicePage() {
         <section className="space-y-3">
           <h2 className="text-base font-bold text-black">1. Acceptance of Terms</h2>
           <p className="text-sm text-gray-600 leading-relaxed">
-            By accessing or using MatchFlow, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the application.
+            By accessing or using QIVO, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the application.
           </p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-base font-bold text-black">2. Eligibility</h2>
           <p className="text-sm text-gray-600 leading-relaxed">
-            You must be at least 18 years of age to create an account on MatchFlow. By using the service, you represent and warrant that you have the right, authority, and capacity to enter into this agreement.
+            You must be at least 18 years of age to create an account on QIVO. By using the service, you represent and warrant that you have the right, authority, and capacity to enter into this agreement.
           </p>
         </section>
 
@@ -41,7 +41,7 @@ export default function TermsOfServicePage() {
         <section className="space-y-3">
           <h2 className="text-base font-bold text-black">4. Virtual Currency</h2>
           <p className="text-sm text-gray-600 leading-relaxed">
-            MatchFlow uses "Coins" and "Diamonds." Coins are purchased and used for interactions. Diamonds are earned through engagement and can be converted to Coins. These virtual currencies have no monetary value outside the app and are non-refundable.
+            QIVO uses "Coins" and "Diamonds." Coins are purchased and used for interactions. Diamonds are earned through engagement and can be converted to Coins. These virtual currencies have no monetary value outside the app and are non-refundable.
           </p>
         </section>
 

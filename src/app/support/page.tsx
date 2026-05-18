@@ -17,13 +17,13 @@ import {
 import { cn } from "@/lib/utils"
 
 /**
- * @fileOverview High-end Customer Support page for MatchFlow.
+ * @fileOverview High-end Customer Support page for QIVO.
  * Provides direct WhatsApp integration and service information.
  */
 export default function CustomerSupportPage() {
   const router = useRouter()
   
-  // Direct support line for the MatchFlow team
+  // Direct support line for the QIVO team
   const handleWhatsAppChat = () => window.open("https://wa.me/254713934404", "_blank")
 
   return (
@@ -138,7 +138,7 @@ export default function CustomerSupportPage() {
       </main>
 
       <footer className="p-12 text-center bg-white border-t border-gray-50">
-        <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.5em] mb-2">MatchFlow Global Support</p>
+        <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.5em] mb-2">QIVO Global Support</p>
         <p className="text-[10px] font-bold text-gray-400">Direct Line: +254 713 934 404</p>
       </footer>
     </div>

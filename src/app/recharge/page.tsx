@@ -105,8 +105,8 @@ function RechargeContent() {
     try {
       const result = await initiatePesaPalPayment(pkg.price, {
         uid: user.uid,
-        email: user.email || `user_${user.uid}@matchflow.app`,
-        name: profile.name || "MatchFlow User"
+        email: user.email || `user_${user.uid}@qivo.app`,
+        name: profile.name || "QIVO User"
       })
       if (result.success && result.redirect_url) {
         setPaymentUrl(result.redirect_url)

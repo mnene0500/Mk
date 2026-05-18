@@ -144,7 +144,7 @@ export default function PesaPalAdminPage() {
                 </div>
                 <ul className="space-y-3 text-[11px] text-gray-400 list-decimal pl-4">
                   <li>Open your <span className="text-white">Vercel Dashboard</span>.</li>
-                  <li>Go to <span className="text-white">Settings > Environment Variables</span>.</li>
+                  <li>Go to <span className="text-white">Settings &gt; Environment Variables</span>.</li>
                   <li>Add <span className="text-white font-mono">PESAPAL_IPN_ID</span> with the value above.</li>
                   <li>Trigger a <span className="text-white">Redeploy</span> of your main branch.</li>
                 </ul>
