@@ -1,0 +1,60 @@
+
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with roles and agency status",
+      "type": "object",
+      "properties": {
+        "matchFlowId": { "type": "string" },
+        "isAdmin": { "type": "boolean" },
+        "isCoinSeller": { "type": "boolean" },
+        "isAgent": { "type": "boolean" },
+        "agencyId": { "type": "string" },
+        "agencyStatus": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Agency": {
+      "title": "Agency",
+      "description": "Recruitment agency",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "agentUid": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Withdrawal": {
+      "title": "Withdrawal",
+      "description": "Withdrawal request",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "diamonds": { "type": "number" },
+        "amountKes": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "paid", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "auth": {
+    "providers": ["google.com", "password"]
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "#/entities/User",
+      "description": "User profiles"
+    },
+    "/agencies/{agencyCode}": {
+      "schema": "#/entities/Agency",
+      "description": "Agencies indexed by code"
+    },
+    "/agencies/{agencyCode}/withdrawals/{withdrawalId}": {
+      "schema": "#/entities/Withdrawal",
+      "description": "Withdrawal requests for an agency"
+    }
+  }
+}
