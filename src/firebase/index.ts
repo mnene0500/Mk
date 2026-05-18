@@ -1,9 +1,9 @@
-
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { getDatabase, Database } from 'firebase/database';
 import { firebaseConfig } from './config';
+import { useUser } from './auth/use-user';
 
 export function initializeFirebase() {
   let app: FirebaseApp;
@@ -19,3 +19,5 @@ export function initializeFirebase() {
 
   return { firebaseApp: app, firestore, auth, database };
 }
+
+export { useUser };
