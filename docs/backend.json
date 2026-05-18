@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "User": {
@@ -22,6 +21,8 @@
         "isVerified": { "type": "boolean" },
         "agencyId": { "type": "string" },
         "agencyStatus": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "checkInStreak": { "type": "number", "description": "Consecutive days the user has checked in" },
+        "lastCheckInDate": { "type": "string", "format": "date-time", "description": "The last time the user checked in" },
         "blocking": { "type": "array", "items": { "type": "string" } },
         "blockedBy": { "type": "array", "items": { "type": "string" } },
         "createdAt": { "type": "string", "format": "date-time" },
