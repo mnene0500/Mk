@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -7,13 +8,22 @@
       "properties": {
         "uid": { "type": "string" },
         "email": { "type": "string", "format": "email" },
+        "name": { "type": "string" },
+        "gender": { "type": "string", "enum": ["male", "female"] },
+        "dob": { "type": "string", "format": "date" },
+        "country": { "type": "string" },
+        "lookingFor": { "type": "string" },
+        "photoURL": { "type": "string" },
         "matchFlowId": { "type": "string" },
         "onboardingComplete": { "type": "boolean" },
         "isAdmin": { "type": "boolean" },
         "isCoinSeller": { "type": "boolean" },
         "isAgent": { "type": "boolean" },
+        "isVerified": { "type": "boolean" },
         "agencyId": { "type": "string" },
         "agencyStatus": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "blocking": { "type": "array", "items": { "type": "string" } },
+        "blockedBy": { "type": "array", "items": { "type": "string" } },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       }
