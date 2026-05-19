@@ -40,51 +40,6 @@ export async function getAccessToken(): Promise<string> {
 }
 
 /**
- * Registers an IPN URL with PesaPal.
- */
-export async function registerIPN() {
-  try {
-    const token = await getAccessToken();
-    const response = await fetch(`${PESAPAL_CONFIG.API_BASE_URL}/api/URLSetup/RegisterIPN`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({
-        url: PESAPAL_CONFIG.IPN_URL,
-        ipn_notification_type: 'GET',
-      }),
-    });
-
-    return await response.json();
-  } catch (error: any) {
-    return { error: error.message };
-  }
-}
-
-/**
- * Fetches all registered IPNs for the account.
- */
-export async function getIpnList() {
-  try {
-    const token = await getAccessToken();
-    const response = await fetch(`${PESAPAL_CONFIG.API_BASE_URL}/api/URLSetup/GetIpnList`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
-      },
-    });
-
-    return await response.json();
-  } catch (error: any) {
-    return { error: error.message };
-  }
-}
-
-/**
  * Initiates a payment request with PesaPal.
  */
 export async function initiatePesaPalPayment(amount: number, user: { uid: string, email: string, name: string }) {
@@ -97,7 +52,6 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
     }
 
     const token = await getAccessToken();
-    // Using QV prefix for QIVO. Format: QV_{uid}_{timestamp}
     const merchantReference = `QV_${user.uid}_${Date.now()}`;
     
     const payload = {
@@ -175,38 +129,38 @@ export async function getTransactionStatus(orderTrackingId: string): Promise<Tra
 
 /**
  * Securely fulfills a payment by checking status and updating RTDB.
- * Used for both IPN and direct redirect checks.
+ * This is the CORE logic that awards coins.
  */
 export async function fulfillPaymentAction(orderTrackingId: string, merchantReference: string) {
-  console.log(`[Fulfillment Request] Tracking: ${orderTrackingId}, Ref: ${merchantReference}`);
+  console.log(`[Fulfillment Start] Tracking: ${orderTrackingId}, Ref: ${merchantReference}`);
   
   try {
     const status = await getTransactionStatus(orderTrackingId);
-    console.log(`[PesaPal Status] Code: ${status?.status_code}, Amount: ${status?.amount}`);
+    console.log(`[PesaPal Response] Status Code: ${status?.status_code}, Amount: ${status?.amount}`);
     
-    // Status Code 1 = Completed/Success
+    // Status Code 1 = Completed/Success in PesaPal v3
     if (status && (Number(status.status_code) === 1)) {
       const { database: rtdb } = initializeFirebase();
       
-      // Robust UID Extraction: Expecting QV_{uid}_{timestamp}
+      // 1. Extract UID from Reference Format: QV_{uid}_{timestamp}
       const parts = merchantReference.split('_');
       const uid = parts[1];
       const amount = Number(status.amount);
 
       if (!uid) {
-        console.error("[Fulfillment Error] Could not extract UID from reference:", merchantReference);
+        console.error("[Fulfillment Error] Invalid Reference (No UID):", merchantReference);
         return { success: false, error: "Invalid Reference Format" };
       }
 
-      // Idempotency: Check if already processed
+      // 2. Idempotency Check: Prevent duplicate coin awards
       const processedRef = ref(rtdb, `processed_payments/${orderTrackingId}`);
       const snap = await get(processedRef);
       if (snap.exists()) {
-        console.log("[Fulfillment] Already processed. Skipping.");
-        return { success: true, message: "Already fulfilled" };
+        console.log("[Fulfillment] Order already processed. Skipping award.");
+        return { success: true, message: "Already fulfilled", coins: snap.val().coins };
       }
 
-      // Map amount to coins (Support exact and threshold matching)
+      // 3. Map Amount to Coins
       let coinsToAward = 0;
       if (amount >= 1800) coinsToAward = 20000;
       else if (amount >= 1000) coinsToAward = 10000;
@@ -214,13 +168,18 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
       else if (amount >= 230) coinsToAward = 2000;
       else if (amount >= 120) coinsToAward = 1000;
       else if (amount >= 80) coinsToAward = 500;
-      else if (amount >= 0.5) coinsToAward = 200; // Test package (any amount > 0.5)
+      else if (amount >= 0.5) coinsToAward = 200; // Test package mapping
 
       if (coinsToAward > 0) {
         const timestamp = Date.now();
         const updates: any = {};
+        
+        // 4. ATOMIC REALTIME UPDATE
+        // Give Coins
         updates[`balances/${uid}/coins`] = increment(coinsToAward);
         updates[`balances/${uid}/updatedAt`] = timestamp;
+        
+        // Record as processed
         updates[`processed_payments/${orderTrackingId}`] = {
           uid,
           amount,
@@ -231,7 +190,7 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
 
         await update(ref(rtdb), updates);
 
-        // Record History
+        // 5. Update History Ledger
         const historyRef = push(ref(rtdb, `coin_history/${uid}`));
         await set(historyRef, {
           amount: coinsToAward,
@@ -240,15 +199,55 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
           timestamp
         });
 
-        console.log(`[Fulfillment Success] Awarded ${coinsToAward} to ${uid}`);
+        console.log(`[Fulfillment SUCCESS] Awarded ${coinsToAward} coins to user ${uid}`);
         return { success: true, coins: coinsToAward };
       } else {
-        console.error("[Fulfillment Error] No coin mapping for amount:", amount);
+        console.error("[Fulfillment Error] No coin package found for amount:", amount);
+        return { success: false, error: "No matching package found" };
       }
     }
-    return { success: false, error: "Payment not completed or mapping failed" };
+    
+    console.warn(`[Fulfillment Pending] Transaction ${orderTrackingId} is not in success state (Status: ${status?.status_code})`);
+    return { success: false, error: "Payment not completed" };
   } catch (err: any) {
-    console.error("[Fulfillment Exception]:", err.message);
+    console.error("[Fulfillment Critical Error]:", err.message);
     return { success: false, error: err.message };
+  }
+}
+
+export async function registerIPN() {
+  try {
+    const token = await getAccessToken();
+    const response = await fetch(`${PESAPAL_CONFIG.API_BASE_URL}/api/URLSetup/RegisterIPN`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        url: PESAPAL_CONFIG.IPN_URL,
+        ipn_notification_type: 'GET',
+      }),
+    });
+    return await response.json();
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+export async function getIpnList() {
+  try {
+    const token = await getAccessToken();
+    const response = await fetch(`${PESAPAL_CONFIG.API_BASE_URL}/api/URLSetup/GetIpnList`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+      },
+    });
+    return await response.json();
+  } catch (error: any) {
+    return { error: error.message };
   }
 }
