@@ -177,12 +177,14 @@ function ChatsContent() {
         const list = Object.entries(data)
           .map(([id, val]: [string, any]) => ({ id, ...val } as ChatSummary))
           .filter(summary => {
-            // Only show chats with a message that is newer than the deletion date
-            const hasMessage = summary.lastMessage && summary.lastMessage.trim() !== "";
-            const isNotDeleted = !summary.deletedAt || summary.lastMessageAt > summary.deletedAt;
-            return hasMessage && isNotDeleted;
+            // Only show chats with a real message that is newer than the deletion date
+            const hasActualMessage = summary.lastMessage && 
+                                   summary.lastMessage.trim() !== "" && 
+                                   summary.lastMessage !== "Start talking...";
+            const isNotDeleted = !summary.deletedAt || (summary.lastMessageAt || 0) > summary.deletedAt;
+            return hasActualMessage && isNotDeleted;
           })
-          .sort((a, b) => b.lastMessageAt - a.lastMessageAt)
+          .sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0))
         setChatSummaries(list)
       } else {
         setChatSummaries([])
@@ -219,9 +221,9 @@ function ChatsContent() {
       if (data) {
         const msgs = Object.entries(data).map(([id, val]: [string, any]) => ({ id, ...val }))
         const filtered = msgs
-          .filter(m => m.timestamp > activeDeletedAt)
+          .filter((m: any) => m.timestamp > activeDeletedAt)
           .sort((a, b) => b.timestamp - a.timestamp)
-        setMessages(filtered)
+        setMessages(filtered as Message[])
       } else {
         setMessages([])
       }
@@ -333,10 +335,7 @@ function ChatsContent() {
         timestamp: Date.now()
       }
 
-      // Signal the recipient
       await set(ref(rtdb, `calls/${startWithId}`), callData)
-      
-      // Redirect to call room
       router.push(`/call/${chatId}?type=${type}&caller=true&partner=${encodeURIComponent(partnerProfile?.name || 'Partner')}`)
     } catch (err: any) {
       toast({ variant: "destructive", title: "Calling Error", description: "Could not start call. Try again." })

@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -11,13 +10,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
  * Supports image/jpeg, image/png, etc.
  * @param base64 The base64 string of the image.
  * @param bucket The name of the Supabase bucket.
- * @param path The destination path in the bucket.
+ * @param path The destination path in the bucket (e.g., 'uid/profile_123.jpg').
  * @returns The public URL of the uploaded image.
  */
 export async function uploadBase64Image(base64: string, bucket: string, path: string): Promise<string> {
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.error("Supabase configuration missing in Environment Variables.");
-    return base64; // Return original if config missing
+    console.warn("Supabase configuration missing in Environment Variables. Returning base64.");
+    return base64;
   }
 
   try {
@@ -25,7 +24,6 @@ export async function uploadBase64Image(base64: string, bucket: string, path: st
     const matches = base64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/);
     
     if (!matches || matches.length !== 3) {
-      // If it doesn't look like a base64 data URI, it's probably already a URL
       if (base64.startsWith('http')) return base64;
       throw new Error("Invalid base64 format");
     }
@@ -43,8 +41,8 @@ export async function uploadBase64Image(base64: string, bucket: string, path: st
     const blob = new Blob([byteArray], { type: mimeType });
 
     // 3. Upload to Supabase
-    // Note: If you get an RLS error, ensure your bucket policies allow Public 'Insert'
-    const { data, error } = await supabase.storage
+    // Note: If you get an RLS error, ensure your bucket policies allow Public 'INSERT' and 'SELECT'
+    const { error } = await supabase.storage
       .from(bucket)
       .upload(path, blob, {
         contentType: mimeType,

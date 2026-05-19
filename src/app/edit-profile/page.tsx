@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
@@ -116,7 +115,6 @@ export default function EditProfilePage() {
     canvas.height = pixelCrop.height
     ctx.drawImage(image, pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height, 0, 0, pixelCrop.width, pixelCrop.height)
     
-    // Default to JPEG for quality/size balance
     return canvas.toDataURL('image/jpeg', 0.85)
   }
 
@@ -125,7 +123,6 @@ export default function EditProfilePage() {
       try {
         const croppedBase64 = await getCroppedImg(tempImage, croppedAreaPixels)
         if (targetPhotoIndex === 'profile') {
-          // Sync new profile photo to gallery if space exists
           const newGallery = [...formData.additionalPhotos];
           if (newGallery.length < 4 && !newGallery.includes(croppedBase64)) {
              newGallery.unshift(croppedBase64);
@@ -152,12 +149,12 @@ export default function EditProfilePage() {
     if (!user || !db) return
     setSaving(true)
     try {
-      // 1. Process and upload all new photos to Supabase
       const finalFormData = { ...formData };
       
       // Upload profile photo if it's base64
       if (formData.photoURL.startsWith('data:image')) {
-        const url = await uploadBase64Image(formData.photoURL, 'photos', `${user.uid}/profile_${Date.now()}.jpg`);
+        const ext = formData.photoURL.includes('png') ? 'png' : 'jpg';
+        const url = await uploadBase64Image(formData.photoURL, 'photos', `${user.uid}/profile_${Date.now()}.${ext}`);
         finalFormData.photoURL = url;
       }
 
@@ -173,7 +170,6 @@ export default function EditProfilePage() {
       );
       finalFormData.additionalPhotos = uploadedGallery;
 
-      // 2. Save URLs to Firestore
       await updateDoc(doc(db, "users", user.uid), {
         ...finalFormData,
         updatedAt: serverTimestamp()
@@ -185,7 +181,7 @@ export default function EditProfilePage() {
       toast({ 
         variant: "destructive", 
         title: "Error", 
-        description: error.message || "Failed to update profile. Ensure your Supabase policies are set to allow public uploads." 
+        description: error.message || "Failed to update profile." 
       })
     } finally {
       setSaving(false)
