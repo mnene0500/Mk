@@ -19,6 +19,11 @@ export interface TransactionStatusResponse {
  * Authenticates with PesaPal and returns an access token.
  */
 export async function getAccessToken(): Promise<string> {
+  if (!PESAPAL_CONFIG.CONSUMER_KEY || !PESAPAL_CONFIG.CONSUMER_SECRET) {
+    console.error("[PesaPal] CRITICAL: Consumer Key or Secret is missing in Environment Variables.");
+    throw new Error('PesaPal Configuration Error: Missing Keys');
+  }
+
   const response = await fetch(`${PESAPAL_CONFIG.API_BASE_URL}/api/Auth/RequestToken`, {
     method: 'POST',
     headers: {
@@ -32,7 +37,9 @@ export async function getAccessToken(): Promise<string> {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to fetch PesaPal access token. Check your Consumer Key/Secret.');
+    const errText = await response.text();
+    console.error("[PesaPal] Auth Failed:", errText);
+    throw new Error('Failed to fetch PesaPal access token.');
   }
 
   const data = await response.json();
@@ -52,6 +59,7 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
     }
 
     const token = await getAccessToken();
+    // Reference format: QV_{uid}_{timestamp}
     const merchantReference = `QV_${user.uid}_${Date.now()}`;
     
     const payload = {
@@ -135,6 +143,7 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
   console.log(`[Fulfillment Start] Tracking: ${orderTrackingId}, Ref: ${merchantReference}`);
   
   try {
+    // 1. Verify payment status with PesaPal API
     const status = await getTransactionStatus(orderTrackingId);
     console.log(`[PesaPal Response] Status Code: ${status?.status_code}, Amount: ${status?.amount}`);
     
@@ -142,17 +151,17 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
     if (status && (Number(status.status_code) === 1)) {
       const { database: rtdb } = initializeFirebase();
       
-      // 1. Extract UID from Reference Format: QV_{uid}_{timestamp}
-      const parts = merchantReference.split('_');
-      const uid = parts[1];
-      const amount = Number(status.amount);
+      // 2. Extract UID from Reference Format: QV_{uid}_{timestamp}
+      // We use a regex or split approach that is robust
+      const match = merchantReference.match(/^QV_([^_]+)_/);
+      const uid = match ? match[1] : merchantReference.split('_')[1];
 
       if (!uid) {
-        console.error("[Fulfillment Error] Invalid Reference (No UID):", merchantReference);
+        console.error("[Fulfillment Error] Could not extract UID from reference:", merchantReference);
         return { success: false, error: "Invalid Reference Format" };
       }
 
-      // 2. Idempotency Check: Prevent duplicate coin awards
+      // 3. Idempotency Check: Prevent duplicate coin awards
       const processedRef = ref(rtdb, `processed_payments/${orderTrackingId}`);
       const snap = await get(processedRef);
       if (snap.exists()) {
@@ -160,8 +169,10 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
         return { success: true, message: "Already fulfilled", coins: snap.val().coins };
       }
 
-      // 3. Map Amount to Coins
+      // 4. Map Paid Amount to Coin Packages
+      const amount = Number(status.amount);
       let coinsToAward = 0;
+      
       if (amount >= 1800) coinsToAward = 20000;
       else if (amount >= 1000) coinsToAward = 10000;
       else if (amount >= 550) coinsToAward = 5000;
@@ -174,7 +185,7 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
         const timestamp = Date.now();
         const updates: any = {};
         
-        // 4. ATOMIC REALTIME UPDATE
+        // 5. ATOMIC REALTIME UPDATE
         // Give Coins
         updates[`balances/${uid}/coins`] = increment(coinsToAward);
         updates[`balances/${uid}/updatedAt`] = timestamp;
@@ -185,12 +196,13 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
           amount,
           coins: coinsToAward,
           timestamp,
+          merchantReference,
           payment_method: status.payment_method || 'pesapal'
         };
 
         await update(ref(rtdb), updates);
 
-        // 5. Update History Ledger
+        // 6. Update History Ledger
         const historyRef = push(ref(rtdb, `coin_history/${uid}`));
         await set(historyRef, {
           amount: coinsToAward,
@@ -207,7 +219,7 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
       }
     }
     
-    console.warn(`[Fulfillment Pending] Transaction ${orderTrackingId} is not in success state (Status: ${status?.status_code})`);
+    console.warn(`[Fulfillment Blocked] Transaction ${orderTrackingId} is not in success state (Status: ${status?.status_code})`);
     return { success: false, error: "Payment not completed" };
   } catch (err: any) {
     console.error("[Fulfillment Critical Error]:", err.message);
