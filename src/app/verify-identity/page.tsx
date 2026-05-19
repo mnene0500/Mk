@@ -14,7 +14,7 @@ import imageCompression from "browser-image-compression"
 
 /**
  * @fileOverview Identity Verification Page.
- * Verification status is now fetched directly from the database without local caching.
+ * Removed forced 'capture="user"' to allow Gallery choice.
  */
 export default function VerifyIdentityPage() {
   const router = useRouter()
@@ -192,7 +192,6 @@ export default function VerifyIdentityPage() {
                 <input 
                   type="file" 
                   accept="image/*" 
-                  capture="user" 
                   className="hidden" 
                   ref={fileInputRef} 
                   onChange={handleCapture}

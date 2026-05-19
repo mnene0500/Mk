@@ -262,7 +262,6 @@ export default function EditProfilePage() {
         ref={fileInputRef} 
         className="hidden" 
         accept="image/*" 
-        capture="user"
         onChange={handleFileChange} 
       />
 

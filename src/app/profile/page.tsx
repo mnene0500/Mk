@@ -23,7 +23,8 @@ import {
   Briefcase,
   UserPlus,
   Wallet,
-  Shield
+  Shield,
+  UserCircle
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -265,8 +266,12 @@ export default function MePage() {
               <span className="text-[8px] font-bold uppercase opacity-60">Diamond Balance</span>
             </Button>
 
+            <Button onClick={() => router.push("/edit-profile")} className="h-20 bg-white hover:bg-gray-50 rounded-2xl border-none shadow-xl flex flex-col items-center justify-center gap-1 text-[#00A2FF] active:scale-95 transition-all col-span-2 mt-4">
+              <div className="flex items-center gap-2"><UserCircle className="w-6 h-6" /><span className="text-sm font-bold uppercase tracking-widest">Edit My Profile</span></div>
+            </Button>
+
             {!isVerified && !profile?.isAdmin && (
-              <Button onClick={() => router.push("/verify-identity")} className="h-20 bg-white hover:bg-gray-50 rounded-2xl border-none shadow-xl flex flex-col items-center justify-center gap-1 text-indigo-600 active:scale-95 transition-all col-span-2 mt-4">
+              <Button onClick={() => router.push("/verify-identity")} className="h-20 bg-white hover:bg-gray-50 rounded-2xl border-none shadow-xl flex flex-col items-center justify-center gap-1 text-indigo-600 active:scale-95 transition-all col-span-2 mt-2">
                 <div className="flex items-center gap-2"><Shield className="w-6 h-6" /><span className="text-sm font-bold uppercase tracking-widest">Verify Identity</span></div>
               </Button>
             )}
