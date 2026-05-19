@@ -168,7 +168,7 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
       else if (amount >= 230) coinsToAward = 2000;
       else if (amount >= 120) coinsToAward = 1000;
       else if (amount >= 80) coinsToAward = 500;
-      else if (amount >= 0.5) coinsToAward = 200; // Test package mapping
+      else if (amount >= 0.5) coinsToAward = 200; // Test package mapping (KES 1)
 
       if (coinsToAward > 0) {
         const timestamp = Date.now();

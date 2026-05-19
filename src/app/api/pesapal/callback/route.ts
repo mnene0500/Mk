@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   
   const { searchParams } = new URL(request.url);
   
-  // Handle both possible PesaPal parameter casings (v3 often uses CamelCase)
+  // Handle both possible PesaPal parameter casings
   const orderTrackingId = searchParams.get('OrderTrackingId') || searchParams.get('orderTrackingId');
   const merchantReference = searchParams.get('OrderMerchantReference') || searchParams.get('orderMerchantReference');
 
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     });
   } catch (error: any) {
     console.error("[PesaPal IPN Critical Failure]:", error.message);
-    // Even if it fails, we return a 200 with an error flag to see logs, or 500 to force PesaPal retry
+    // Return a 500 error to force PesaPal to retry later if it was a temporary failure
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
