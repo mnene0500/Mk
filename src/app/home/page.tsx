@@ -158,7 +158,7 @@ export default function HomePage() {
       <div className="absolute top-0 left-0 right-0 z-0 flex flex-col">
         <div className="h-[72px] bg-[#00A2FF] relative overflow-hidden">
           <div className="absolute -right-4 -top-10 rotate-[-12deg] opacity-20 select-none pointer-events-none">
-            <span className="text-7xl font-bold text-white whitespace-nowrap">QIVO</span>
+            <span className="text-7xl font-logo text-white whitespace-nowrap">QIVO</span>
           </div>
         </div>
         <div className="h-[120px] bg-white shadow-[0_10px_30px_rgba(0,0,0,0.03)]" />
