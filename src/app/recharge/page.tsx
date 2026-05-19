@@ -55,24 +55,12 @@ function RechargeContent() {
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null)
   const [isFulfilling, setIsFulfilling] = useState(false)
   
-  const [currentCoins, setCurrentCoins] = useState(() => {
-    if (typeof window !== 'undefined' && user?.uid) {
-      const cached = localStorage.getItem(`balance_cache_${user.uid}`)
-      if (cached) {
-        try {
-          return JSON.parse(cached).coins || 0
-        } catch (e) {
-          return 0
-        }
-      }
-    }
-    return 0
-  })
+  const [currentCoins, setCurrentCoins] = useState(0)
 
   const userRef = useMemoFirebase(() => user?.uid ? doc(db, "users", user.uid) : null, [db, user?.uid])
   const { data: profile } = useDoc<any>(userRef)
 
-  // INSTANT FULFILLMENT ON REDIRECT
+  // Handle instant fulfillment if redirected back from PesaPal
   useEffect(() => {
     const orderId = searchParams.get("OrderTrackingId");
     const merchantRef = searchParams.get("OrderMerchantReference");
@@ -85,12 +73,10 @@ function RechargeContent() {
           if (res.success) {
             toast({ 
               title: "Payment Successful", 
-              description: `Successfully credited ${res.coins || 'your'} coins!`,
+              description: `Successfully credited ${res.coins || ''} coins!`,
             });
-            // Give it a moment for RTDB sync then go to profile
             setTimeout(() => router.replace("/profile"), 2000);
           } else {
-            // Still redirect but maybe it's still processing in background
             router.replace("/profile");
           }
         } catch (e) {
@@ -103,19 +89,14 @@ function RechargeContent() {
     }
   }, [searchParams, router, toast]);
 
-  // REAL-TIME BALANCE LISTENER
+  // Real-time listener for coin balance
   useEffect(() => {
-    if (!user?.uid) return
+    if (!user?.uid || !rtdb) return
     
     const balanceRef = ref(rtdb, `balances/${user.uid}/coins`)
     const unsubscribe = onValue(balanceRef, (snapshot) => {
       if (snapshot.exists()) {
-        const coins = snapshot.val() || 0
-        setCurrentCoins(coins)
-        
-        const cached = localStorage.getItem(`balance_cache_${user.uid}`)
-        const balanceData = cached ? JSON.parse(cached) : { diamonds: 0 }
-        localStorage.setItem(`balance_cache_${user.uid}`, JSON.stringify({ ...balanceData, coins }))
+        setCurrentCoins(snapshot.val() || 0)
       }
     })
 
@@ -125,6 +106,7 @@ function RechargeContent() {
   const handlePayment = async () => {
     const pkg = PACKAGES.find(p => p.amount === selectedPackage)
     if (!user || !profile || !pkg) return
+    
     setLoading(true)
     try {
       const result = await initiatePesaPalPayment(pkg.price, {
@@ -132,13 +114,22 @@ function RechargeContent() {
         email: user.email || `user_${user.uid}@qivo.app`,
         name: profile.name || "QIVO User"
       })
+      
       if (result.success && result.redirect_url) {
         setPaymentUrl(result.redirect_url)
       } else {
-        toast({ variant: "destructive", title: "Payment Error", description: result.error || "Could not initiate payment." })
+        toast({ 
+          variant: "destructive", 
+          title: "Payment Error", 
+          description: result.error || "Could not initiate payment. Check server logs." 
+        })
       }
     } catch (err: any) {
-      toast({ variant: "destructive", title: "System Error", description: err.message })
+      toast({ 
+        variant: "destructive", 
+        title: "System Error", 
+        description: "Failed to connect to payment server. Please try again." 
+      })
     } finally {
       setLoading(false)
     }
@@ -146,7 +137,7 @@ function RechargeContent() {
 
   if (isFulfilling) {
     return (
-      <div className="flex-1 bg-white min-h-screen flex flex-col items-center justify-center p-8 space-y-8 animate-in fade-in duration-500">
+      <div className="flex-1 bg-white min-h-screen flex flex-col items-center justify-center p-8 space-y-8">
         <div className="relative">
           <div className="w-24 h-24 border-4 border-blue-50 rounded-full" />
           <div className="w-24 h-24 border-4 border-[#00A2FF] border-t-transparent rounded-full animate-spin absolute inset-0" />
@@ -236,7 +227,7 @@ function RechargeContent() {
       </footer>
 
       <Dialog open={!!paymentUrl} onOpenChange={(open) => !open && setPaymentUrl(null)}>
-        <DialogContent className="max-w-none w-full h-[100dvh] p-0 border-none bg-white rounded-none flex flex-col overflow-hidden z-[9999] [&>button]:hidden animate-in slide-in-from-bottom duration-500">
+        <DialogContent className="max-w-none w-full h-[100dvh] p-0 border-none bg-white rounded-none flex flex-col overflow-hidden z-[9999] [&>button]:hidden">
           <DialogTitle className="sr-only">Secure Payment Checkout</DialogTitle>
           
           <div className="flex-1 relative bg-gray-50">
@@ -263,4 +254,10 @@ function RechargeContent() {
   )
 }
 
-export default function RechargePage() { return <Suspense fallback={null}><RechargeContent /></Suspense> }
+export default function RechargePage() { 
+  return (
+    <Suspense fallback={null}>
+      <RechargeContent />
+    </Suspense>
+  )
+}
