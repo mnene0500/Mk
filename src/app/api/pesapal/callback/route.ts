@@ -6,14 +6,18 @@ import { fulfillPaymentAction } from '@/app/actions/payment-actions';
  * Automatically fulfills coin orders upon successful payment verification in Realtime.
  */
 export async function GET(request: Request) {
+  console.log("🔥 IPN HIT RECEIVED");
+  
   const { searchParams } = new URL(request.url);
   
+  // Handle both possible PesaPal param casings
   const orderTrackingId = searchParams.get('OrderTrackingId') || searchParams.get('orderTrackingId');
   const merchantReference = searchParams.get('OrderMerchantReference') || searchParams.get('orderMerchantReference');
 
-  console.log(`[PesaPal IPN] Received notification. Tracking ID: ${orderTrackingId}, Reference: ${merchantReference}`);
+  console.log(`[PesaPal IPN] Notification Data - Tracking ID: ${orderTrackingId}, Reference: ${merchantReference}`);
 
   if (!orderTrackingId || !merchantReference) {
+    console.error("[PesaPal IPN] Missing required parameters.");
     return NextResponse.json({ status: 'Invalid Request', message: 'Missing parameters' }, { status: 400 });
   }
 

@@ -97,7 +97,7 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
     }
 
     const token = await getAccessToken();
-    // Using QV prefix for QIVO
+    // Using QV prefix for QIVO. Format: QV_{uid}_{timestamp}
     const merchantReference = `QV_${user.uid}_${Date.now()}`;
     
     const payload = {
@@ -178,25 +178,35 @@ export async function getTransactionStatus(orderTrackingId: string): Promise<Tra
  * Used for both IPN and direct redirect checks.
  */
 export async function fulfillPaymentAction(orderTrackingId: string, merchantReference: string) {
+  console.log(`[Fulfillment Request] Tracking: ${orderTrackingId}, Ref: ${merchantReference}`);
+  
   try {
     const status = await getTransactionStatus(orderTrackingId);
+    console.log(`[PesaPal Status] Code: ${status?.status_code}, Amount: ${status?.amount}`);
     
     // Status Code 1 = Completed/Success
     if (status && (Number(status.status_code) === 1)) {
       const { database: rtdb } = initializeFirebase();
       
+      // Robust UID Extraction: Expecting QV_{uid}_{timestamp}
       const parts = merchantReference.split('_');
       const uid = parts[1];
       const amount = Number(status.amount);
 
-      if (!uid) return { success: false, error: "Invalid Reference" };
+      if (!uid) {
+        console.error("[Fulfillment Error] Could not extract UID from reference:", merchantReference);
+        return { success: false, error: "Invalid Reference Format" };
+      }
 
-      // Check if already processed
+      // Idempotency: Check if already processed
       const processedRef = ref(rtdb, `processed_payments/${orderTrackingId}`);
       const snap = await get(processedRef);
-      if (snap.exists()) return { success: true, message: "Already fulfilled" };
+      if (snap.exists()) {
+        console.log("[Fulfillment] Already processed. Skipping.");
+        return { success: true, message: "Already fulfilled" };
+      }
 
-      // Map amount to coins
+      // Map amount to coins (Support exact and threshold matching)
       let coinsToAward = 0;
       if (amount >= 1800) coinsToAward = 20000;
       else if (amount >= 1000) coinsToAward = 10000;
@@ -204,7 +214,7 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
       else if (amount >= 230) coinsToAward = 2000;
       else if (amount >= 120) coinsToAward = 1000;
       else if (amount >= 80) coinsToAward = 500;
-      else if (amount >= 0.5) coinsToAward = 200; // Test package
+      else if (amount >= 0.5) coinsToAward = 200; // Test package (any amount > 0.5)
 
       if (coinsToAward > 0) {
         const timestamp = Date.now();
@@ -222,18 +232,23 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
         await update(ref(rtdb), updates);
 
         // Record History
-        await set(push(ref(rtdb, `coin_history/${uid}`)), {
+        const historyRef = push(ref(rtdb, `coin_history/${uid}`));
+        await set(historyRef, {
           amount: coinsToAward,
           type: 'recharge',
           description: `PesaPal Recharge: KES ${amount}`,
           timestamp
         });
 
+        console.log(`[Fulfillment Success] Awarded ${coinsToAward} to ${uid}`);
         return { success: true, coins: coinsToAward };
+      } else {
+        console.error("[Fulfillment Error] No coin mapping for amount:", amount);
       }
     }
-    return { success: false, error: "Payment not completed yet" };
+    return { success: false, error: "Payment not completed or mapping failed" };
   } catch (err: any) {
+    console.error("[Fulfillment Exception]:", err.message);
     return { success: false, error: err.message };
   }
 }
