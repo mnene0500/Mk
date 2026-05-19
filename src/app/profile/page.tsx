@@ -160,20 +160,14 @@ export default function MePage() {
   
   const [copied, setCopied] = useState(false)
   
-  const [balances, setBalances] = useState(() => {
-    if (typeof window !== 'undefined' && user?.uid) {
-      const cached = localStorage.getItem(`balance_cache_${user.uid}`)
-      if (cached) return JSON.parse(cached)
-    }
-    return { coins: 0, diamonds: 0, isVerified: false }
-  })
+  const [balances, setBalances] = useState({ coins: 0, diamonds: 0, isVerified: false })
 
   const profileRef = useMemo(() => (user && db) ? doc(db, "users", user.uid) : null, [db, user])
   const { data: profile, loading: profileLoading } = useDoc<UserProfile>(profileRef)
 
   useEffect(() => {
     if (isInitialized && !authLoading && !user) {
-      router.replace("/auth")
+      router.replace("/welcome")
     } else if (profile && !profileLoading && !profile.onboardingComplete) {
       router.replace("/onboarding")
     }
@@ -185,13 +179,11 @@ export default function MePage() {
     const unsubscribe = onValue(balanceRef, (snapshot) => {
       const data = snapshot.val()
       if (data) {
-        const newBal = { 
+        setBalances({ 
           coins: data.coins || 0, 
           diamonds: data.diamonds || 0,
           isVerified: !!data.isVerified 
-        }
-        setBalances(newBal)
-        localStorage.setItem(`balance_cache_${user.uid}`, JSON.stringify(newBal))
+        })
       }
     })
     return () => off(balanceRef, 'value', unsubscribe)

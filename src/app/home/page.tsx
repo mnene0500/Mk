@@ -77,7 +77,6 @@ export default function HomePage() {
         if (blockedList.includes(u.uid)) return false
         
         // GENDER DISCOVERY LOGIC: Male sees Female, Female sees Male
-        // Fallback: If current user gender is missing or not binary, show all
         if (!currentUserProfile?.gender) return true;
         
         const myGender = currentUserProfile.gender.toLowerCase();
@@ -92,7 +91,6 @@ export default function HomePage() {
       // Randomize for fresh "Recommend" vibe
       const sorted = filtered.sort(() => Math.random() - 0.5)
       setUsers(sorted)
-      sessionStorage.setItem('cached_home_users', JSON.stringify(sorted))
     } catch (err) {
       console.error("[Home Fetch Error]:", err)
     } finally {
@@ -103,24 +101,13 @@ export default function HomePage() {
 
   useEffect(() => { 
     setIsMounted(true)
-    const cached = sessionStorage.getItem('cached_home_users')
-    if (cached) {
-      setUsers(JSON.parse(cached))
-      setInitialLoading(false)
-    }
-    const savedLimit = sessionStorage.getItem('home_display_limit')
-    if (savedLimit) setDisplayLimit(parseInt(savedLimit))
   }, [])
 
+  // Auto-fetch users when auth and profile are ready
   useEffect(() => {
-    if (isMounted) sessionStorage.setItem('home_display_limit', displayLimit.toString())
-  }, [displayLimit, isMounted])
-
-  // Trigger fetch once profile is ready OR if we have no users and auth is done
-  useEffect(() => {
-    if (isInitialized && !authLoading) {
+    if (isInitialized && !authLoading && db) {
       if (!currentUser) {
-        router.replace("/auth")
+        router.replace("/welcome")
         return
       }
       
@@ -129,18 +116,15 @@ export default function HomePage() {
           router.replace("/onboarding")
           return
         }
-        // Fetch users if we haven't yet
-        if (users.length === 0 && initialLoading) {
-          fetchUsers()
-        }
+        // Always fetch on mount/profile-ready to avoid stale data
+        fetchUsers()
       }
     }
-  }, [currentUser, authLoading, isInitialized, currentUserProfile, profileLoading, router, users.length, initialLoading, fetchUsers])
+  }, [currentUser, authLoading, isInitialized, currentUserProfile, profileLoading, db, router, fetchUsers])
 
   const handleRefresh = () => {
     fetchUsers(true)
     setDisplayLimit(10)
-    sessionStorage.removeItem('home_scroll_pos')
   }
 
   const filteredUsers = useMemo(() => {
@@ -205,7 +189,6 @@ export default function HomePage() {
         </div>
 
         <main className="px-4 pt-3 relative">
-          {/* PACIFICO BRAND STAMP */}
           <div className="fixed inset-0 flex items-center justify-center opacity-[0.04] pointer-events-none -z-10 rotate-[-15deg]">
             <span className="text-[30vw] font-logo text-black whitespace-nowrap select-none">QIVO</span>
           </div>
