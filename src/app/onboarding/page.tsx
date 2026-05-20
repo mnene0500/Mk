@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
@@ -196,7 +195,7 @@ export default function OnboardingPage() {
                       "h-24 rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all",
                       gender === g 
                         ? "border-[#00A2FF] bg-blue-50 text-[#00A2FF] shadow-sm" 
-                        : "border-gray-50 bg-gray-50 text-gray-400"
+                        : "border-gray-50 bg-gray-50 text-gray-600"
                     )}
                   >
                     <span className="text-2xl">{g === 'male' ? '♂️' : '♀️'}</span>
