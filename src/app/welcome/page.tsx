@@ -6,14 +6,16 @@ import { Button } from "@/components/ui/button"
 import { Mail, Loader2, AlertCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth"
-import { useAuth, useUser, useFirestore } from "@/firebase"
+import { useAuth, useUser, useFirestore, useDatabase } from "@/firebase"
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
+import { ref, set as rtdbSet, push } from "firebase/database"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 
 /**
  * @fileOverview Welcome / Auth Entry Page.
- * Strictly initializes the account document before allowing entry to onboarding.
+ * Strictly initializes the account document before allowing entry.
+ * Google Sign-In automatically completes onboarding.
  */
 export default function WelcomePage() {
   const [mounted, setMounted] = useState(false)
@@ -22,6 +24,7 @@ export default function WelcomePage() {
   
   const auth = useAuth()
   const db = useFirestore()
+  const rtdb = useDatabase()
   const { user, loading: authLoading, isInitialized } = useUser()
   const router = useRouter()
   const { toast } = useToast()
@@ -33,7 +36,7 @@ export default function WelcomePage() {
   // AUTH GATEKEEPER: Ensures skeleton account is ready before proceeding
   useEffect(() => {
     const handleRedirect = async () => {
-      if (isInitialized && !authLoading && user && db) {
+      if (isInitialized && !authLoading && user && db && rtdb) {
         setRedirecting(true)
         try {
           const userRef = doc(db, "users", user.uid)
@@ -43,27 +46,13 @@ export default function WelcomePage() {
             if (userSnap.data().onboardingComplete) {
               router.replace("/home")
             } else {
+              // Existing user but not complete? Likely a partial email sign up
               router.replace("/onboarding")
             }
           } else {
-            // NEW USER: Create skeleton account document ATOMICALLY
-            const qId = Math.floor(1000000 + Math.random() * 900000000).toString();
-            const skeletonData = {
-              uid: user.uid,
-              email: user.email || `anon_${user.uid}@qivo.app`,
-              name: user.displayName || "New User",
-              matchFlowId: qId,
-              onboardingComplete: false,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-              isVerified: false,
-              isAdmin: false,
-              photoURL: user.photoURL || `https://picsum.photos/seed/${user.uid}/400/400`
-            }
-            
-            // Critical: Wait for setDoc to complete before navigating
-            await setDoc(userRef, skeletonData)
-            console.log("[Welcome] Skeleton profile created for:", user.uid)
+            // For safety, standard auth users go to onboarding, 
+            // but the handleGoogleLogin below handles Google users specifically.
+            // If they reach here, they are likely standard email users.
             router.replace("/onboarding")
           }
         } catch (error) {
@@ -73,10 +62,10 @@ export default function WelcomePage() {
       }
     }
     handleRedirect()
-  }, [user, isInitialized, authLoading, router, db])
+  }, [user, isInitialized, authLoading, router, db, rtdb])
 
   const handleGoogleLogin = async () => {
-    if (!auth) {
+    if (!auth || !db || !rtdb) {
       toast({ variant: "destructive", title: "Config Error", description: "Firebase is not ready." });
       return;
     }
@@ -84,7 +73,67 @@ export default function WelcomePage() {
     setLoading(true)
     try {
       const provider = new GoogleAuthProvider()
-      await signInWithPopup(auth, provider)
+      const result = await signInWithPopup(auth, provider)
+      const googleUser = result.user
+
+      // Check if user already exists
+      const userRef = doc(db, "users", googleUser.uid)
+      const userSnap = await getDoc(userRef)
+
+      if (!userSnap.exists()) {
+        // NEW GOOGLE USER: Auto-onboard with fetched details
+        const qId = Math.floor(1000000 + Math.random() * 900000000).toString();
+        
+        // Google doesn't give gender/dob via Firebase scope easily, 
+        // so we set defaults but mark onboarding as COMPLETE.
+        const skeletonData = {
+          uid: googleUser.uid,
+          email: googleUser.email,
+          name: googleUser.displayName || "Google User",
+          matchFlowId: qId,
+          onboardingComplete: true, // SKIPPING ONBOARDING
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          isVerified: false,
+          isAdmin: false,
+          gender: "not specified", // Set default to avoid undefined errors
+          dob: "2000-01-01", // Set default 
+          country: "Kenya", // Default for your main market
+          photoURL: googleUser.photoURL || `https://picsum.photos/seed/${googleUser.uid}/400/400`,
+          lookingFor: "Dating",
+          isDeleted: false,
+          isCoinSeller: false,
+          isAgent: false,
+          blocking: [],
+          blockedBy: []
+        }
+        
+        await setDoc(userRef, skeletonData)
+
+        // Initialize Realtime Wallet
+        const timestamp = Date.now()
+        await rtdbSet(ref(rtdb, `balances/${googleUser.uid}`), {
+          coins: 150, // Welcome Bonus
+          diamonds: 0,
+          updatedAt: timestamp,
+          isVerified: false
+        })
+
+        await push(ref(rtdb, `coin_history/${googleUser.uid}`), {
+          amount: 150,
+          type: 'bonus',
+          description: 'Google Sign-in Bonus',
+          timestamp: timestamp
+        })
+
+        console.log("[Welcome] Auto-onboarded Google user:", googleUser.uid)
+      } else if (!userSnap.data().onboardingComplete) {
+          // Existing user with incomplete profile? Force complete it now.
+          await setDoc(userRef, { onboardingComplete: true }, { merge: true })
+      }
+
+      // Successful Google entry always lands on Home
+      router.replace("/home")
     } catch (error: any) {
       if (error.code !== 'auth/popup-closed-by-user') {
         toast({ variant: "destructive", title: "Sign-In Error", description: error.message || "Failed to connect." })

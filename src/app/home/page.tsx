@@ -105,7 +105,8 @@ export default function HomePage() {
 
   useEffect(() => {
     if (isInitialized && !authLoading && !profileLoading && db) {
-      // STRICT GUARD: Wait until we are absolutely sure the profile is complete
+      // STRICT GUARD: If onboarding is not complete, redirect to setup.
+      // Auto-onboarded Google users will have true here.
       if (!profile || profile.onboardingComplete !== true) {
         console.log("[Home Guard] Incomplete profile, redirecting to onboarding...");
         router.replace("/onboarding")
@@ -134,7 +135,7 @@ export default function HomePage() {
   const hasMore = paginatedUsers.length < filteredUsers.length
 
   // FULL SCREEN LOADER: Prevents UI flicker while redirection logic is resolving
-  if (!isMounted || authLoading || profileLoading || (isInitialized && !profile) || (profile && profile.onboardingComplete !== true)) {
+  if (!isMounted || authLoading || profileLoading || (isInitialized && !profile)) {
     return (
       <div className="flex-1 bg-white min-h-screen flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
