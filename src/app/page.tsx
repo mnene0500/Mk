@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -8,7 +9,7 @@ import { doc } from "firebase/firestore"
 /**
  * Root Redirector with Cinematic Splash Screen.
  * Checks auth status and redirects automatically if a session exists.
- * Optimized for fast transitions.
+ * Optimized for snappy transitions.
  */
 export default function RootPage() {
   const router = useRouter()
@@ -18,14 +19,14 @@ export default function RootPage() {
   
   const [minTimeElapsed, setMinTimeElapsed] = useState(false)
 
-  // Ensure splash is visible for branding, but not for too long
+  // Shortened branding delay for a faster "App Open" feel
   useEffect(() => {
-    const timer = setTimeout(() => setMinTimeElapsed(true), 1000)
+    const timer = setTimeout(() => setMinTimeElapsed(true), 600)
     return () => clearTimeout(timer)
   }, [])
 
   useEffect(() => {
-    // Only proceed if minimum splash time (1s) has passed AND auth listener has fired
+    // Only proceed if snappy splash time (600ms) has passed AND auth listener has fired
     if (!minTimeElapsed || !isInitialized || authLoading) return
 
     if (user) {
@@ -55,7 +56,7 @@ export default function RootPage() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-[#00A2FF]/20 rounded-full blur-[100px] animate-pulse-slow" />
       
       <div className="relative z-10 flex flex-col items-center gap-6">
-        <h1 className="text-7xl font-logo text-white tracking-tight drop-shadow-2xl animate-in fade-in zoom-in-95 duration-1000">
+        <h1 className="text-7xl font-logo text-white tracking-tight drop-shadow-2xl animate-in fade-in zoom-in-95 duration-700">
           QIVO
         </h1>
       </div>
@@ -63,9 +64,9 @@ export default function RootPage() {
       {/* Subtle loader at the bottom */}
       <div className="absolute bottom-16 inset-x-0 flex justify-center">
         <div className="flex gap-1.5">
-          <div className="w-1 h-1 bg-[#00A2FF] rounded-full animate-bounce [animation-delay:-0.3s]" />
-          <div className="w-1 h-1 bg-[#00A2FF] rounded-full animate-bounce [animation-delay:-0.15s]" />
-          <div className="w-1 h-1 bg-[#00A2FF] rounded-full animate-bounce" />
+          <div className="w-1.5 h-1.5 bg-[#00A2FF]/40 rounded-full animate-bounce [animation-delay:-0.3s]" />
+          <div className="w-1.5 h-1.5 bg-[#00A2FF]/40 rounded-full animate-bounce [animation-delay:-0.15s]" />
+          <div className="w-1.5 h-1.5 bg-[#00A2FF]/40 rounded-full animate-bounce" />
         </div>
       </div>
     </div>
