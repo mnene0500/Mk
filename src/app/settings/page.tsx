@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { useAuth, useFirestore, useUser, useDoc, useMemoFirebase } from "@/firebase"
+import { useAuth, useFirestore, useUser, useDoc } from "@/firebase"
+import { useMemoFirebase } from "@/firebase/utils-client"
 import { errorEmitter } from "@/firebase/error-emitter"
-import { FirestorePermissionError, type SecurityRuleContext } from "@/firebase/errors"
+import { FirestorePermissionError } from "@/firebase/errors"
 import { deleteUser, signOut } from "firebase/auth"
 import { doc, deleteDoc } from "firebase/firestore"
 import { useRouter } from "next/navigation"
@@ -48,10 +49,7 @@ function SettingItem({ label, onClick, href, icon }: SettingItemProps) {
     </div>
   )
 
-  if (href) {
-    return <Link href={href}>{content}</Link>
-  }
-
+  if (href) return <Link href={href}>{content}</Link>
   return <div onClick={onClick}>{content}</div>
 }
 
@@ -63,7 +61,7 @@ export default function SettingsPage() {
   const { user } = useUser()
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
 
-  const profileRef = useMemoFirebase(() => user?.uid ? doc(db, "users", user.uid) : null, [db, user?.uid])
+  const profileRef = useMemoFirebase(() => (user?.uid && db) ? doc(db, "users", user.uid) : null, [db, user?.uid])
   const { data: profile } = useDoc<UserProfile>(profileRef)
 
   const handleSignOut = async () => {
@@ -87,7 +85,7 @@ export default function SettingsPage() {
       toast({ title: "App Reset", description: "Reloading..." })
       setTimeout(() => window.location.reload(), 1000)
     } catch (err) {
-      toast({ variant: "destructive", title: "Error resettting cache" })
+      toast({ variant: "destructive", title: "Error" })
     }
   }
 
@@ -138,11 +136,7 @@ export default function SettingsPage() {
       <main className="flex-1">
         <div className="flex flex-col mt-4">
           {user?.isAnonymous && (
-            <SettingItem 
-              label="Secure Account" 
-              href="/bind-account" 
-              icon={<LinkIcon className="w-4 h-4 text-[#00A2FF]" />} 
-            />
+            <SettingItem label="Secure Account" href="/bind-account" icon={<LinkIcon className="w-4 h-4 text-[#00A2FF]" />} />
           )}
           
           {settingsList.map((item, idx) => (
@@ -179,9 +173,9 @@ export default function SettingsPage() {
 
       <footer className="pb-10 pt-20 px-6">
         <div className="flex items-center justify-center gap-4 text-[10px] text-gray-400 font-black uppercase tracking-[0.2em]">
-          <Link href="/privacy" className="hover:text-black">Privacy</Link>
+          <Link href="/privacy">Privacy</Link>
           <span className="opacity-20">•</span>
-          <Link href="/terms" className="hover:text-black">Terms</Link>
+          <Link href="/terms">Terms</Link>
           {!profile?.isAdmin && (
             <>
               <span className="opacity-20">•</span>
@@ -196,7 +190,7 @@ export default function SettingsPage() {
                     </div>
                     <AlertDialogTitle className="text-xl font-bold">Delete Account?</AlertDialogTitle>
                     <AlertDialogDescription className="text-xs font-bold pt-2 uppercase tracking-widest leading-relaxed">
-                      All coins and messages will be lost. To confirm, please type <span className="text-red-600 font-black">DELETE</span> below:
+                      To confirm, please type <span className="text-red-600 font-black">DELETE</span> below:
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   
@@ -224,7 +218,6 @@ export default function SettingsPage() {
             </>
           )}
         </div>
-        <p className="text-center text-[9px] text-gray-300 font-bold mt-8 uppercase tracking-[0.3em]">QIVO Kenya v1.2.1</p>
       </footer>
     </div>
   )

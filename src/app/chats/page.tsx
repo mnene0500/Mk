@@ -88,9 +88,7 @@ function ChatListItem({ summary, onClick, onDelete }: { summary: ChatSummary, on
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   const handleTouchStart = () => {
-    timerRef.current = setTimeout(() => {
-      onDelete()
-    }, 800)
+    timerRef.current = setTimeout(() => onDelete(), 800)
   }
 
   const handleTouchEnd = () => {
@@ -103,10 +101,7 @@ function ChatListItem({ summary, onClick, onDelete }: { summary: ChatSummary, on
       onClick={onClick}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      onContextMenu={(e) => {
-        e.preventDefault()
-        onDelete()
-      }}
+      onContextMenu={(e) => { e.preventDefault(); onDelete(); }}
     >
       <div className="relative">
         <Avatar className="w-14 h-14 rounded-full border-none shadow-sm">
@@ -139,12 +134,10 @@ function ChatsContent() {
   const { user: currentUser, loading: authLoading } = useUser()
   const db = useFirestore()
   const rtdb = useDatabase()
-  const messagesEndRef = useRef<HTMLDivElement>(null)
   
   const partnerPresence = useUserPresence(startWithId || undefined)
-  
-  const currentUserDocRef = useMemo(() => currentUser?.uid && db ? doc(db, "users", currentUser.uid) : null, [db, currentUser?.uid])
-  const partnerDocRef = useMemo(() => startWithId && db ? doc(db, "users", startWithId) : null, [db, startWithId])
+  const currentUserDocRef = useMemo(() => (currentUser?.uid && db) ? doc(db, "users", currentUser.uid) : null, [db, currentUser?.uid])
+  const partnerDocRef = useMemo(() => (startWithId && db) ? doc(db, "users", startWithId) : null, [db, startWithId])
   
   const { data: currentUserProfile } = useDoc<UserProfile>(currentUserDocRef)
   const { data: partnerProfile } = useDoc<UserProfile>(partnerDocRef)
@@ -164,10 +157,8 @@ function ChatsContent() {
 
   const isBlocked = useMemo(() => {
     if (!startWithId || !currentUserProfile || !partnerProfile) return false
-    const blockedByMe = currentUserProfile.blocking?.includes(startWithId)
-    const blockedByThem = currentUserProfile.blockedBy?.includes(startWithId) || partnerProfile.blocking?.includes(currentUser?.uid || "")
-    return blockedByMe || blockedByThem
-  }, [currentUserProfile, partnerProfile, startWithId, currentUser?.uid])
+    return currentUserProfile.blocking?.includes(startWithId) || currentUserProfile.blockedBy?.includes(startWithId)
+  }, [currentUserProfile, partnerProfile, startWithId])
 
   useEffect(() => {
     if (!currentUser?.uid || !rtdb) return
@@ -178,17 +169,13 @@ function ChatsContent() {
         const list = Object.entries(data)
           .map(([id, val]: [string, any]) => ({ id, ...val } as ChatSummary))
           .filter(summary => {
-            const hasActualMessage = summary.lastMessage && 
-                                   summary.lastMessage.trim() !== "" && 
-                                   summary.lastMessage !== "Start talking...";
-            const isNotDeleted = !summary.deletedAt || (summary.lastMessageAt || 0) > summary.deletedAt;
-            return hasActualMessage && isNotDeleted;
+            const hasMsg = summary.lastMessage && summary.lastMessage.trim() !== "";
+            const notDeleted = !summary.deletedAt || summary.lastMessageAt > summary.deletedAt;
+            return hasMsg && notDeleted;
           })
-          .sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0))
+          .sort((a, b) => b.lastMessageAt - a.lastMessageAt)
         setChatSummaries(list)
-      } else {
-        setChatSummaries([])
-      }
+      } else setChatSummaries([])
       setSummariesLoading(false)
     })
     return () => off(summariesRef, 'value', unsubscribe)
@@ -201,12 +188,7 @@ function ChatsContent() {
       get(ref(rtdb, `user_chats/${currentUser.uid}/${chatId}/deletedAt`)).then((snap) => {
         setActiveDeletedAt(snap.val() || 0)
         setMetadataLoading(false)
-      }).catch(() => {
-        setActiveDeletedAt(0)
-        setMetadataLoading(false)
       })
-    } else {
-      setActiveDeletedAt(0)
     }
   }, [chatId, currentUser?.uid, rtdb])
 
@@ -219,14 +201,9 @@ function ChatsContent() {
     const unsubscribe = onValue(messagesRef, (snapshot) => {
       const data = snapshot.val()
       if (data) {
-        const msgs = Object.entries(data).map(([id, val]: [string, any]) => ({ id, ...val }))
-        const filtered = msgs
-          .filter((m: any) => m.timestamp > activeDeletedAt)
-          .sort((a, b) => b.timestamp - a.timestamp)
-        setMessages(filtered as Message[])
-      } else {
-        setMessages([])
-      }
+        const msgs = Object.entries(data).map(([id, val]: [string, any]) => ({ id, ...val } as Message))
+        setMessages(msgs.filter(m => m.timestamp > activeDeletedAt).sort((a, b) => b.timestamp - a.timestamp))
+      } else setMessages([])
     })
     return () => off(messagesRef, 'value', unsubscribe)
   }, [chatId, rtdb, activeDeletedAt, metadataLoading])
@@ -235,339 +212,74 @@ function ChatsContent() {
     if (!currentUser?.uid || !rtdb) return
     const balRef = ref(rtdb, `balances/${currentUser.uid}`)
     const unsubscribe = onValue(balRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.val()
-        setUserBalances({ coins: data.coins || 0, diamonds: data.diamonds || 0 })
-      }
+      if (snap.exists()) setUserBalances({ coins: snap.val().coins || 0, diamonds: snap.val().diamonds || 0 })
     })
     return () => off(balRef, 'value', unsubscribe)
   }, [rtdb, currentUser?.uid])
 
   useEffect(() => {
-    if (!currentUser?.uid || !startWithId) {
-      setChatId(null)
-      return
+    if (currentUser?.uid && startWithId) {
+      const ids = [currentUser.uid, startWithId].sort()
+      setChatId(`direct_${ids[0]}_${ids[1]}`)
     }
-    const ids = [currentUser.uid, startWithId].sort()
-    setChatId(`direct_${ids[0]}_${ids[1]}`)
   }, [currentUser?.uid, startWithId])
 
   const handleSendMessage = async (text: string) => {
     if (!text.trim() || !chatId || !currentUser?.uid || !partnerProfile || isBlocked || !rtdb) return
-    
-    const sentText = text.trim()
-    setNewMessage("") 
-
     const timestamp = Date.now()
-
     if (currentUserProfile?.gender === 'male' && !currentUserProfile?.isAdmin) {
-      if (userBalances.coins < 15) {
-        toast({ variant: "destructive", title: "Insufficient Coins" })
-        return
-      }
-      
-      await update(ref(rtdb, `balances/${currentUser.uid}`), { 
-        coins: rtdbIncrement(-15),
-        updatedAt: timestamp
-      })
-
-      await push(ref(rtdb, `coin_history/${currentUser.uid}`), {
-        amount: -15,
-        type: 'chat',
-        description: `Chat with ${partnerProfile.name}`,
-        timestamp: timestamp
-      })
+      if (userBalances.coins < 15) { toast({ variant: "destructive", title: "Insufficient Coins" }); return; }
+      await update(ref(rtdb, `balances/${currentUser.uid}`), { coins: rtdbIncrement(-15), updatedAt: timestamp })
     }
-
-    const msgData = { 
-      text: sentText, 
-      senderId: currentUser.uid, 
-      timestamp 
-    }
-    
+    const msgData = { text: text.trim(), senderId: currentUser.uid, timestamp }
     await set(push(ref(rtdb, `chat_messages/${chatId}`)), msgData)
-
     const updates: any = {}
-    updates[`user_chats/${currentUser.uid}/${chatId}/partnerId`] = partnerProfile.uid || startWithId
-    updates[`user_chats/${currentUser.uid}/${chatId}/partnerName`] = partnerProfile.name || "Unknown"
-    updates[`user_chats/${currentUser.uid}/${chatId}/partnerPhoto`] = partnerProfile.photoURL || ""
-    updates[`user_chats/${currentUser.uid}/${chatId}/lastMessage`] = sentText
-    updates[`user_chats/${currentUser.uid}/${chatId}/lastMessageAt`] = timestamp
-    updates[`user_chats/${currentUser.uid}/${chatId}/unreadCount`] = 0
-
-    updates[`user_chats/${partnerProfile.uid || startWithId}/${chatId}/partnerId`] = currentUser.uid || ""
-    updates[`user_chats/${partnerProfile.uid || startWithId}/${chatId}/partnerName`] = currentUserProfile?.name || "User"
-    updates[`user_chats/${partnerProfile.uid || startWithId}/${chatId}/partnerPhoto`] = currentUserProfile?.photoURL || ""
-    updates[`user_chats/${partnerProfile.uid || startWithId}/${chatId}/lastMessage`] = sentText
-    updates[`user_chats/${partnerProfile.uid || startWithId}/${chatId}/lastMessageAt`] = timestamp
-    updates[`user_chats/${partnerProfile.uid || startWithId}/${chatId}/unreadCount`] = rtdbIncrement(1)
-
-    await update(ref(rtdb), updates).catch(err => {
-      console.error("[Chat Update Error]:", err);
-    });
+    updates[`user_chats/${currentUser.uid}/${chatId}`] = { partnerId: partnerProfile.uid, partnerName: partnerProfile.name, partnerPhoto: partnerProfile.photoURL, lastMessage: text.trim(), lastMessageAt: timestamp, unreadCount: 0 }
+    updates[`user_chats/${partnerProfile.uid}/${chatId}`] = { partnerId: currentUser.uid, partnerName: currentUserProfile?.name, partnerPhoto: currentUserProfile?.photoURL, lastMessage: text.trim(), lastMessageAt: timestamp, unreadCount: rtdbIncrement(1) }
+    await update(ref(rtdb), updates)
+    setNewMessage("")
   }
 
   const handleStartCall = async (type: 'video' | 'voice') => {
-    if (!currentUser?.uid || !startWithId || !chatId || isCalling || !rtdb) {
-      if (!rtdb) toast({ variant: "destructive", title: "Offline", description: "Service configuration pending." });
-      return
-    }
-    if (isBlocked) {
-      toast({ variant: "destructive", title: "Cannot Call", description: "You cannot call this user." })
-      return
-    }
-    
-    setIsCalling(true)
-    try {
-      const balCheck = await checkCallBalanceAction(currentUser.uid, type);
-      if (!balCheck.success && !currentUserProfile?.isAdmin) {
-        toast({ variant: "destructive", title: "Insufficient Balance", description: balCheck.error });
-        setIsCalling(false);
-        return;
-      }
-
-      const callData = {
-        callerId: currentUser.uid,
-        callerName: currentUserProfile?.name || "Someone",
-        callerPhoto: currentUserProfile?.photoURL || "",
-        type,
-        chatId,
-        timestamp: Date.now()
-      }
-
-      await set(ref(rtdb, `calls/${startWithId}`), callData)
-      router.push(`/call/${chatId}?type=${type}&caller=true&partner=${encodeURIComponent(partnerProfile?.name || 'Partner')}`)
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Calling Error", description: "Could not start call. Try again." })
-      setIsCalling(false)
-    }
-  }
-
-  const handleSendGift = async (gift: any) => {
-    if (!currentUser?.uid || !partnerProfile || !chatId || isBlocked || !rtdb) return
-    if (userBalances.coins < gift.price) { toast({ variant: "destructive", title: "Insufficient Coins" }); return }
-    try {
-      const timestamp = Date.now()
-      
-      await update(ref(rtdb, `balances/${currentUser.uid}`), { 
-        coins: rtdbIncrement(-gift.price),
-        updatedAt: timestamp
-      })
-      
-      await push(ref(rtdb, `coin_history/${currentUser.uid}`), {
-        amount: -gift.price,
-        type: 'gift',
-        description: `Sent ${gift.name} to ${partnerProfile.name}`,
-        timestamp: timestamp
-      })
-
-      const reward = Math.floor(gift.price * 0.5)
-      await update(ref(rtdb, `balances/${partnerProfile.uid}`), { 
-        diamonds: rtdbIncrement(reward),
-        updatedAt: timestamp 
-      })
-      
-      const text = `Sent a gift: ${gift.icon} ${gift.name}`
-      await handleSendMessage(text)
-      setIsGiftDrawerOpen(false)
-      setSelectedGift(null)
-    } catch (err) { toast({ variant: "destructive", title: "Gift Error" }) }
+    if (!currentUser?.uid || !startWithId || !chatId || !rtdb) return
+    const balCheck = await checkCallBalanceAction(currentUser.uid, type)
+    if (!balCheck.success && !currentUserProfile?.isAdmin) { toast({ variant: "destructive", title: "Low Balance", description: balCheck.error }); return; }
+    await set(ref(rtdb, `calls/${startWithId}`), { callerId: currentUser.uid, callerName: currentUserProfile?.name, callerPhoto: currentUserProfile?.photoURL, type, chatId, timestamp: Date.now() })
+    router.push(`/call/${chatId}?type=${type}&caller=true&partner=${encodeURIComponent(partnerProfile?.name || 'Partner')}`)
   }
 
   const handleDeleteChat = async () => {
     if (!currentUser?.uid || !chatToDelete || !rtdb) return
-    try {
-      const now = Date.now()
-      await update(ref(rtdb, `user_chats/${currentUser.uid}/${chatToDelete.id}`), {
-        lastMessage: "",
-        unreadCount: 0,
-        deletedAt: now
-      })
-      if (chatId === chatToDelete.id) setActiveDeletedAt(now)
-      toast({ title: "Conversation removed" })
-    } catch (err) {
-      toast({ variant: "destructive", title: "Delete Error" })
-    } finally {
-      setChatToDelete(null)
-    }
+    await update(ref(rtdb, `user_chats/${currentUser.uid}/${chatToDelete.id}`), { lastMessage: "", unreadCount: 0, deletedAt: Date.now() })
+    if (chatId === chatToDelete.id) setActiveDeletedAt(Date.now())
+    setChatToDelete(null)
+    toast({ title: "Chat deleted" })
   }
 
-  if (authLoading && chatSummaries.length === 0) {
-    return <div className="flex-1 flex items-center justify-center h-screen bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
-  }
+  if (authLoading && chatSummaries.length === 0) return <div className="flex-1 flex items-center justify-center h-screen bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
 
-  if (!currentUser && !authLoading) {
-    router.replace("/")
-    return null
-  }
-
-  if (!startWithId) {
-    return (
-      <div className="flex-1 flex flex-col bg-white min-h-screen pb-20 select-none overflow-y-auto no-scrollbar">
-        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md px-4 pt-8 pb-3 flex items-center justify-between border-b">
-          <h1 className="text-2xl font-bold text-[#00A2FF] tracking-tight">Chat</h1>
-        </header>
-        <main className="flex-1">
-          {summariesLoading && chatSummaries.length === 0 ? (
-            <div className="flex items-center justify-center py-20 opacity-20"><Loader2 className="animate-spin" /></div>
-          ) : chatSummaries.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-32 px-12 text-center opacity-40">
-              <ShoppingBag className="w-16 h-16 mb-4" />
-              <p className="font-semibold text-black">No chats yet...</p>
-            </div>
-          ) : chatSummaries.map(summary => (
-            <ChatListItem 
-              key={summary.id} 
-              summary={summary} 
-              onClick={() => router.push(`/chats?startWith=${summary.partnerId}`)}
-              onDelete={() => setChatToDelete(summary)}
-            />
-          ))}
-        </main>
-        
-        <BottomNav />
-
-        <AlertDialog open={!!chatToDelete} onOpenChange={(open) => !open && setChatToDelete(null)}>
-          <AlertDialogContent className="rounded-[2.5rem] max-w-[85vw] p-8 border-none select-none">
-            <div className="flex flex-col items-center text-center space-y-4">
-              <div className="w-20 h-20 bg-red-50 rounded-[2.5rem] flex items-center justify-center">
-                <Trash2 className="w-10 h-10 text-red-500" />
-              </div>
-              <div className="space-y-2">
-                <AlertDialogTitle className="text-2xl font-black text-black tracking-tight">Delete Chat?</AlertDialogTitle>
-                <AlertDialogDescription className="sr-only">
-                  Delete conversation confirmation
-                </AlertDialogDescription>
-              </div>
-            </div>
-            <AlertDialogFooter className="flex-row gap-3 mt-8">
-              <AlertDialogCancel className="flex-1 h-14 rounded-full border-none bg-gray-50 text-black font-black uppercase tracking-widest text-[10px] hover:bg-gray-100">
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction 
-                onClick={handleDeleteChat} 
-                className="flex-1 h-14 rounded-full bg-red-500 hover:bg-red-600 text-white font-black uppercase tracking-widest text-[10px] shadow-lg shadow-red-100"
-              >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
-    )
-  }
+  if (!startWithId) return (
+    <div className="flex-1 flex flex-col bg-white min-h-screen pb-20 select-none overflow-y-auto no-scrollbar">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md px-4 pt-8 pb-3 border-b"><h1 className="text-2xl font-bold text-[#00A2FF] tracking-tight">Chat</h1></header>
+      <main className="flex-1">
+        {summariesLoading ? <div className="flex items-center justify-center py-20 opacity-20"><Loader2 className="animate-spin" /></div> : chatSummaries.length === 0 ? <div className="flex flex-col items-center justify-center py-32 px-12 text-center opacity-40"><ShoppingBag className="w-16 h-16 mb-4" /><p className="font-semibold text-black">No chats yet...</p></div> : chatSummaries.map(s => <ChatListItem key={summary.id} summary={s} onClick={() => router.push(`/chats?startWith=${s.partnerId}`)} onDelete={() => setChatToDelete(s)} />)}
+      </main>
+      <BottomNav />
+      <AlertDialog open={!!chatToDelete} onOpenChange={(o) => !o && setChatToDelete(null)}>
+        <AlertDialogContent className="rounded-[2.5rem] max-w-[85vw] p-8 border-none"><div className="flex flex-col items-center text-center space-y-4"><div className="w-20 h-20 bg-red-50 rounded-[2.5rem] flex items-center justify-center"><Trash2 className="w-10 h-10 text-red-500" /></div><AlertDialogTitle className="text-2xl font-black text-black tracking-tight">Delete Chat?</AlertDialogTitle></div><AlertDialogFooter className="flex-row gap-3 mt-8"><AlertDialogCancel className="flex-1 h-14 rounded-full border-none bg-gray-50 text-black font-black text-[10px] uppercase">Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteChat} className="flex-1 h-14 rounded-full bg-red-500 text-white font-black text-[10px] uppercase">Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
 
   return (
     <div className="flex flex-col h-[100dvh] bg-white overflow-hidden relative select-none">
-      <header className="shrink-0 h-16 bg-white px-4 flex items-center justify-between border-b shadow-sm z-[100] sticky top-0">
-        <Button variant="ghost" size="sm" onClick={() => router.push("/chats")} className="text-[#00A2FF]"><ChevronLeft className="w-6 h-6" /></Button>
-        <div className="flex flex-col items-center flex-1 mx-2">
-          <div className="flex items-center justify-center gap-1 max-w-full">
-            <h3 className="font-semibold text-sm text-black truncate">{partnerProfile?.name || '...'}</h3>
-            {partnerProfile?.isVerified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-white shrink-0" />}
-          </div>
-          {partnerPresence?.state === 'online' && <span className="text-[9px] font-bold text-green-500 uppercase">Online</span>}
-        </div>
-        
-        <div className="flex items-center gap-1 mr-2">
-           <Button variant="ghost" size="icon" className="text-[#00A2FF]" disabled={isCalling} onClick={() => handleStartCall('voice')}>
-             {isCalling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Phone className="w-5 h-5" />}
-           </Button>
-           <Button variant="ghost" size="icon" className="text-[#00A2FF]" disabled={isCalling} onClick={() => handleStartCall('video')}>
-             {isCalling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-5 h-5" />}
-           </Button>
-        </div>
-
-        <Avatar className="w-8 h-8 cursor-pointer" onClick={() => router.push(`/users/${startWithId}`)}>
-          <AvatarImage src={partnerProfile?.photoURL || ""} />
-          <AvatarFallback>{partnerProfile?.name?.[0] || "?"}</AvatarFallback>
-        </Avatar>
-      </header>
-
-      <main className="flex-1 overflow-y-auto no-scrollbar flex flex-col-reverse p-4">
-        <div className="flex flex-col-reverse space-y-4 space-y-reverse">
-          <div ref={messagesEndRef} />
-          {metadataLoading ? (
-            <div className="flex items-center justify-center py-10 opacity-10"><Loader2 className="animate-spin" /></div>
-          ) : messages.map((msg) => (
-            <div key={msg.id} className={cn("flex items-end gap-2", msg.senderId === currentUser?.uid ? 'flex-row-reverse' : 'flex-row')}>
-              <div className={cn("max-w-[75%] p-3.5 text-xs font-medium rounded-[1.2rem]", msg.senderId === currentUser?.uid ? 'bg-[#00A2FF] text-white rounded-br-none' : 'bg-gray-100 text-black rounded-bl-none')}>
-                {msg.text}
-              </div>
-            </div>
-          ))}
-        </div>
-      </main>
-
-      <footer className="shrink-0 bg-white border-t p-4 flex items-center gap-3 z-50">
-        {isBlocked ? (
-          <div className="flex-1 py-3 px-6 bg-red-50 text-red-500 rounded-full text-center flex items-center justify-center gap-2">
-            <Ban className="w-4 h-4" />
-            <span className="text-[10px] font-bold uppercase tracking-widest">User Unavailable</span>
-          </div>
-        ) : (
-          <>
-            <Button variant="ghost" size="icon" onClick={() => setIsGiftDrawerOpen(true)} className="text-[#00A2FF]"><GiftIcon className="w-6 h-6" /></Button>
-            <div className="flex-1 bg-gray-100 rounded-full h-11 px-5 flex items-center">
-              <input 
-                placeholder={partnerProfile ? "Type..." : "Loading..."} 
-                className="bg-transparent flex-1 outline-none text-sm" 
-                value={newMessage} 
-                disabled={!partnerProfile}
-                onChange={(e) => setNewMessage(e.target.value)} 
-                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(newMessage)} 
-              />
-            </div>
-            <Button variant="ghost" disabled={!partnerProfile} onClick={() => handleSendMessage(newMessage)}><Send className="w-6 h-6 text-[#00A2FF]" /></Button>
-          </>
-        )}
-      </footer>
-
-      <Dialog open={isGiftDrawerOpen} onOpenChange={(open) => { setIsGiftDrawerOpen(open); if(!open) setSelectedGift(null); }}>
-        <DialogContent className="bg-[#1A1C21] text-white rounded-t-[2.5rem] bottom-0 top-auto translate-y-0 max-w-md mx-auto p-8 pb-10 border-none [&>button]:hidden select-none z-[200]">
-          <DialogTitle className="sr-only">Send a Gift</DialogTitle>
-          <div className="flex justify-between items-center mb-6 px-2">
-            <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full">
-              <Coins className="w-4 h-4 text-yellow-500" />
-              <span className="text-xs font-bold">{userBalances.coins}</span>
-            </div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Select a Gift</p>
-          </div>
-          
-          <div className="grid grid-cols-4 gap-y-6 gap-x-2 mb-8">
-            {GIFTS.map(gift => (
-              <div 
-                key={gift.id} 
-                onClick={() => setSelectedGift(gift)} 
-                className={cn(
-                  "flex flex-col items-center gap-2 p-2 rounded-2xl transition-all active:scale-95 cursor-pointer border-2",
-                  selectedGift?.id === gift.id ? "border-[#00A2FF] bg-white/5" : "border-transparent"
-                )}
-              >
-                <span className="text-2xl">{gift.icon}</span>
-                <span className="text-[10px] font-bold">{gift.name}</span>
-                <span className="text-[9px] text-gray-400">{gift.price} Coins</span>
-              </div>
-            ))}
-          </div>
-          
-          <Button 
-            disabled={!selectedGift} 
-            onClick={() => handleSendGift(selectedGift)}
-            className="w-full h-14 rounded-full bg-[#00A2FF] text-white font-bold uppercase tracking-widest text-xs"
-          >
-            Send {selectedGift?.name}
-          </Button>
-        </DialogContent>
-      </Dialog>
+      <header className="shrink-0 h-16 bg-white px-4 flex items-center justify-between border-b shadow-sm z-[100] sticky top-0"><Button variant="ghost" size="sm" onClick={() => router.push("/chats")} className="text-[#00A2FF]"><ChevronLeft className="w-6 h-6" /></Button><div className="flex flex-col items-center flex-1 mx-2"><div className="flex items-center justify-center gap-1 max-w-full"><h3 className="font-semibold text-sm text-black truncate">{partnerProfile?.name || '...'}</h3>{partnerProfile?.isVerified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-white shrink-0" />}</div>{partnerPresence?.state === 'online' && <span className="text-[9px] font-bold text-green-500 uppercase">Online</span>}</div><div className="flex items-center gap-1 mr-2"><Button variant="ghost" size="icon" className="text-[#00A2FF]" onClick={() => handleStartCall('voice')}><Phone className="w-5 h-5" /></Button><Button variant="ghost" size="icon" className="text-[#00A2FF]" onClick={() => handleStartCall('video')}><Video className="w-5 h-5" /></Button></div><Avatar className="w-8 h-8 cursor-pointer" onClick={() => router.push(`/users/${startWithId}`)}><AvatarImage src={partnerProfile?.photoURL || ""} /><AvatarFallback>?</AvatarFallback></Avatar></header>
+      <main className="flex-1 overflow-y-auto no-scrollbar flex flex-col-reverse p-4"><div className="flex flex-col-reverse space-y-4 space-y-reverse">{messages.map((m) => (<div key={m.id} className={cn("flex items-end gap-2", m.senderId === currentUser?.uid ? 'flex-row-reverse' : 'flex-row')}><div className={cn("max-w-[75%] p-3.5 text-xs font-medium rounded-[1.2rem]", m.senderId === currentUser?.uid ? 'bg-[#00A2FF] text-white rounded-br-none' : 'bg-gray-100 text-black rounded-bl-none')}>{m.text}</div></div>))}</div></main>
+      <footer className="shrink-0 bg-white border-t p-4 flex items-center gap-3 z-50">{isBlocked ? <div className="flex-1 py-3 px-6 bg-red-50 text-red-500 rounded-full text-center text-[10px] font-bold uppercase tracking-widest">User Unavailable</div> : <><Button variant="ghost" size="icon" onClick={() => setIsGiftDrawerOpen(true)} className="text-[#00A2FF]"><GiftIcon className="w-6 h-6" /></Button><div className="flex-1 bg-gray-100 rounded-full h-11 px-5 flex items-center"><input placeholder="Type..." className="bg-transparent flex-1 outline-none text-sm" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(newMessage)} /></div><Button variant="ghost" onClick={() => handleSendMessage(newMessage)}><Send className="w-6 h-6 text-[#00A2FF]" /></Button></>}</footer>
     </div>
   )
 }
 
 export default function ChatsPage() {
-  return (
-    <Suspense fallback={<div className="flex-1 flex items-center justify-center h-screen bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>}>
-      <ChatsContent />
-    </Suspense>
-  )
+  return <Suspense fallback={<div className="flex-1 flex items-center justify-center h-screen bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>}><ChatsContent /></Suspense>
 }

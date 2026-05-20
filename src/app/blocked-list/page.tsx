@@ -2,10 +2,11 @@
 
 import { useMemo } from "react"
 import { doc, updateDoc, arrayRemove } from "firebase/firestore"
-import { useFirestore, useUser, useDoc, useMemoFirebase } from "@/firebase"
+import { useFirestore, useUser, useDoc } from "@/firebase"
+import { useMemoFirebase } from "@/firebase/utils-client"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, Ban, ShieldCheck, Loader2 } from "lucide-react"
+import { ChevronLeft, ShieldCheck, Loader2 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
 
@@ -18,7 +19,7 @@ interface UserProfile {
 
 function BlockedUserItem({ userId, onUnblock }: { userId: string, onUnblock: (id: string) => void }) {
   const db = useFirestore()
-  const userRef = useMemo(() => doc(db, "users", userId), [db, userId])
+  const userRef = useMemo(() => doc(db!, "users", userId), [db, userId])
   const { data: profile, loading } = useDoc<UserProfile>(userRef)
 
   if (loading) return (
@@ -62,35 +63,21 @@ export default function BlockedListPage() {
   const db = useFirestore()
   const { toast } = useToast()
 
-  const profileRef = useMemoFirebase(() => user?.uid ? doc(db, "users", user.uid) : null, [db, user?.uid])
+  const profileRef = useMemoFirebase(() => (user?.uid && db) ? doc(db, "users", user.uid) : null, [db, user?.uid])
   const { data: profile, loading: profileLoading } = useDoc<UserProfile>(profileRef)
 
   const handleUnblock = async (targetId: string) => {
-    if (!user || !profile) return
+    if (!user || !profile || !db) return
     try {
       const myRef = doc(db, "users", user.uid)
       const targetRef = doc(db, "users", targetId)
 
-      // 1. Remove from my blocking list
-      await updateDoc(myRef, {
-        blocking: arrayRemove(targetId)
-      })
+      await updateDoc(myRef, { blocking: arrayRemove(targetId) })
+      await updateDoc(targetRef, { blockedBy: arrayRemove(user.uid) })
 
-      // 2. Remove from their blockedBy list
-      await updateDoc(targetRef, {
-        blockedBy: arrayRemove(user.uid)
-      })
-
-      toast({
-        title: "User Unblocked",
-        description: "This user can now interact with you again.",
-      })
+      toast({ title: "User Unblocked" })
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to unblock user.",
-      })
+      toast({ variant: "destructive", title: "Error" })
     }
   }
 
@@ -118,7 +105,7 @@ export default function BlockedListPage() {
             </div>
             <div className="space-y-2">
               <h2 className="text-xl font-black text-black tracking-tight">Your List is Empty</h2>
-              <p className="text-sm font-medium text-gray-400">You haven't blocked anyone yet. Enjoy a safe community!</p>
+              <p className="text-sm font-medium text-gray-400">Enjoy a safe community!</p>
             </div>
           </div>
         ) : (
@@ -134,12 +121,6 @@ export default function BlockedListPage() {
           </div>
         )}
       </main>
-
-      <footer className="p-8 text-center bg-gray-50/30">
-        <p className="text-[10px] font-bold text-gray-300 leading-relaxed max-w-xs mx-auto italic uppercase tracking-wider">
-          Blocking a user prevents them from finding your profile and sending you messages.
-        </p>
-      </footer>
     </div>
   )
 }

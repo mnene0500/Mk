@@ -1,5 +1,3 @@
-'use client';
-
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
@@ -8,11 +6,11 @@ import { firebaseConfig } from './config';
 import { useUser } from './auth/use-user';
 import { useCollection } from './firestore/use-collection';
 import { useDoc } from './firestore/use-doc';
-import { useMemo } from 'react';
 
 /**
  * Idempotent initialization of Firebase services.
  * Returns null for services if the configuration is missing to prevent hard crashes.
+ * This is safe to use in both Client Components and Server Actions.
  */
 export function initializeFirebase() {
   const apiKey = firebaseConfig.apiKey || (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_API_KEY : undefined);
@@ -51,8 +49,5 @@ export function initializeFirebase() {
 export * from './provider';
 export { FirebaseClientProvider } from './client-provider';
 
-export function useMemoFirebase<T>(factory: () => T, deps: any[]): T {
-  return useMemo(factory, deps);
-}
-
+// Re-export hooks
 export { useUser, useCollection, useDoc };
