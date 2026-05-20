@@ -2,60 +2,23 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { doc, getDoc } from "firebase/firestore"
-import { useUser, useFirestore } from "@/firebase"
 
 /**
  * Root Redirector with Cinematic Splash Screen.
- * Displays the QIVO logo while handling intelligent routing.
+ * Always leads to /welcome to stop auto-login behavior.
  */
 export default function RootPage() {
   const router = useRouter()
-  const { user, loading, isInitialized } = useUser()
-  const db = useFirestore()
 
   useEffect(() => {
-    if (isInitialized && !loading) {
-      const checkDestination = async () => {
-        // Minimum display time for the splash screen vibe
-        const startTime = Date.now();
-        
-        if (user && db) {
-          try {
-            const userRef = doc(db, "users", user.uid)
-            const snap = await getDoc(userRef)
-            
-            const elapsedTime = Date.now() - startTime;
-            const remainingTime = Math.max(0, 1500 - elapsedTime);
-
-            setTimeout(() => {
-              if (snap.exists() && snap.data().onboardingComplete) {
-                router.replace("/home")
-              } else {
-                if (user.isAnonymous) {
-                  router.replace("/fastonboard")
-                } else {
-                  router.replace("/onboarding")
-                }
-              }
-            }, remainingTime);
-          } catch (e) {
-            console.error("Root redirection error:", e)
-            router.replace("/welcome")
-          }
-        } else if (!user) {
-          const elapsedTime = Date.now() - startTime;
-          const remainingTime = Math.max(0, 1500 - elapsedTime);
-          setTimeout(() => router.replace("/welcome"), remainingTime);
-        } else if (user && !db) {
-           // Case where auth exists but config for DB is missing or failing
-           router.replace("/welcome")
-        }
-      }
-
-      checkDestination()
-    }
-  }, [user, loading, isInitialized, router, db])
+    // Minimum display time for the splash screen vibe (2 seconds)
+    // Then always redirect to /welcome to allow for a manual "Enter" action.
+    const timer = setTimeout(() => {
+      router.replace("/welcome")
+    }, 2000);
+    
+    return () => clearTimeout(timer);
+  }, [router])
 
   return (
     <div className="fixed inset-0 bg-black flex flex-col items-center justify-center overflow-hidden">
