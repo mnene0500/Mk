@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -6,18 +7,31 @@ import { useUser } from "@/firebase"
 
 /**
  * Root Redirector with Cinematic Splash Screen.
- * Optimized for speed: Only waits for Auth session, not full profile data.
+ * Optimized for speed and features a safety fallback to prevent "Forever Loading".
  */
 export default function RootPage() {
   const router = useRouter()
   const { user, loading: authLoading, isInitialized } = useUser()
   const [minTimeElapsed, setMinTimeElapsed] = useState(false)
 
-  // Shortened branding delay for a fast "App Open" feel
   useEffect(() => {
-    const timer = setTimeout(() => setMinTimeElapsed(true), 600)
-    return () => clearTimeout(timer)
-  }, [])
+    // 1. Mandatory Branding Delay (600ms)
+    const brandingTimer = setTimeout(() => setMinTimeElapsed(true), 600)
+    
+    // 2. Safety Fallback: If auth takes > 3.5s, force go to Welcome
+    // This prevents the app from hanging if Firebase Auth initialization is slow
+    const safetyTimer = setTimeout(() => {
+      if (!isInitialized || authLoading) {
+        console.warn("[QIVO] Auth init taking too long. Using fallback redirect.");
+        router.replace("/welcome")
+      }
+    }, 3500)
+
+    return () => {
+      clearTimeout(brandingTimer)
+      clearTimeout(safetyTimer)
+    }
+  }, [isInitialized, authLoading, router])
 
   useEffect(() => {
     // Only proceed if branding time (600ms) has passed AND auth listener has fired
