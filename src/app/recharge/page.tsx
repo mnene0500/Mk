@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, Suspense, useEffect } from "react"
@@ -8,12 +9,10 @@ import { useFirestore, useUser, useDoc, useMemoFirebase, useDatabase } from "@/f
 import { Button } from "@/components/ui/button"
 import { 
   ChevronLeft, 
-  CreditCard, 
   Loader2, 
   History, 
   Users, 
   ArrowRight,
-  CheckCircle2,
   AlertCircle,
   ShieldCheck
 } from "lucide-react"
@@ -25,14 +24,6 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog"
-
-function CoinIcon({ className }: { className?: string }) {
-  return (
-    <div className={cn("w-10 h-10 rounded-full bg-gradient-to-tr from-[#FFD600] to-[#FFF500] flex items-center justify-center shadow-lg", className)}>
-      <span className="text-white font-black text-xl italic drop-shadow-[0_2px_2px_rgba(0,0,0,0.2)]">S</span>
-    </div>
-  )
-}
 
 const PACKAGES = [
   { amount: 500, price: 80.0 },
@@ -51,7 +42,8 @@ function RechargeContent() {
   const rtdb = useDatabase()
   const { toast } = useToast()
   
-  const [selectedPackage, setSelectedPackage] = useState<number | null>(2000)
+  // Set to null so no package is auto-selected
+  const [selectedPackage, setSelectedPackage] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null)
   const [isFulfilling, setIsFulfilling] = useState(false)
@@ -201,7 +193,7 @@ function RechargeContent() {
             className="w-full h-16 rounded-full bg-[#00A2FF] hover:bg-[#0081CC] text-white font-black uppercase tracking-[0.2em] text-sm shadow-2xl active:scale-95 transition-all" 
             onClick={handlePayment}
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : `Pay KES ${PACKAGES.find(p => p.amount === selectedPackage)?.price}`}
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : selectedPackage ? `Pay KES ${PACKAGES.find(p => p.amount === selectedPackage)?.price}` : "Select a Package"}
           </Button>
         </div>
       </footer>

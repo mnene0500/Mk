@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect, useCallback, useRef } from "react"
@@ -66,10 +67,12 @@ export default function HomePage() {
 
   const fetchUsers = useCallback(async (isManual = false) => {
     if (!db || !profile || !currentUser?.uid) return
+    // STATE PRESERVATION: If we already have users and it's not a manual refresh, don't re-fetch
     if (!isManual && users.length > 0) {
       setInitialLoading(false)
       return
     }
+    
     if (isManual) setIsRefreshing(true)
     try {
       const q = query(collection(db, "users"), where("onboardingComplete", "==", true), limit(40))
