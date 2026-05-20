@@ -37,12 +37,12 @@ function CoinIcon({ className }: { className?: string }) {
 }
 
 const PACKAGES = [
-  { amount: 500, price: 80.0, label: "Starter" },
-  { amount: 1000, price: 120.0, label: "Basic" },
-  { amount: 2000, price: 230.0, label: "Popular", badge: "Hot" },
-  { amount: 5000, price: 550.0, label: "Pro" },
-  { amount: 10000, price: 1000.0, label: "Elite", badge: "Best Value" },
-  { amount: 20000, price: 1800.0, label: "VVIP" },
+  { amount: 500, price: 80.0 },
+  { amount: 1000, price: 120.0 },
+  { amount: 2000, price: 230.0 },
+  { amount: 5000, price: 550.0 },
+  { amount: 10000, price: 1000.0 },
+  { amount: 20000, price: 1800.0 },
 ]
 
 function RechargeContent() {
@@ -57,7 +57,7 @@ function RechargeContent() {
   const [loading, setLoading] = useState(false)
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null)
   const [isFulfilling, setIsFulfilling] = useState(false)
-  const [fulfillmentError, setFulfillmentError] = useState<string | null>(null)
+  const [fulfillmentError, setFulfillmentError] = : string | null>(null)
   
   const [currentCoins, setCurrentCoins] = useState(0)
 
@@ -193,21 +193,11 @@ function RechargeContent() {
                 </div>
               </div>
             </div>
-            <div className="mt-8 flex gap-3">
-              <div className="bg-white/15 backdrop-blur-md border border-white/10 px-4 py-2 rounded-2xl flex items-center gap-2">
-                <ShieldCheck className="w-3.5 h-3.5 text-blue-200" />
-                <span className="text-[9px] font-bold uppercase tracking-widest">Secure Wallet</span>
-              </div>
-            </div>
           </div>
 
           <div className="space-y-6">
             <div className="flex items-center justify-between px-1">
               <h2 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Select Package</h2>
-              <div className="flex items-center gap-1 text-[#00A2FF]">
-                 <Star className="w-3 h-3 fill-current" />
-                 <span className="text-[9px] font-black uppercase tracking-widest">Premium Rewards</span>
-              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -222,15 +212,9 @@ function RechargeContent() {
                       : "bg-white border-transparent shadow-sm hover:border-gray-200"
                   )}
                 >
-                  {p.badge && (
-                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-[#FFD600] text-black px-3 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest whitespace-nowrap shadow-sm border border-white">
-                      {p.badge}
-                    </div>
-                  )}
                   <CoinIcon className="w-8 h-8 mb-2" />
                   <span className="text-2xl font-black text-black tracking-tighter">{p.amount}</span>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{p.label}</p>
-                  <div className="bg-gray-50 px-3 py-1 rounded-full border border-gray-100 mt-1">
+                  <div className="bg-gray-50 px-3 py-1 rounded-full border border-gray-100 mt-2">
                     <span className="text-[10px] font-black text-[#00A2FF]">KES {p.price}</span>
                   </div>
                 </div>
@@ -259,11 +243,7 @@ function RechargeContent() {
       </main>
 
       <footer className="fixed bottom-0 inset-x-0 bg-white/80 backdrop-blur-xl p-6 border-t z-50">
-        <div className="max-w-md mx-auto space-y-4">
-          <div className="flex items-center justify-center gap-2 text-[9px] font-bold text-gray-400 uppercase tracking-widest">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            PesaPal Secure 256-bit Encryption
-          </div>
+        <div className="max-w-md mx-auto">
           <Button 
             disabled={loading || !selectedPackage} 
             className="w-full h-16 rounded-full bg-[#00A2FF] hover:bg-[#0081CC] text-white font-black uppercase tracking-[0.2em] text-sm shadow-2xl shadow-blue-200 active:scale-95 transition-all group" 

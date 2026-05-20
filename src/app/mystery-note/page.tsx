@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
@@ -26,7 +27,6 @@ export default function MysteryNotePage() {
   const [isSending, setIsSending] = useState(false)
   const [userCoins, setUserCoins] = useState(0)
 
-  // Guard: Ensure db exists before creating document reference
   const userRef = useMemo(() => (user?.uid && db) ? doc(db, "users", user.uid) : null, [db, user?.uid])
   const { data: profile } = useDoc<any>(userRef)
 
@@ -64,7 +64,7 @@ export default function MysteryNotePage() {
         .slice(0, recipientCount)
 
       if (allTargets.length < recipientCount) {
-        toast({ variant: "destructive", title: "Not enough users", description: "Could not find enough recipients of the opposite gender." })
+        toast({ variant: "destructive", title: "Not enough users", description: "Could not find enough recipients." })
         setIsSending(false)
         return
       }
@@ -114,7 +114,7 @@ export default function MysteryNotePage() {
         await update(ref(rtdb), updates)
       }
 
-      toast({ title: "Note Sent!", description: `Your note was delivered to ${recipientCount} people.` })
+      toast({ title: "Note Sent!", description: `Your note was delivered successfully.` })
       router.push("/chats")
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message })
@@ -125,7 +125,6 @@ export default function MysteryNotePage() {
 
   return (
     <div className="flex-1 bg-[#00A2FF] min-h-screen flex flex-col select-none relative overflow-hidden">
-      {/* Dynamic Background Elements */}
       <div className="absolute -top-10 -right-20 w-80 h-80 opacity-20 pointer-events-none rotate-12">
         <Sparkles className="w-full h-full text-white" />
       </div>
@@ -143,7 +142,7 @@ export default function MysteryNotePage() {
             Mystery<br/>Note
           </h1>
           <p className="text-sm font-bold text-white/70 uppercase tracking-[0.2em] ml-1">
-            Send a secret message into the flux
+            Send a secret message
           </p>
         </div>
 
@@ -172,7 +171,7 @@ export default function MysteryNotePage() {
 
           <div className="relative">
             <Textarea 
-              placeholder="Your little secrets, joys, or doubts..."
+              placeholder="Type your note here..."
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               className="bg-white rounded-[2rem] min-h-[180px] border-none text-black font-bold placeholder:text-gray-300 p-6 text-sm resize-none focus-visible:ring-4 focus-visible:ring-white/20 shadow-inner"
@@ -192,17 +191,7 @@ export default function MysteryNotePage() {
             )}
           </Button>
         </div>
-
-        <div className="p-6 bg-black/10 rounded-[2.5rem] border border-white/5">
-          <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.3em] leading-relaxed text-center">
-            Messages are delivered directly to random users of the opposite gender. Always be respectful.
-          </p>
-        </div>
       </main>
-
-      <footer className="p-8 text-center bg-transparent">
-        <p className="text-[10px] font-bold text-white/20 uppercase tracking-[0.4em]">QIVO Social Network</p>
-      </footer>
     </div>
   )
 }

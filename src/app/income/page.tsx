@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -22,7 +23,6 @@ export default function IncomePage() {
   const [diamondsToConvert, setDiamondsToConvert] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
 
-  // Avoid hydration mismatch by loading cache in useEffect
   useEffect(() => {
     if (typeof window !== 'undefined' && user?.uid) {
       const cached = localStorage.getItem(`balance_cache_${user.uid}`)
@@ -75,7 +75,6 @@ export default function IncomePage() {
         updatedAt: timestamp
       })
 
-      // Update local state and cache immediately (Optimistic Update)
       const updatedBal = {
         coins: balances.coins + expectedCoins,
         diamonds: balances.diamonds - amount
@@ -83,7 +82,6 @@ export default function IncomePage() {
       setBalances(updatedBal)
       if (user?.uid) localStorage.setItem(`balance_cache_${user.uid}`, JSON.stringify(updatedBal))
 
-      // Log history
       const historyRef = push(ref(rtdb, `diamond_history/${user?.uid}`))
       await set(historyRef, {
         amount: -amount,
@@ -95,7 +93,7 @@ export default function IncomePage() {
       toast({ title: "Success!", description: `Added ${expectedCoins} coins to your wallet.` })
       setDiamondsToConvert("")
     } catch (err) {
-      toast({ variant: "destructive", title: "Error", description: "Conversion failed. Please try again." })
+      toast({ variant: "destructive", title: "Error", description: "Conversion failed." })
     } finally {
       setIsProcessing(false)
     }
@@ -171,21 +169,13 @@ export default function IncomePage() {
           </Button>
         </div>
 
-        <div className="p-6 bg-gray-50 rounded-3xl space-y-4">
+        <div className="p-6 bg-gray-50 rounded-3xl">
           <div className="flex items-start gap-3">
             <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
               <span className="text-[10px] font-bold text-blue-600">i</span>
             </div>
             <p className="text-[11px] font-medium text-gray-500 leading-relaxed">
-              Conversion Rate: 1000 Diamonds = 90 Coins. Coins can be used to chat and send gifts to other users.
-            </p>
-          </div>
-          <div className="flex items-start gap-3">
-            <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-              <span className="text-[10px] font-bold text-blue-600">i</span>
-            </div>
-            <p className="text-[11px] font-medium text-gray-500 leading-relaxed">
-              Need to withdraw cash? Approved Agency members can convert diamonds to KES in the <span className="text-[#00A2FF] font-bold">Agency Wallet</span>.
+              Conversion Rate: 1000 Diamonds = 90 Coins. Coins can be used to chat and send gifts to other users across the QIVO network.
             </p>
           </div>
         </div>
