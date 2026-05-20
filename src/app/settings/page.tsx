@@ -80,10 +80,6 @@ export default function SettingsPage() {
     try {
       localStorage.clear()
       sessionStorage.clear()
-      if ('serviceWorker' in navigator) {
-        const regs = await navigator.serviceWorker.getRegistrations()
-        for (const r of regs) await r.unregister()
-      }
       toast({ title: "App Reset", description: "Reloading..." })
       setTimeout(() => window.location.reload(), 1000)
     } catch (err) {

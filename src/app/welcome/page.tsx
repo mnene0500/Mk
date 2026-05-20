@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Mail, Loader2, AlertCircle } from "lucide-react"
+import { Mail, Loader2, AlertCircle, RefreshCw } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth"
 import { useAuth, useUser, useFirestore, useDatabase } from "@/firebase"
@@ -14,8 +14,7 @@ import { useToast } from "@/hooks/use-toast"
 
 /**
  * @fileOverview Welcome / Auth Entry Page.
- * Strictly initializes the account document before allowing entry.
- * Google Sign-In automatically completes onboarding.
+ * Optimized for high-speed redirection and Google Auto-Onboarding.
  */
 export default function WelcomePage() {
   const [mounted, setMounted] = useState(false)
@@ -46,17 +45,13 @@ export default function WelcomePage() {
             if (userSnap.data().onboardingComplete) {
               router.replace("/home")
             } else {
-              // Existing user but not complete? Likely a partial email sign up
               router.replace("/onboarding")
             }
           } else {
-            // For safety, standard auth users go to onboarding, 
-            // but the handleGoogleLogin below handles Google users specifically.
-            // If they reach here, they are likely standard email users.
+            // No profile? Send to onboarding for manual setup
             router.replace("/onboarding")
           }
         } catch (error) {
-          console.error("[Welcome Redirect Error]:", error)
           router.replace("/onboarding")
         }
       }
@@ -66,7 +61,7 @@ export default function WelcomePage() {
 
   const handleGoogleLogin = async () => {
     if (!auth || !db || !rtdb) {
-      toast({ variant: "destructive", title: "Config Error", description: "Firebase is not ready." });
+      toast({ variant: "destructive", title: "Config Error", description: "Firebase not ready." });
       return;
     }
 
@@ -76,29 +71,26 @@ export default function WelcomePage() {
       const result = await signInWithPopup(auth, provider)
       const googleUser = result.user
 
-      // Check if user already exists
       const userRef = doc(db, "users", googleUser.uid)
       const userSnap = await getDoc(userRef)
 
       if (!userSnap.exists()) {
-        // NEW GOOGLE USER: Auto-onboard with fetched details
         const qId = Math.floor(1000000 + Math.random() * 900000000).toString();
         
-        // Google doesn't give gender/dob via Firebase scope easily, 
-        // so we set defaults but mark onboarding as COMPLETE.
+        // AUTO-ONBOARD GOOGLE USER
         const skeletonData = {
           uid: googleUser.uid,
           email: googleUser.email,
           name: googleUser.displayName || "Google User",
           matchFlowId: qId,
-          onboardingComplete: true, // SKIPPING ONBOARDING
+          onboardingComplete: true, // SKIP ONBOARDING
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           isVerified: false,
           isAdmin: false,
-          gender: "not specified", // Set default to avoid undefined errors
-          dob: "2000-01-01", // Set default 
-          country: "Kenya", // Default for your main market
+          gender: "not specified",
+          dob: "2000-01-01",
+          country: "Kenya",
           photoURL: googleUser.photoURL || `https://picsum.photos/seed/${googleUser.uid}/400/400`,
           lookingFor: "Dating",
           isDeleted: false,
@@ -110,7 +102,6 @@ export default function WelcomePage() {
         
         await setDoc(userRef, skeletonData)
 
-        // Initialize Realtime Wallet
         const timestamp = Date.now()
         await rtdbSet(ref(rtdb, `balances/${googleUser.uid}`), {
           coins: 150, // Welcome Bonus
@@ -125,18 +116,14 @@ export default function WelcomePage() {
           description: 'Google Sign-in Bonus',
           timestamp: timestamp
         })
-
-        console.log("[Welcome] Auto-onboarded Google user:", googleUser.uid)
       } else if (!userSnap.data().onboardingComplete) {
-          // Existing user with incomplete profile? Force complete it now.
           await setDoc(userRef, { onboardingComplete: true }, { merge: true })
       }
 
-      // Successful Google entry always lands on Home
       router.replace("/home")
     } catch (error: any) {
       if (error.code !== 'auth/popup-closed-by-user') {
-        toast({ variant: "destructive", title: "Sign-In Error", description: error.message || "Failed to connect." })
+        toast({ variant: "destructive", title: "Sign-In Error", description: error.message })
       }
       setLoading(false)
     }
@@ -146,7 +133,7 @@ export default function WelcomePage() {
     return (
       <div className="fixed inset-0 bg-black flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-[#00A2FF]" />
-        <p className="text-[10px] font-bold text-[#00A2FF] uppercase tracking-[0.3em] animate-pulse">Establishing Session...</p>
+        <p className="text-[10px] font-bold text-[#00A2FF] uppercase tracking-[0.3em] animate-pulse">Entering QIVO...</p>
       </div>
     )
   }
@@ -154,13 +141,7 @@ export default function WelcomePage() {
   return (
     <div className="fixed inset-0 bg-black overflow-hidden select-none">
       <div className="absolute inset-0 z-0 overflow-hidden">
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover opacity-60"
-        >
+        <video autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover opacity-60">
           <source src="/backgroundvideo.mp4" type="video/mp4" />
         </video>
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
@@ -168,20 +149,11 @@ export default function WelcomePage() {
 
       <div className="relative z-10 h-full flex flex-col px-8 pt-24 pb-16 justify-between items-center text-center">
         <div className="flex flex-col items-center space-y-6 pt-10">
-          <h1 className="text-7xl font-logo font-black text-white drop-shadow-2xl tracking-tight">
-            QIVO
-          </h1>
+          <h1 className="text-7xl font-logo font-black text-white drop-shadow-2xl tracking-tight">QIVO</h1>
         </div>
 
         <div className="w-full max-w-sm space-y-4">
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {!auth && (
-              <div className="mb-6 p-4 bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl flex flex-col items-center gap-2">
-                <AlertCircle className="w-6 h-6 text-[#00A2FF]" />
-                <p className="text-[10px] font-bold text-white uppercase tracking-widest">Auth Service Pending</p>
-              </div>
-            )}
-
             <Button 
               disabled={loading}
               onClick={() => router.push("/auth")}
@@ -200,9 +172,7 @@ export default function WelcomePage() {
               className="w-full h-16 rounded-3xl border border-white/20 bg-white/5 backdrop-blur-xl text-white hover:bg-white/10 font-bold text-sm tracking-widest uppercase active:scale-95 transition-all"
             >
               <div className="flex items-center justify-center gap-3">
-                {loading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                   <svg className="w-5 h-5" viewBox="0 0 24 24">
                     <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                     <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -217,10 +187,7 @@ export default function WelcomePage() {
 
           <div className="pt-8">
             <p className="text-[10px] text-white/30 font-medium px-8 leading-relaxed">
-              By entering, you confirm you are 18+ and agree to our{' '}
-              <Link href="/terms" className="text-white/50 underline underline-offset-4 decoration-white/20">Terms</Link>
-              {' '}and{' '}
-              <Link href="/privacy" className="text-white/50 underline underline-offset-4 decoration-white/20">Privacy Policy</Link>.
+              By entering, you confirm you are 18+ and agree to our <Link href="/terms" className="text-white/50 underline">Terms</Link> and <Link href="/privacy" className="text-white/50 underline">Privacy Policy</Link>.
             </p>
           </div>
         </div>
