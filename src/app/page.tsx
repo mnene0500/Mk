@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useUser, useFirestore, useDoc } from "@/firebase"
 import { doc } from "firebase/firestore"
@@ -8,35 +8,46 @@ import { doc } from "firebase/firestore"
 /**
  * Root Redirector with Cinematic Splash Screen.
  * Checks auth status and redirects automatically if a session exists.
+ * Optimized for fast transitions.
  */
 export default function RootPage() {
   const router = useRouter()
   const { user, loading: authLoading, isInitialized } = useUser()
   const db = useFirestore()
   const { data: profile, loading: profileLoading } = useDoc<any>(user?.uid && db ? doc(db, "users", user.uid) : null)
+  
+  const [minTimeElapsed, setMinTimeElapsed] = useState(false)
+
+  // Ensure splash is visible for branding, but not for too long
+  useEffect(() => {
+    const timer = setTimeout(() => setMinTimeElapsed(true), 1000)
+    return () => clearTimeout(timer)
+  }, [])
 
   useEffect(() => {
-    if (!isInitialized || authLoading) return
+    // Only proceed if minimum splash time (1s) has passed AND auth listener has fired
+    if (!minTimeElapsed || !isInitialized || authLoading) return
 
-    const timer = setTimeout(() => {
-      if (user) {
-        if (!profileLoading && profile) {
-          if (profile.onboardingComplete) {
-            router.replace("/home")
-          } else {
-            router.replace(user.isAnonymous ? "/fastonboard" : "/onboarding")
-          }
-        } else if (!profileLoading && !profile) {
-          // No profile found but user exists
-          router.replace("/onboarding")
+    if (user) {
+      // If user is logged in, we must wait for the profile to know where to send them
+      if (profileLoading) return 
+
+      if (profile) {
+        if (profile.onboardingComplete) {
+          router.replace("/home")
+        } else {
+          // Send to correct onboarding flow
+          router.replace(user.isAnonymous ? "/fastonboard" : "/onboarding")
         }
       } else {
-        router.replace("/welcome")
+        // User exists in Auth but no Firestore record yet
+        router.replace("/onboarding")
       }
-    }, 2000);
-    
-    return () => clearTimeout(timer);
-  }, [user, isInitialized, authLoading, profile, profileLoading, router])
+    } else {
+      // No active session, send to Welcome/Intro
+      router.replace("/welcome")
+    }
+  }, [user, isInitialized, authLoading, profile, profileLoading, router, minTimeElapsed])
 
   return (
     <div className="fixed inset-0 bg-black flex flex-col items-center justify-center overflow-hidden">
