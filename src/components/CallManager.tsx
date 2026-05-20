@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useRef } from "react"
@@ -6,11 +7,12 @@ import { ref, onValue, set, off } from "firebase/database"
 import { useUser, useDatabase } from "@/firebase"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { Phone, PhoneOff, Video, X, Minus, GripHorizontal } from "lucide-react"
+import { Phone, PhoneOff, Video, Minus, GripHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 /**
  * @fileOverview Global listener for incoming calls with auto-decline and draggable minimize functionality.
+ * Watches the RTDB node `calls/${uid}` for real-time signaling.
  */
 export function CallManager() {
   const router = useRouter()
@@ -23,6 +25,7 @@ export function CallManager() {
   
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   
+  // Draggable position (for minimized state)
   const [position, setPosition] = useState({ x: 20, y: 100 })
   const [isDragging, setIsDragging] = useState(false)
   const dragOffset = useRef({ x: 0, y: 0 })
@@ -35,6 +38,12 @@ export function CallManager() {
       const unsubscribe = onValue(callRef, (snap) => {
         if (snap.exists()) {
           const data = snap.val()
+          // Safety: Ignore signals older than 2 minutes
+          if (Date.now() - data.timestamp > 120000) {
+            set(ref(rtdb, `calls/${user.uid}`), null)
+            return
+          }
+
           setIncomingCall(data)
           setIsMinimized(false)
           setTimeLeft(40)
@@ -70,8 +79,9 @@ export function CallManager() {
     
     if (timerRef.current) clearInterval(timerRef.current)
     try {
+      // Clear the signal first so the caller knows we responded
       await set(ref(rtdb, `calls/${user.uid}`), null)
-      router.push(`/call/${chatId}?type=${type}&partner=${encodeURIComponent(callerName)}`)
+      router.push(`/call/${chatId}?type=${type}&partner=${encodeURIComponent(callerName)}&caller=false`)
     } catch (err) {
       setIncomingCall(null)
     }
@@ -125,6 +135,7 @@ export function CallManager() {
 
   if (!incomingCall) return null
 
+  // FULL SCREEN RECEIVER UI
   if (!isMinimized) {
     return (
       <div className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center p-8 animate-in fade-in zoom-in-95 duration-500 select-none">
@@ -151,10 +162,12 @@ export function CallManager() {
           </div>
 
           <div className="space-y-3">
-            <h2 className="text-4xl font-black text-white tracking-tighter">{incomingCall.callerName}</h2>
-            <div className="flex flex-col items-center gap-1">
+            <h2 className="text-4xl font-black text-white tracking-tighter leading-none">{incomingCall.callerName}</h2>
+            <div className="flex flex-col items-center gap-1.5">
               <p className="text-[#00A2FF] font-black uppercase tracking-[0.3em] text-[10px] animate-pulse">Ringing...</p>
-              <p className="text-white/20 font-bold text-[9px] uppercase tracking-widest">Auto-decline in {timeLeft}s</p>
+              <div className="bg-white/5 px-3 py-1 rounded-full border border-white/5">
+                <p className="text-white/20 font-bold text-[9px] uppercase tracking-widest">Auto-decline in {timeLeft}s</p>
+              </div>
             </div>
           </div>
 
@@ -171,6 +184,7 @@ export function CallManager() {
     )
   }
 
+  // MINIMIZED RECEIVER UI (DRAGGABLE)
   return (
     <div 
       className={cn("fixed z-[9999] cursor-pointer select-none touch-none active:scale-105 transition-transform", isDragging && "scale-110")}
