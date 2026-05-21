@@ -100,9 +100,10 @@ function ChatsContent() {
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !chatId || !currentUser?.id) return
-    const msg = { chat_id: chatId, text: newMessage.trim(), sender_id: currentUser.id, timestamp: Date.now() }
+    const timestamp = Date.now()
+    const msg = { chat_id: chatId, text: newMessage.trim(), sender_id: currentUser.id, timestamp }
     await supabase.from('messages').insert(msg)
-    await supabase.from('chats').upsert({ id: chatId, last_message: newMessage.trim(), last_message_at: Date.now(), participant_ids: [currentUser.id, startWithId] })
+    await supabase.from('chats').upsert({ id: chatId, last_message: newMessage.trim(), last_message_at: timestamp, participant_ids: [currentUser.id, startWithId] })
     setNewMessage("")
   }
 

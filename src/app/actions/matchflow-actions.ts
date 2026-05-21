@@ -3,7 +3,7 @@
 import { supabase } from '@/lib/supabase';
 
 /**
- * @fileOverview Supabase Database Server Actions for QIVO.
+ * @fileOverview Standardized Supabase Server Actions for QIVO.
  */
 
 export async function awardCoinsAction(callerUid: string, targetMatchFlowId: string, amount: number) {

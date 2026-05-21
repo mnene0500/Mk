@@ -122,13 +122,13 @@ export default function MePage() {
       })
       // Load Balances
       supabase.from('balances').select('*').eq('user_id', user.id).single().then(({ data }) => {
-        if (data) setBalances({ coins: data.coins || 0, diamonds: data.diamonds || 0 })
+        if (data) setBalances({ coins: data.coins || 0, diamonds: Number(data.diamonds) || 0 })
       })
       
       // Realtime Balance Listener
       const channel = supabase.channel(`balance:${user.id}`)
         .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
-          setBalances({ coins: payload.new.coins, diamonds: payload.new.diamonds })
+          setBalances({ coins: payload.new.coins, diamonds: Number(payload.new.diamonds) })
         })
         .subscribe()
         
