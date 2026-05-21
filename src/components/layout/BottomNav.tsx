@@ -1,3 +1,4 @@
+
 "use client"
 
 import Link from "next/link"
@@ -21,6 +22,7 @@ export function BottomNav() {
     if (!user?.id) return
     
     const fetchUnread = async () => {
+      // Simplified: check for presence of any chat
       const { data } = await supabase
         .from('chats')
         .select('id')
