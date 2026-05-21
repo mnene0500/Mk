@@ -88,14 +88,10 @@ export default function SettingsPage() {
     if (!user || deleteConfirmText.toUpperCase() !== "DELETE") return
 
     try {
-      // 1. Mark user as deleted in Supabase
       await supabase.from('users').update({ is_deleted: true, onboarding_complete: false }).eq('uid', user.id)
-      
-      // 2. Sign out
       await supabase.auth.signOut()
       window.location.replace("/welcome")
-      
-      toast({ title: "Account Deletion Requested", description: "Your data has been scheduled for removal." })
+      toast({ title: "Account Deletion Requested" })
     } catch (error: any) {
       toast({ variant: "destructive", title: "Deletion failed", description: error.message })
     }
@@ -137,28 +133,15 @@ export default function SettingsPage() {
                   </div>
                   <AlertDialogTitle className="text-xl font-bold">Delete Account?</AlertDialogTitle>
                   <AlertDialogDescription className="text-xs font-bold pt-2 uppercase tracking-widest leading-relaxed text-center">
-                    This action is permanent. To confirm, please type <span className="text-red-600 font-black">DELETE</span> below:
+                    Type <span className="text-red-600 font-black">DELETE</span> to confirm:
                   </AlertDialogDescription>
                 </AlertDialogHeader>
-                
                 <div className="py-4">
-                  <Input 
-                    placeholder="Type DELETE" 
-                    value={deleteConfirmText} 
-                    onChange={(e) => setDeleteConfirmText(e.target.value)}
-                    className="rounded-2xl h-14 border-red-100 bg-red-50/30 text-center font-black uppercase tracking-widest"
-                  />
+                  <Input placeholder="Type DELETE" value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)} className="rounded-2xl h-14 text-center font-black" />
                 </div>
-
                 <AlertDialogFooter className="flex-row gap-3 mt-4">
-                  <AlertDialogCancel className="flex-1 h-14 rounded-full border-none bg-gray-50 font-bold uppercase tracking-widest text-[10px]">Cancel</AlertDialogCancel>
-                  <AlertDialogAction 
-                    disabled={deleteConfirmText.toUpperCase() !== "DELETE"}
-                    className="flex-1 h-14 rounded-full bg-red-500 hover:bg-red-600 font-bold uppercase tracking-widest text-[10px] disabled:opacity-30"
-                    onClick={handleDeleteAccount}
-                  >
-                    Delete
-                  </AlertDialogAction>
+                  <AlertDialogCancel className="flex-1 h-14 rounded-full">Cancel</AlertDialogCancel>
+                  <AlertDialogAction disabled={deleteConfirmText.toUpperCase() !== "DELETE"} className="flex-1 h-14 rounded-full bg-red-500" onClick={handleDeleteAccount}>Delete</AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
@@ -179,13 +162,10 @@ export default function SettingsPage() {
             <AlertDialogContent className="rounded-[2.5rem] max-w-[85vw] p-8 border-none select-none">
               <AlertDialogHeader className="items-center text-center">
                 <AlertDialogTitle className="text-xl font-bold">Sign Out?</AlertDialogTitle>
-                <AlertDialogDescription className="text-xs font-bold uppercase tracking-widest text-center">
-                  Are you sure you want to end your session?
-                </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter className="flex-row gap-3 mt-6">
-                <AlertDialogCancel className="flex-1 h-14 rounded-full border-none bg-gray-50 font-bold uppercase tracking-widest text-[10px]">No</AlertDialogCancel>
-                <AlertDialogAction onClick={handleSignOut} className="flex-1 h-14 rounded-full bg-black text-white font-bold uppercase tracking-widest text-[10px]">Yes, Logout</AlertDialogAction>
+                <AlertDialogCancel className="flex-1 h-14 rounded-full">No</AlertDialogCancel>
+                <AlertDialogAction onClick={handleSignOut} className="flex-1 h-14 rounded-full bg-black">Yes, Logout</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>

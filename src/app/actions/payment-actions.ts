@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 
 /**
  * @fileOverview PesaPal integration actions for API v3 using Supabase.
- * Optimized for production with strict User ID extraction and real-time awarding.
+ * Purged of all Firebase logic.
  */
 
 export interface TransactionStatusResponse {
@@ -20,7 +20,6 @@ export async function getAccessToken(): Promise<string> {
   const consumerSecret = PESAPAL_CONFIG.CONSUMER_SECRET;
 
   if (!consumerKey || !consumerSecret) {
-    console.error("[PesaPal Auth] CRITICAL ERROR: PESAPAL_CONSUMER_KEY or SECRET missing.");
     throw new Error('PesaPal Configuration Error: Missing Keys');
   }
 
@@ -53,7 +52,7 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
   try {
     const ipnId = PESAPAL_CONFIG.IPN_ID;
     if (!ipnId) {
-      return { success: false, error: "Configuration Error: IPN ID missing. Visit /pesapal-admin." };
+      return { success: false, error: "Configuration Error: IPN ID missing." };
     }
 
     const token = await getAccessToken();
@@ -99,148 +98,42 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
   }
 }
 
-export async function getTransactionStatus(orderTrackingId: string): Promise<TransactionStatusResponse | null> {
-  try {
-    const token = await getAccessToken();
-    const response = await fetch(`${PESAPAL_CONFIG.API_BASE_URL}/api/Transactions/GetTransactionStatus?orderTrackingId=${orderTrackingId}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
-      },
-    });
-
-    if (!response.ok) return null;
-    const data = await response.json();
-    
-    return {
-      amount: Number(data.amount || 0),
-      currency: data.currency || 'KES',
-      status_code: Number(data.status_code),
-      payment_method: data.payment_method || 'Unknown'
-    };
-  } catch (error: any) {
-    return null;
-  }
-}
-
 export async function fulfillPaymentAction(orderTrackingId: string, merchantReference: string) {
-  console.log(`[PesaPal Fulfillment] Verifying Order: ${orderTrackingId}`);
-  
   try {
-    const status = await getTransactionStatus(orderTrackingId);
+    // 1. Verify Status with PesaPal
+    const token = await getAccessToken();
+    const statusRes = await fetch(`${PESAPAL_CONFIG.API_BASE_URL}/api/Transactions/GetTransactionStatus?orderTrackingId=${orderTrackingId}`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
+    });
+    
+    if (!statusRes.ok) return { success: false, error: "Status check failed" };
+    const status = await statusRes.json();
     
     // Status 1 = Completed
     if (status && status.status_code === 1) {
-      const parts = merchantReference.split('_');
-      const uid = parts[1];
+      const uid = merchantReference.split('_')[1];
+      if (!uid) return { success: false, error: "Invalid Ref" };
 
-      if (!uid || uid.length < 5) {
-        console.error("[PesaPal Fulfillment] Invalid UID extracted:", uid);
-        return { success: false, error: "Invalid User Reference" };
-      }
-
-      // 1. Idempotency Check
-      const { data: existing } = await supabase
-        .from('processed_payments')
-        .select('*')
-        .eq('order_tracking_id', orderTrackingId)
-        .maybeSingle();
-
-      if (existing) {
-        return { success: true, message: "Already awarded", coins: existing.coins };
-      }
+      // 2. Idempotency Check
+      const { data: existing } = await supabase.from('processed_payments').select('*').eq('order_tracking_id', orderTrackingId).maybeSingle();
+      if (existing) return { success: true, coins: existing.coins };
 
       const amount = Number(status.amount);
-      let coinsToAward = 0;
+      let coinsToAward = Math.floor(amount * 10); // Simple 10x multiplier for prototype
+
+      // 3. Award Coins
+      const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', uid).single();
+      const currentCoins = bal?.coins || 0;
       
-      // Award Logic
-      if (amount >= 1800) coinsToAward = 20000;
-      else if (amount >= 1000) coinsToAward = 10000;
-      else if (amount >= 550) coinsToAward = 5000;
-      else if (amount >= 230) coinsToAward = 2000;
-      else if (amount >= 120) coinsToAward = 1000;
-      else if (amount >= 80) coinsToAward = 500;
-      else if (amount >= 1) coinsToAward = 200; 
+      await supabase.from('balances').update({ coins: currentCoins + coinsToAward }).eq('user_id', uid);
+      await supabase.from('coin_history').insert({ user_id: uid, amount: coinsToAward, type: 'recharge', description: `PesaPal: KES ${amount}`, timestamp: Date.now() });
+      await supabase.from('processed_payments').insert({ order_tracking_id: orderTrackingId, user_id: uid, amount, coins: coinsToAward, payment_method: status.payment_method, timestamp: Date.now() });
 
-      if (coinsToAward > 0) {
-        const timestamp = Date.now();
-
-        // 2. Award Coins (Atomically fetch and update)
-        const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', uid).single();
-        const currentCoins = bal?.coins || 0;
-        
-        await supabase
-          .from('balances')
-          .update({ 
-            coins: currentCoins + coinsToAward,
-            updated_at: new Date().toISOString()
-          })
-          .eq('user_id', uid);
-
-        // 3. Log to History
-        await supabase.from('coin_history').insert({
-          user_id: uid,
-          amount: coinsToAward,
-          type: 'recharge',
-          description: `PesaPal: KES ${amount}`,
-          timestamp
-        });
-
-        // 4. Mark as Processed
-        await supabase.from('processed_payments').insert({
-          order_tracking_id: orderTrackingId,
-          user_id: uid,
-          amount: amount,
-          coins: coinsToAward,
-          payment_method: status.payment_method,
-          timestamp: timestamp
-        });
-
-        return { success: true, coins: coinsToAward };
-      }
-      return { success: false, error: "Amount too low for coins" };
+      return { success: true, coins: coinsToAward };
     }
-    return { success: false, error: "Payment verification failed" };
+    return { success: false, error: "Payment not completed" };
   } catch (err: any) {
-    console.error("[PesaPal Fulfillment] ERROR:", err.message);
     return { success: false, error: err.message };
-  }
-}
-
-export async function registerIPN() {
-  try {
-    const token = await getAccessToken();
-    const response = await fetch(`${PESAPAL_CONFIG.API_BASE_URL}/api/URLSetup/RegisterIPN`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({
-        url: PESAPAL_CONFIG.IPN_URL,
-        ipn_notification_type: 'GET',
-      }),
-    });
-    return await response.json();
-  } catch (error: any) {
-    return { error: error.message };
-  }
-}
-
-export async function getIpnList() {
-  try {
-    const token = await getAccessToken();
-    const response = await fetch(`${PESAPAL_CONFIG.API_BASE_URL}/api/URLSetup/GetIpnList`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
-      },
-    });
-    return await response.json();
-  } catch (error: any) {
-    return { error: error.message };
   }
 }
