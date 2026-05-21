@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo, useEffect, useCallback } from "react"
@@ -30,6 +31,7 @@ interface UserProfile {
   interests?: string
   is_verified?: boolean
   onboarding_complete: boolean
+  is_deleted?: boolean
   blocking?: string[]
   blocked_by?: string[]
 }
@@ -66,10 +68,12 @@ export default function ExplorePage() {
     if (!profile) return
     setLoading(true)
     try {
+      // SOFT DELETE FILTER: Ensure we hide users marked as is_deleted
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('onboarding_complete', true)
+        .or('is_deleted.is.null,is_deleted.eq.false')
         .limit(40)
 
       if (data) {

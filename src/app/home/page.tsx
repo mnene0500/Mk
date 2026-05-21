@@ -20,6 +20,7 @@ interface UserProfile {
   dob: string
   onboarding_complete: boolean
   is_verified?: boolean
+  is_deleted?: boolean
 }
 
 let globalUserCache: UserProfile[] = [];
@@ -96,10 +97,12 @@ export default function HomePage() {
     }
 
     try {
+      // SOFT DELETE FILTER: Only fetch users where is_deleted is false or null
       const { data } = await supabase
         .from('users')
         .select('*')
         .eq('onboarding_complete', true)
+        .or('is_deleted.is.null,is_deleted.eq.false')
         .limit(60);
 
       if (data) {

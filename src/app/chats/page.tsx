@@ -54,10 +54,10 @@ function ChatsContent() {
     if (!currentUser?.id) return
     
     const fetchSummaries = async () => {
-      // RLS ensures only the current user's chats are returned
       const { data: chatsData } = await supabase
         .from('chats')
         .select('*')
+        .contains('participant_ids', [currentUser.id])
         .order('last_message_at', { ascending: false })
 
       if (chatsData) {
@@ -86,10 +86,7 @@ function ChatsContent() {
     fetchSummaries()
 
     const channel = supabase.channel('chats_realtime')
-      .on('postgres_changes', { 
-        event: '*', 
-        table: 'chats'
-      }, () => fetchSummaries())
+      .on('postgres_changes', { event: '*', table: 'chats' }, () => fetchSummaries())
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -102,6 +99,9 @@ function ChatsContent() {
       const cId = `direct_${ids[0]}_${ids[1]}`
       setChatId(cId)
       supabase.from('users').select('*').eq('uid', startWithId).single().then(({ data }) => setPartnerProfile(data))
+    } else {
+      setChatId(null)
+      setPartnerProfile(null)
     }
   }, [currentUser?.id, startWithId])
 
@@ -128,7 +128,11 @@ function ChatsContent() {
       }, (payload) => {
         const newMsg = payload.new as Message
         setMessages(prev => {
-          if (prev.find(m => m.id === newMsg.id || (m.timestamp === newMsg.timestamp && m.text === newMsg.text))) return prev
+          // Prevent duplicates from optimistic UI
+          if (prev.some(m => m.text === newMsg.text && Math.abs(m.timestamp - newMsg.timestamp) < 5000)) {
+            // Replace optimistic with real
+            return prev.map(m => m.is_optimistic && m.text === newMsg.text ? newMsg : m)
+          }
           return [newMsg, ...prev]
         })
       })
@@ -142,43 +146,39 @@ function ChatsContent() {
     
     const text = newMessage.trim()
     const timestamp = Date.now()
-    setNewMessage("")
     
-    // OPTIMISTIC UI
-    const tempId = `temp-${timestamp}`
+    // IMMEDIATE OPTIMISTIC UPDATE (Zero Latency)
     const optimisticMsg: Message = {
-      id: tempId,
+      id: `temp-${timestamp}`,
       text: text,
       sender_id: currentUser.id,
       timestamp: timestamp,
       is_optimistic: true
     }
+    
     setMessages(prev => [optimisticMsg, ...prev])
+    setNewMessage("")
 
     try {
-      // 1. Update Chat Summary (ensure chat exists)
-      const { error: chatErr } = await supabase.from('chats').upsert({ 
-        id: chatId, 
-        last_message: text, 
-        last_message_at: timestamp, 
-        participant_ids: [currentUser.id, startWithId] 
-      }, { onConflict: 'id' })
-      
-      if (chatErr) throw chatErr
-
-      // 2. Insert Message
-      const { error: msgErr } = await supabase.from('messages').insert({ 
-        chat_id: chatId, 
-        text: text, 
-        sender_id: currentUser.id, 
-        timestamp 
-      })
-      
-      if (msgErr) throw msgErr
-
+      // Execute database writes in parallel for speed
+      await Promise.all([
+        supabase.from('chats').upsert({ 
+          id: chatId, 
+          last_message: text, 
+          last_message_at: timestamp, 
+          participant_ids: [currentUser.id, startWithId] 
+        }, { onConflict: 'id' }),
+        supabase.from('messages').insert({ 
+          chat_id: chatId, 
+          text: text, 
+          sender_id: currentUser.id, 
+          timestamp 
+        })
+      ])
     } catch (err: any) {
-      setMessages(prev => prev.filter(m => m.id !== tempId))
-      toast({ variant: "destructive", title: "Access Denied", description: "You don't have permission to message this user." })
+      // Rollback optimistic message if error
+      setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
+      toast({ variant: "destructive", title: "Message Failed", description: "Could not send message." })
     }
   }
 
@@ -253,11 +253,11 @@ function ChatsContent() {
           <div 
             key={m.id} 
             className={cn(
-              "max-w-[80%] p-4 rounded-3xl text-sm font-medium shadow-sm transition-opacity",
+              "max-w-[80%] p-4 rounded-3xl text-sm font-medium shadow-sm transition-all duration-300 animate-in fade-in slide-in-from-bottom-2",
               m.sender_id === currentUser?.id 
                 ? "bg-[#00A2FF] text-white self-end rounded-br-none" 
                 : "bg-white text-black self-start rounded-bl-none border border-black/5",
-              m.is_optimistic && "opacity-60"
+              m.is_optimistic && "opacity-60 translate-y-1"
             )}
           >
             {m.text}
