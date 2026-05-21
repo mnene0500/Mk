@@ -1,3 +1,4 @@
+
 'use server';
 
 import { PESAPAL_CONFIG } from '@/lib/pesapal-config';
@@ -158,15 +159,35 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
       if (existing) return { success: true, coins: existing.coins };
 
       const amount = Number(status.amount);
-      // Logic: awarded coins = KES * 10
+      // Award Logic: KES 1 = 10 Coins
       let coinsToAward = Math.floor(amount * 10);
 
       const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', uid).single();
       const currentCoins = bal?.coins || 0;
       
+      const timestamp = Date.now();
+      
+      // Update balance
       await supabase.from('balances').update({ coins: currentCoins + coinsToAward }).eq('user_id', uid);
-      await supabase.from('coin_history').insert({ user_id: uid, amount: coinsToAward, type: 'recharge', description: `PesaPal: KES ${amount}`, timestamp: Date.now() });
-      await supabase.from('processed_payments').insert({ order_tracking_id: orderTrackingId, user_id: uid, amount, coins: coinsToAward, payment_method: status.payment_method, timestamp: Date.now() });
+      
+      // Log Recharge History
+      await supabase.from('coin_history').insert({ 
+        user_id: uid, 
+        amount: coinsToAward, 
+        type: 'recharge', 
+        description: `PesaPal: KES ${amount} Recharge`, 
+        timestamp 
+      });
+      
+      // Mark payment as processed
+      await supabase.from('processed_payments').insert({ 
+        order_tracking_id: orderTrackingId, 
+        user_id: uid, 
+        amount, 
+        coins: coinsToAward, 
+        payment_method: status.payment_method, 
+        timestamp 
+      });
 
       return { success: true, coins: coinsToAward };
     }

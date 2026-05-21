@@ -97,7 +97,6 @@ export default function HomePage() {
     }
 
     try {
-      // SOFT DELETE FILTER: Only fetch users where is_deleted is false or null
       const { data } = await supabase
         .from('users')
         .select('*')
@@ -173,12 +172,12 @@ export default function HomePage() {
                   <Image src={u.photo_url || ""} alt={u.name} fill className="object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-90" />
                   
-                  {/* Quick Chat Button - Top Right as requested */}
+                  {/* Quick Chat Button - Top Right with Blue Background and Name Chat */}
                   <div 
                     onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }}
-                    className="absolute top-2.5 right-2.5 w-11 h-11 bg-white/30 backdrop-blur-xl border border-white/20 rounded-full flex items-center justify-center text-white shadow-2xl active:scale-90 transition-all z-20 hover:bg-white hover:text-[#00A2FF]"
+                    className="absolute top-2.5 right-2.5 px-3 h-8 bg-[#00A2FF] rounded-full flex items-center justify-center text-white shadow-xl active:scale-90 transition-all z-20 hover:bg-[#0081CC]"
                   >
-                    <MessageSquare className="w-5 h-5 fill-current" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Chat</span>
                   </div>
 
                   <div className="absolute inset-x-0 bottom-0 p-3 text-white">

@@ -1,9 +1,11 @@
+
 'use server';
 
 import { supabase } from '@/lib/supabase';
 
 /**
  * @fileOverview Standardized Supabase Server Actions for QIVO roles and economy.
+ * All functions now strictly log transactions to coin_history or diamond_history.
  */
 
 export async function awardCoinsAction(callerUid: string, targetMatchFlowId: string, amount: number) {
@@ -20,13 +22,23 @@ export async function awardCoinsAction(callerUid: string, targetMatchFlowId: str
     if (caller.is_coin_seller && !caller.is_admin) {
       const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', callerUid).single();
       if ((bal?.coins || 0) < amount) return { success: false, error: "Insufficient balance to award." };
+      
+      const ts = Date.now();
       await supabase.from('balances').update({ coins: (bal?.coins || 0) - amount }).eq('user_id', callerUid);
+      await supabase.from('coin_history').insert({
+        user_id: callerUid,
+        amount: -amount,
+        type: 'transfer',
+        description: `Awarded coins to user ID: ${targetMatchFlowId}`,
+        timestamp: ts
+      });
     }
 
     const { data: target } = await supabase.from('users').select('uid, name').eq('match_flow_id', targetMatchFlowId.trim()).single();
     if (!target) return { success: false, error: "Target User ID not found." };
 
     const { data: targetBal } = await supabase.from('balances').select('coins').eq('user_id', target.uid).single();
+    const targetTimestamp = Date.now();
     await supabase.from('balances').update({ coins: (targetBal?.coins || 0) + amount }).eq('user_id', target.uid);
 
     await supabase.from('coin_history').insert({
@@ -34,7 +46,7 @@ export async function awardCoinsAction(callerUid: string, targetMatchFlowId: str
       amount,
       type: 'award',
       description: `Awarded by ${caller.is_admin ? 'Admin' : 'Certified Seller'}`,
-      timestamp: Date.now()
+      timestamp: targetTimestamp
     });
 
     return { success: true, message: `Successfully awarded ${amount} coins to ${target.name}.` };
@@ -49,14 +61,12 @@ export async function awardCoinsAction(callerUid: string, targetMatchFlowId: str
  */
 export async function sendGiftAction(senderUid: string, recipientUid: string, coinAmount: number, giftName: string) {
   try {
-    // 1. Check Sender Balance
     const { data: senderBal } = await supabase.from('balances').select('coins').eq('user_id', senderUid).single();
     if ((senderBal?.coins || 0) < coinAmount) return { success: false, error: "Insufficient coins." };
 
     const timestamp = Date.now();
-    const diamondGain = Math.floor(coinAmount * 0.7); // 70% Share for recipient
+    const diamondGain = Math.floor(coinAmount * 0.7); 
 
-    // 2. Atomic Transactions (Simulated via sequential await for prototype)
     // Deduct from Sender
     await supabase.from('balances').update({ coins: (senderBal?.coins || 0) - coinAmount }).eq('user_id', senderUid);
     await supabase.from('coin_history').insert({
@@ -74,11 +84,11 @@ export async function sendGiftAction(senderUid: string, recipientUid: string, co
       user_id: recipientUid,
       amount: diamondGain,
       type: 'gift_received',
-      description: `Received ${giftName} gift`,
+      description: `Received ${giftName} gift (70% share)`,
       timestamp
     });
 
-    // 3. Send a system message in the chat
+    // System message in chat
     const ids = [senderUid, recipientUid].sort();
     const chatId = `direct_${ids[0]}_${ids[1]}`;
     await supabase.from('messages').insert({
