@@ -45,14 +45,22 @@ export default function FastOnboardingPage() {
       const initialCoins = gender === 'male' ? 150 : 0
       const initialDiamonds = gender === 'female' ? 150 : 0
       const timestamp = Date.now()
+      const qId = Math.floor(1000000 + Math.random() * 900000000).toString();
 
-      // 1. Update Profile
-      const { error: profileErr } = await supabase.from('users').update({
+      // 1. Upsert Profile (Ensures record exists to satisfy foreign keys)
+      // We use upsert so that if the user already has a partial profile, we update it.
+      const { error: profileErr } = await supabase.from('users').upsert({
+        uid: user.id,
+        email: user.email,
+        name: user.user_metadata?.full_name || user.email?.split('@')[0] || "User",
         gender,
         country,
         looking_for: lookingFor,
         onboarding_complete: true,
-      }).eq('uid', user.id)
+        match_flow_id: qId,
+        photo_url: user.user_metadata?.avatar_url || `https://picsum.photos/seed/${user.id}/400/400`,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'uid' })
 
       if (profileErr) throw profileErr;
       
@@ -61,7 +69,7 @@ export default function FastOnboardingPage() {
         user_id: user.id,
         coins: initialCoins,
         diamonds: initialDiamonds
-      })
+      }, { onConflict: 'user_id' })
 
       if (balanceErr) throw balanceErr;
 
@@ -76,8 +84,6 @@ export default function FastOnboardingPage() {
       }
       
       toast({ title: "Setup Complete!" })
-      
-      // Move immediately to Home
       router.replace("/home");
       
     } catch (err: any) {
@@ -90,7 +96,7 @@ export default function FastOnboardingPage() {
   const canContinue = () => !!gender && !!country && !!lookingFor
 
   return (
-    <div className="flex-1 flex flex-col bg-white min-h-screen">
+    <div className="flex-1 flex flex-col bg-white min-h-screen relative">
       <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-blue-50 to-white -z-10" />
       
       <header className="px-6 pt-12 pb-4 flex flex-col items-center">

@@ -38,7 +38,7 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     if (user?.email && !name) {
-      setName(user.email.split('@')[0])
+      setName(user.user_metadata?.full_name || user.email.split('@')[0])
     }
   }, [user, name])
 
@@ -65,7 +65,7 @@ export default function OnboardingPage() {
       const initialDiamonds = gender === 'female' ? 150 : 0
       const timestamp = Date.now()
 
-      // 1. Update Profile
+      // 1. Create or Update Profile
       const { error: profileErr } = await supabase.from('users').upsert({
         uid: user.id,
         email: user.email,
@@ -76,9 +76,9 @@ export default function OnboardingPage() {
         looking_for: lookingFor,
         onboarding_complete: true,
         match_flow_id: qId,
-        photo_url: `https://picsum.photos/seed/${user.id}/400/400`,
+        photo_url: user.user_metadata?.avatar_url || `https://picsum.photos/seed/${user.id}/400/400`,
         updated_at: new Date().toISOString()
-      })
+      }, { onConflict: 'uid' })
 
       if (profileErr) throw profileErr;
       
@@ -87,7 +87,7 @@ export default function OnboardingPage() {
         user_id: user.id,
         coins: initialCoins,
         diamonds: initialDiamonds
-      })
+      }, { onConflict: 'user_id' })
 
       if (initialCoins > 0) {
         await supabase.from('coin_history').insert({
@@ -100,7 +100,7 @@ export default function OnboardingPage() {
       }
 
       toast({ title: "Setup Complete!" })
-      setTimeout(() => router.replace("/home"), 800)
+      router.replace("/home")
     } catch (err: any) {
       toast({ variant: "destructive", title: "Setup Failed", description: err.message })
       setLoading(false)
