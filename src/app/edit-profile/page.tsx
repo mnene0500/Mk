@@ -1,10 +1,9 @@
-
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { doc, updateDoc, getDoc, serverTimestamp } from "firebase/firestore"
-import { useFirestore, useUser } from "@/firebase"
+import { supabase, uploadBase64Image } from "@/lib/supabase"
+import { useUser } from "@/firebase/auth/use-user"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,7 +15,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Cropper from "react-easy-crop"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import Image from "next/image"
-import { uploadBase64Image } from "@/lib/supabase"
 
 const AFRICAN_COUNTRIES = [
   "Kenya", "Tanzania", "Uganda", "Rwanda", "Burundi", "South Sudan", "Ethiopia", "Somalia", "Eritrea", "Djibouti", "South Africa", "Nigeria", "Ghana", "Egypt"
@@ -33,7 +31,6 @@ const EDUCATION_OPTIONS = [
 export default function EditProfilePage() {
   const router = useRouter()
   const { user } = useUser()
-  const db = useFirestore()
   const { toast } = useToast()
 
   const [loading, setLoading] = useState(true)
@@ -44,13 +41,12 @@ export default function EditProfilePage() {
     interests: "",
     dob: "",
     country: "",
-    lookingFor: "",
-    educationLevel: "",
-    photoURL: "",
-    additionalPhotos: [] as string[]
+    looking_for: "",
+    education_level: "",
+    photo_url: "",
+    additional_photos: [] as string[]
   })
 
-  // Cropping State
   const [cropOpen, setCropOpen] = useState(false)
   const [tempImage, setTempImage] = useState<string | null>(null)
   const [crop, setCrop] = useState({ x: 0, y: 0 })
@@ -61,30 +57,23 @@ export default function EditProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (!user || !db) return
-    const fetchProfile = async () => {
-      try {
-        const docRef = doc(db, "users", user.uid)
-        const snap = await getDoc(docRef)
-        if (snap.exists()) {
-          const data = snap.data()
-          setFormData({
-            name: data.name || "",
-            interests: data.interests || "",
-            dob: data.dob || "",
-            country: data.country || "",
-            lookingFor: data.lookingFor || "",
-            educationLevel: data.educationLevel || "",
-            photoURL: data.photoURL || "",
-            additionalPhotos: data.additionalPhotos || []
-          })
-        }
-      } finally {
-        setLoading(false)
+    if (!user) return
+    supabase.from('users').select('*').eq('uid', user.id).single().then(({ data }) => {
+      if (data) {
+        setFormData({
+          name: data.name || "",
+          interests: data.interests || "",
+          dob: data.dob || "",
+          country: data.country || "",
+          looking_for: data.looking_for || "",
+          education_level: data.education_level || "",
+          photo_url: data.photo_url || "",
+          additional_photos: data.additional_photos || []
+        })
       }
-    }
-    fetchProfile()
-  }, [user, db])
+      setLoading(false)
+    })
+  }, [user])
 
   const onCropComplete = useCallback((_: any, croppedAreaPixels: any) => {
     setCroppedAreaPixels(croppedAreaPixels)
@@ -115,7 +104,6 @@ export default function EditProfilePage() {
     canvas.width = pixelCrop.width
     canvas.height = pixelCrop.height
     ctx.drawImage(image, pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height, 0, 0, pixelCrop.width, pixelCrop.height)
-    
     return canvas.toDataURL('image/jpeg', 0.85)
   }
 
@@ -124,24 +112,15 @@ export default function EditProfilePage() {
       try {
         const croppedBase64 = await getCroppedImg(tempImage, croppedAreaPixels)
         if (targetPhotoIndex === 'profile') {
-          // If profile photo is changed, maybe add old one to gallery if there's space
-          const newGallery = [...formData.additionalPhotos];
-          if (newGallery.length < 4 && !newGallery.includes(croppedBase64)) {
-             newGallery.unshift(croppedBase64);
-          }
-          setFormData({ 
-            ...formData, 
-            photoURL: croppedBase64, 
-            additionalPhotos: newGallery.slice(0, 4) 
-          })
+          setFormData({ ...formData, photo_url: croppedBase64 })
         } else {
-          const newPhotos = [...formData.additionalPhotos]
+          const newPhotos = [...formData.additional_photos]
           if (typeof targetPhotoIndex === 'number') {
             newPhotos[targetPhotoIndex] = croppedBase64
           } else {
             newPhotos.push(croppedBase64)
           }
-          setFormData({ ...formData, additionalPhotos: newPhotos.slice(0, 4) })
+          setFormData({ ...formData, additional_photos: newPhotos.slice(0, 4) })
         }
         setCropOpen(false)
         setTempImage(null)
@@ -152,43 +131,22 @@ export default function EditProfilePage() {
   }
 
   const handleSave = async () => {
-    if (!user || !db) return
+    if (!user) return
     setSaving(true)
     try {
       const finalFormData = { ...formData };
-      
-      // Upload profile photo if it's base64
-      if (formData.photoURL.startsWith('data:image')) {
-        const ext = formData.photoURL.includes('png') ? 'png' : 'jpg';
-        const url = await uploadBase64Image(formData.photoURL, 'photos', `${user.uid}/profile_${Date.now()}.${ext}`);
-        finalFormData.photoURL = url;
+      if (formData.photo_url.startsWith('data:image')) {
+        finalFormData.photo_url = await uploadBase64Image(formData.photo_url, 'photos', `${user.id}/profile_${Date.now()}.jpg`);
       }
-
-      // Upload gallery photos if they're base64
-      const uploadedGallery = await Promise.all(
-        formData.additionalPhotos.map(async (photo, idx) => {
-          if (photo.startsWith('data:image')) {
-            const ext = photo.includes('png') ? 'png' : 'jpg';
-            return await uploadBase64Image(photo, 'photos', `${user.uid}/gallery_${idx}_${Date.now()}.${ext}`);
-          }
-          return photo;
-        })
+      finalFormData.additional_photos = await Promise.all(
+        formData.additional_photos.map(async (p, i) => p.startsWith('data:image') ? await uploadBase64Image(p, 'photos', `${user.id}/gallery_${i}_${Date.now()}.jpg`) : p)
       );
-      finalFormData.additionalPhotos = uploadedGallery;
 
-      await updateDoc(doc(db, "users", user.uid), {
-        ...finalFormData,
-        updatedAt: serverTimestamp()
-      })
-      
+      await supabase.from('users').update(finalFormData).eq('uid', user.id)
       toast({ title: "Profile Updated" })
       router.back()
     } catch (error: any) {
-      toast({ 
-        variant: "destructive", 
-        title: "Error", 
-        description: error.message || "Failed to update profile." 
-      })
+      toast({ variant: "destructive", title: "Error", description: error.message })
     } finally {
       setSaving(false)
     }
@@ -198,145 +156,46 @@ export default function EditProfilePage() {
 
   return (
     <div className="flex-1 bg-white min-h-screen flex flex-col pb-20">
-      <header className="px-4 h-16 flex items-center justify-between border-b sticky top-0 bg-white z-50">
-        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full">
-          <ChevronLeft className="w-6 h-6 text-black" />
-        </Button>
+      <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-50">
+        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
         <h1 className="text-base font-black text-black">Edit Profile</h1>
-        <Button variant="ghost" size="icon" onClick={handleSave} disabled={saving} className="text-[#00A2FF]">
-          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-        </Button>
+        <Button variant="ghost" size="icon" onClick={handleSave} disabled={saving} className="text-[#00A2FF]">{saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}</Button>
       </header>
-
       <main className="flex-1 p-6 space-y-8 overflow-y-auto">
-        {/* Profile Image Section */}
         <div className="flex flex-col items-center">
           <div className="relative group cursor-pointer" onClick={() => { setTargetPhotoIndex('profile'); fileInputRef.current?.click(); }}>
-            <Avatar className="w-28 h-28 border-4 border-gray-50 shadow-xl">
-              <AvatarImage src={formData.photoURL} className="object-cover" />
-              <AvatarFallback className="bg-gray-100"><Camera className="w-8 h-8 text-gray-300" /></AvatarFallback>
-            </Avatar>
-            <div className="absolute bottom-0 right-0 bg-[#00A2FF] p-2 rounded-full text-white shadow-lg">
-              <Camera className="w-4 h-4" />
-            </div>
+            <Avatar className="w-28 h-28 border-4 border-gray-50 shadow-xl"><AvatarImage src={formData.photo_url} className="object-cover" /><AvatarFallback className="bg-gray-100"><Camera className="w-8 h-8 text-gray-300" /></AvatarFallback></Avatar>
+            <div className="absolute bottom-0 right-0 bg-[#00A2FF] p-2 rounded-full text-white shadow-lg"><Camera className="w-4 h-4" /></div>
           </div>
           <p className="mt-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Profile Photo</p>
         </div>
-
-        {/* Gallery Section */}
         <div className="space-y-4">
-          <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Additional Photos (Max 4)</Label>
+          <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Gallery (Max 4)</Label>
           <div className="grid grid-cols-4 gap-3">
             {[0, 1, 2, 3].map((i) => (
-              <div 
-                key={i} 
-                className="relative aspect-square rounded-2xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden cursor-pointer"
-                onClick={() => { setTargetPhotoIndex(i); fileInputRef.current?.click(); }}
-              >
-                {formData.additionalPhotos[i] ? (
-                  <>
-                    <Image src={formData.additionalPhotos[i]} alt={`Photo ${i}`} fill className="object-cover" />
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const newPhotos = [...formData.additionalPhotos];
-                        newPhotos.splice(i, 1);
-                        setFormData({ ...formData, additionalPhotos: newPhotos });
-                      }}
-                      className="absolute top-1 right-1 bg-black/50 p-1 rounded-full text-white"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </>
-                ) : (
-                  <Plus className="w-6 h-6 text-gray-300" />
-                )}
+              <div key={i} className="relative aspect-square rounded-2xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden cursor-pointer" onClick={() => { setTargetPhotoIndex(i); fileInputRef.current?.click(); }}>
+                {formData.additional_photos[i] ? (<><Image src={formData.additional_photos[i]} alt={`P${i}`} fill className="object-cover" /><button onClick={(e) => { e.stopPropagation(); const n = [...formData.additional_photos]; n.splice(i,1); setFormData({...formData, additional_photos: n}); }} className="absolute top-1 right-1 bg-black/50 p-1 rounded-full text-white"><X className="w-3 h-3" /></button></>) : (<Plus className="w-6 h-6 text-gray-300" />)}
               </div>
             ))}
           </div>
         </div>
-
-        {/* Input Fields */}
         <div className="space-y-6">
-          <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Full Name</Label>
-            <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="rounded-2xl h-14 border-gray-100 bg-gray-50 font-bold" />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Date of Birth</Label>
-            <div className="relative">
-              <Input 
-                type="date" 
-                value={formData.dob} 
-                onChange={(e) => setFormData({...formData, dob: e.target.value})} 
-                className="rounded-2xl h-14 border-gray-100 bg-gray-50 font-bold pl-12" 
-              />
-              <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">About Me</Label>
-            <Textarea value={formData.interests} onChange={(e) => setFormData({...formData, interests: e.target.value})} className="rounded-2xl min-h-[120px] border-gray-100 bg-gray-50 font-medium" />
-          </div>
-
+          <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Full Name</Label><Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="rounded-2xl h-14 border-gray-100 bg-gray-50 font-bold" /></div>
+          <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">DOB</Label><Input type="date" value={formData.dob} onChange={(e) => setFormData({...formData, dob: e.target.value})} className="rounded-2xl h-14 border-gray-100 bg-gray-50 font-bold" /></div>
+          <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Bio</Label><Textarea value={formData.interests} onChange={(e) => setFormData({...formData, interests: e.target.value})} className="rounded-2xl min-h-[120px] border-gray-100 bg-gray-50 font-medium" /></div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Country</Label>
-              <Select onValueChange={(val) => setFormData({...formData, country: val})} value={formData.country}>
-                <SelectTrigger className="rounded-2xl h-14 border-gray-100 bg-gray-50 font-bold"><SelectValue placeholder="Select" /></SelectTrigger>
-                <SelectContent className="rounded-2xl">{AFRICAN_COUNTRIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Education</Label>
-              <Select onValueChange={(val) => setFormData({...formData, educationLevel: val})} value={formData.educationLevel}>
-                <SelectTrigger className="rounded-2xl h-14 border-gray-100 bg-gray-50 font-bold"><SelectValue placeholder="Select" /></SelectTrigger>
-                <SelectContent className="rounded-2xl">{EDUCATION_OPTIONS.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
+            <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Country</Label><Select onValueChange={(val) => setFormData({...formData, country: val})} value={formData.country}><SelectTrigger className="rounded-2xl h-14 bg-gray-50"><SelectValue /></SelectTrigger><SelectContent className="rounded-2xl">{AFRICAN_COUNTRIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Education</Label><Select onValueChange={(val) => setFormData({...formData, education_level: val})} value={formData.education_level}><SelectTrigger className="rounded-2xl h-14 bg-gray-50"><SelectValue /></SelectTrigger><SelectContent className="rounded-2xl">{EDUCATION_OPTIONS.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent></Select></div>
           </div>
-
-          <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Looking For</Label>
-            <Select onValueChange={(val) => setFormData({...formData, lookingFor: val})} value={formData.lookingFor}>
-              <SelectTrigger className="rounded-2xl h-14 border-gray-100 bg-gray-50 font-bold"><SelectValue placeholder="Select" /></SelectTrigger>
-              <SelectContent className="rounded-2xl">{LOOKING_FOR_OPTIONS.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
+          <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Looking For</Label><Select onValueChange={(val) => setFormData({...formData, looking_for: val})} value={formData.looking_for}><SelectTrigger className="rounded-2xl h-14 bg-gray-50"><SelectValue /></SelectTrigger><SelectContent className="rounded-2xl">{LOOKING_FOR_OPTIONS.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent></Select></div>
         </div>
       </main>
-
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        className="hidden" 
-        accept="image/*" 
-        onChange={handleFileChange} 
-      />
-
+      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
       <Dialog open={cropOpen} onOpenChange={setCropOpen}>
         <DialogContent className="max-w-md h-[500px] p-0 overflow-hidden rounded-[2.5rem]">
-          <DialogHeader className="p-4 border-b">
-            <DialogTitle className="text-center font-black uppercase text-[10px] tracking-widest">Adjust Photo</DialogTitle>
-          </DialogHeader>
-          <div className="relative flex-1 bg-black h-full min-h-[300px]">
-            {tempImage && (
-              <Cropper
-                image={tempImage}
-                crop={crop}
-                zoom={zoom}
-                aspect={1}
-                onCropChange={setCrop}
-                onCropComplete={onCropComplete}
-                onZoomChange={setZoom}
-              />
-            )}
-          </div>
-          <DialogFooter className="p-4 bg-white">
-            <Button onClick={handleCropSave} className="w-full h-14 rounded-full bg-[#00A2FF] font-bold uppercase tracking-widest">Save Selection</Button>
-          </DialogFooter>
+          <DialogHeader className="p-4 border-b"><DialogTitle className="text-center font-black uppercase text-[10px] tracking-widest">Adjust Photo</DialogTitle></DialogHeader>
+          <div className="relative flex-1 bg-black h-full min-h-[300px]">{tempImage && (<Cropper image={tempImage} crop={crop} zoom={zoom} aspect={1} onCropChange={setCrop} onCropComplete={onCropComplete} onZoomChange={setZoom} />)}</div>
+          <DialogFooter className="p-4 bg-white"><Button onClick={handleCropSave} className="w-full h-14 rounded-full bg-[#00A2FF] font-bold uppercase tracking-widest">Save Selection</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

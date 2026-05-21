@@ -1,9 +1,7 @@
-
 "use client"
 
 import { useState, useMemo, useEffect, useCallback } from "react"
-import { collection, query, where, limit, getDocs, doc } from "firebase/firestore"
-import { useFirestore, useUser, useDoc, useMemoFirebase } from "@/firebase"
+import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -20,19 +18,20 @@ import { BottomNav } from "@/components/layout/BottomNav"
 import { Card } from "@/components/ui/card"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
+import { useUser } from "@/firebase/auth/use-user"
 
 interface UserProfile {
   uid: string
   name: string
-  photoURL: string
+  photo_url: string
   country: string
   gender: string
   dob: string
   interests?: string
-  isVerified?: boolean
-  onboardingComplete: boolean
+  is_verified?: boolean
+  onboarding_complete: boolean
   blocking?: string[]
-  blockedBy?: string[]
+  blocked_by?: string[]
 }
 
 const POPULAR_INTERESTS = ["Travel", "Music", "Cooking", "Photography", "Fitness", "Art", "Tech", "Dancing"]
@@ -50,42 +49,43 @@ function calculateAge(dob: string) {
 export default function ExplorePage() {
   const router = useRouter()
   const { user: currentUser, loading: authLoading } = useUser()
-  const db = useFirestore()
   
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedInterest, setSelectedInterest] = useState<string | null>(null)
   const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
 
-  const currentUserRef = useMemoFirebase(() => currentUser?.uid && db ? doc(db, "users", currentUser.uid) : null, [db, currentUser?.uid])
-  const { data: profile } = useDoc<UserProfile>(currentUserRef)
+  useEffect(() => {
+    if (currentUser?.id) {
+      supabase.from('users').select('*').eq('uid', currentUser.id).single().then(({ data }) => setProfile(data))
+    }
+  }, [currentUser?.id])
 
   const fetchUsers = useCallback(async () => {
-    if (!db || !profile) return
+    if (!profile) return
     setLoading(true)
     try {
-      // READ OPTIMIZATION: Lowered limit to 30 for Explore
-      const q = query(
-        collection(db, "users"),
-        where("onboardingComplete", "==", true),
-        limit(30)
-      )
-      const snap = await getDocs(q)
-      const fetched = snap.docs.map(d => ({ ...d.data() } as UserProfile))
-      
-      const blockedList = [...(profile.blocking || []), ...(profile.blockedBy || [])]
-      const filtered = fetched.filter(u => 
-        u.uid !== currentUser?.uid && 
-        !blockedList.includes(u.uid)
-      )
-      
-      setUsers(filtered)
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('onboarding_complete', true)
+        .limit(40)
+
+      if (data) {
+        const blockedList = [...(profile.blocking || []), ...(profile.blocked_by || [])]
+        const filtered = data.filter(u => 
+          u.uid !== currentUser?.id && 
+          !blockedList.includes(u.uid)
+        )
+        setUsers(filtered)
+      }
     } catch (err) {
       console.error(err)
     } finally {
       setLoading(false)
     }
-  }, [db, profile?.uid, currentUser?.uid])
+  }, [profile, currentUser?.id])
 
   useEffect(() => {
     if (profile && users.length === 0) fetchUsers()
@@ -163,11 +163,7 @@ export default function ExplorePage() {
       </header>
 
       <main className="flex-1 p-4">
-        {!db ? (
-          <div className="flex flex-col items-center justify-center py-20 opacity-40">
-             <p className="text-xs font-bold uppercase tracking-widest">Network Connecting...</p>
-          </div>
-        ) : loading ? (
+        {loading ? (
           <div className="grid grid-cols-2 gap-3">
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <div key={i} className="aspect-[3/4] bg-white rounded-3xl animate-pulse border border-black/5" />
@@ -193,24 +189,17 @@ export default function ExplorePage() {
                 onClick={() => router.push(`/users/${user.uid}`)}
               >
                 <Image 
-                  src={user.photoURL} 
+                  src={user.photo_url || ""} 
                   alt={user.name} 
                   fill 
                   className="object-cover transition-transform duration-500 group-hover:scale-110"
                   sizes="(max-width: 768px) 50vw, 25vw"
                 />
-                
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                
-                <div className="absolute top-3 left-3 bg-white/20 backdrop-blur-md border border-white/10 px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                  <span className="text-[8px] font-black text-white uppercase tracking-widest">Active</span>
-                </div>
-
                 <div className="absolute bottom-4 inset-x-4">
                   <div className="flex items-center gap-1.5 mb-1">
                     <p className="text-white font-black text-sm truncate tracking-tight">{user.name}</p>
-                    {user.isVerified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-white shrink-0" />}
+                    {user.is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-white shrink-0" />}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="bg-[#006400] text-white px-2 py-0.5 rounded-lg text-[9px] font-bold">{calculateAge(user.dob)}</span>
@@ -224,21 +213,7 @@ export default function ExplorePage() {
             ))}
           </div>
         )}
-
-        <div className="mt-12 p-8 rounded-[3rem] bg-gradient-to-br from-indigo-600 to-blue-500 text-white relative overflow-hidden shadow-2xl">
-          <div className="absolute -right-4 -bottom-4 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
-          <div className="relative z-10 space-y-4">
-            <div className="w-12 h-12 bg-white/15 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/10">
-              <TrendingUp className="w-6 h-6 text-white" />
-            </div>
-            <h3 className="text-xl font-black tracking-tight leading-none">Find Your<br/>Vibe Faster</h3>
-            <p className="text-[10px] font-medium text-white/70 leading-relaxed uppercase tracking-widest">
-              Our AI engine tracks global engagement to show you trending profiles daily.
-            </p>
-          </div>
-        </div>
       </main>
-
       <BottomNav />
     </div>
   )
