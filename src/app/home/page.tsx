@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react"
@@ -45,18 +46,43 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<'Recommend' | 'Nearby'>('Recommend')
   const [profile, setProfile] = useState<UserProfile | null>(null)
 
+  // 1. Manage Authentication and Profile Redirects
   useEffect(() => {
-    if (isInitialized && !currentUser && !authLoading) router.replace("/welcome")
-    if (currentUser) {
-      supabase.from('users').select('*').eq('uid', currentUser.id).single().then(({ data }) => {
-        if (data) {
-          setProfile(data)
-          if (!data.onboarding_complete) router.replace("/fastonboard")
-        }
-      })
+    if (!isInitialized || authLoading) return;
+
+    if (!currentUser) {
+      router.replace("/welcome")
+      return;
     }
+
+    const checkProfile = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('uid', currentUser.id)
+          .single();
+
+        if (error || !data) {
+          // No user record found, force onboarding
+          router.replace("/fastonboard");
+          return;
+        }
+
+        setProfile(data);
+        if (!data.onboarding_complete) {
+          router.replace("/fastonboard");
+        }
+      } catch (err) {
+        console.error("Profile check error:", err);
+        router.replace("/fastonboard");
+      }
+    };
+
+    checkProfile();
   }, [isInitialized, currentUser, authLoading, router])
 
+  // 2. Scroll Position Persistence
   useEffect(() => {
     if (!initialLoading) {
        setTimeout(() => window.scrollTo(0, globalScrollY), 50);
@@ -66,16 +92,21 @@ export default function HomePage() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [initialLoading])
 
+  // 3. User Discovery Feed Fetching
   const fetchUsers = useCallback(async (isManual = false) => {
-    if (isManual) { setIsRefreshing(true); globalScrollY = 0; }
-    else if (users.length === 0) setInitialLoading(true)
+    if (isManual) { 
+      setIsRefreshing(true); 
+      globalScrollY = 0; 
+    } else if (users.length === 0) {
+      setInitialLoading(true);
+    }
 
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('onboarding_complete', true)
-        .limit(60)
+        .limit(60);
 
       if (data) {
         const filtered = data.filter(u => u.uid !== currentUser?.id)
@@ -83,25 +114,36 @@ export default function HomePage() {
         setUsers(shuffled)
         globalUserCache = shuffled
       }
+    } catch (err) {
+      console.error("Discovery fetch failed:", err);
     } finally {
       setIsRefreshing(false)
       setInitialLoading(false)
     }
   }, [currentUser?.id, users.length])
 
+  // Trigger discovery fetch
   useEffect(() => {
-    if (isInitialized && currentUser && profile?.onboarding_complete && users.length === 0) {
+    if (isInitialized && currentUser && users.length === 0) {
       fetchUsers()
     }
-  }, [isInitialized, currentUser, profile, fetchUsers, users.length])
+  }, [isInitialized, currentUser, users.length, fetchUsers])
 
   const filteredUsers = useMemo(() => {
     if (activeTab === 'Nearby' && profile) return users.filter(u => u.country === profile.country)
     return users
   }, [users, activeTab, profile])
 
-  if (initialLoading && users.length === 0 && isInitialized) {
-    return <div className="flex-1 bg-white min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00A2FF] w-8 h-8" /></div>
+  // Loading state guard
+  if ((initialLoading && users.length === 0) || authLoading || !isInitialized) {
+    return (
+      <div className="flex-1 bg-white min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="animate-spin text-[#00A2FF] w-8 h-8" />
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Syncing Feed...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -136,6 +178,13 @@ export default function HomePage() {
               </Card>
             ))}
           </div>
+
+          {filteredUsers.length === 0 && !initialLoading && (
+            <div className="py-20 text-center flex flex-col items-center gap-4 opacity-40">
+              <RotateCw className="w-10 h-10 text-gray-300" />
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-400">No users found nearby</p>
+            </div>
+          )}
         </main>
       </div>
       <BottomNav />

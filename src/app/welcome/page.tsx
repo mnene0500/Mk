@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -33,7 +34,7 @@ export default function WelcomePage() {
         .from('users')
         .select('onboarding_complete')
         .eq('uid', uid)
-        .single()
+        .maybeSingle(); // Better than .single() as it handles missing records gracefully
       
       if (data?.onboarding_complete) {
         router.replace("/home")
@@ -41,6 +42,7 @@ export default function WelcomePage() {
         router.replace("/fastonboard")
       }
     } catch (err) {
+      console.error("Auth check failed:", err);
       router.replace("/fastonboard")
     }
   }
@@ -64,8 +66,13 @@ export default function WelcomePage() {
   if (!mounted || (isInitialized && user)) {
     return (
       <div className="fixed inset-0 bg-black flex flex-col items-center justify-center gap-4">
-        <Loader2 className="w-10 h-10 animate-spin text-[#00A2FF]" />
-        <p className="text-[10px] font-bold text-[#00A2FF] uppercase tracking-[0.3em] animate-pulse">Entering QIVO...</p>
+        <div className="flex flex-col items-center gap-6">
+          <Loader2 className="w-10 h-10 animate-spin text-[#00A2FF]" />
+          <div className="text-center space-y-1">
+            <p className="text-[10px] font-black text-[#00A2FF] uppercase tracking-[0.4em] animate-pulse">Entering QIVO</p>
+            <p className="text-[8px] font-bold text-gray-600 uppercase tracking-widest">Securing Connection...</p>
+          </div>
+        </div>
       </div>
     )
   }

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from "react"
@@ -46,19 +47,23 @@ export default function FastOnboardingPage() {
       const timestamp = Date.now()
 
       // 1. Update Profile
-      await supabase.from('users').update({
+      const { error: profileErr } = await supabase.from('users').update({
         gender,
         country,
         looking_for: lookingFor,
         onboarding_complete: true,
       }).eq('uid', user.id)
+
+      if (profileErr) throw profileErr;
       
       // 2. Setup Initial Balance
-      await supabase.from('balances').upsert({
+      const { error: balanceErr } = await supabase.from('balances').upsert({
         user_id: user.id,
         coins: initialCoins,
         diamonds: initialDiamonds
       })
+
+      if (balanceErr) throw balanceErr;
 
       if (initialCoins > 0) {
         await supabase.from('coin_history').insert({
@@ -71,11 +76,12 @@ export default function FastOnboardingPage() {
       }
       
       toast({ title: "Setup Complete!" })
-      setTimeout(() => {
-        router.push("/home")
-      }, 500)
+      
+      // Move immediately to Home
+      router.replace("/home");
       
     } catch (err: any) {
+      console.error("Onboarding failed:", err);
       toast({ variant: "destructive", title: "Setup Failed", description: err.message })
       setLoading(false)
     }
