@@ -1,260 +1,94 @@
 'use server';
 
-import { initializeFirebase } from '@/firebase';
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  doc, 
-  getDoc, 
-  updateDoc, 
-  serverTimestamp,
-  addDoc 
-} from 'firebase/firestore';
-import { 
-  ref, 
-  update, 
-  increment as rtdbIncrement, 
-  get, 
-  set, 
-  push 
-} from 'firebase/database';
+import { supabase } from '@/lib/supabase';
 
 /**
- * @fileOverview Hardened Server Actions for QIVO.
- * Returns only serializable plain objects to prevent "Server Components render" errors.
+ * @fileOverview Supabase Database Server Actions for QIVO.
  */
 
 export async function awardCoinsAction(callerUid: string, targetMatchFlowId: string, amount: number) {
-  const { firestore: db, database: rtdb } = initializeFirebase();
-  
-  if (!db || !rtdb) {
-    return { success: false, error: "Database configuration missing in Vercel settings." };
-  }
-
   if (amount < 500) return { success: false, error: "Minimum award amount is 500 coins." };
-  if (amount > 50000) return { success: false, error: "Maximum single award limit is 50,000 coins." };
 
   try {
-    const callerSnap = await getDoc(doc(db, "users", callerUid));
-    if (!callerSnap.exists()) return { success: false, error: "Your profile was not found." };
+    const { data: caller, error: callerErr } = await supabase.from('users').select('*').eq('uid', callerUid).single();
+    if (callerErr || !caller) return { success: false, error: "Caller profile not found." };
     
-    const callerData = callerSnap.data();
-    if (!callerData.isAdmin && !callerData.isCoinSeller) {
-      return { success: false, error: "Unauthorized. Role [Admin/CoinSeller] required." };
+    if (!caller.is_admin && !caller.is_coin_seller) {
+      return { success: false, error: "Unauthorized. Role required." };
     }
 
-    // Coin Sellers (who aren't full Admins) must pay from their own balance
-    if (callerData.isCoinSeller && !callerData.isAdmin) {
-      const sellerBalanceSnap = await get(ref(rtdb, `balances/${callerUid}`));
-      const currentSellerBalance = sellerBalanceSnap.val()?.coins || 0;
+    if (caller.is_coin_seller && !caller.is_admin) {
+      const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', callerUid).single();
+      if ((bal?.coins || 0) < amount) return { success: false, error: "Insufficient balance." };
       
-      if (currentSellerBalance < amount) {
-        return { success: false, error: `Insufficient balance. You have ${currentSellerBalance} coins.` };
-      }
-      
-      await update(ref(rtdb, `balances/${callerUid}`), {
-        coins: rtdbIncrement(-amount),
-        updatedAt: Date.now()
-      });
-
-      await set(push(ref(rtdb, `coin_history/${callerUid}`)), {
-        amount: -amount,
-        type: 'sold',
-        description: `Transferred to ID: ${targetMatchFlowId}`,
-        timestamp: Date.now()
-      });
+      await supabase.from('balances').update({ coins: (bal?.coins || 0) - amount }).eq('user_id', callerUid);
     }
 
-    const targetQuery = query(collection(db, "users"), where("matchFlowId", "==", targetMatchFlowId.trim()));
-    const targetSnap = await getDocs(targetQuery);
-    if (targetSnap.empty) return { success: false, error: "Target User ID not found." };
+    const { data: target } = await supabase.from('users').select('uid, name').eq('match_flow_id', targetMatchFlowId.trim()).single();
+    if (!target) return { success: false, error: "Target User not found." };
 
-    const targetDoc = targetSnap.docs[0];
-    const targetUid = targetDoc.id;
-    const timestamp = Date.now();
+    const { data: targetBal } = await supabase.from('balances').select('coins').eq('user_id', target.uid).single();
+    await supabase.from('balances').update({ coins: (targetBal?.coins || 0) + amount }).eq('user_id', target.uid);
 
-    const updates: any = {};
-    updates[`balances/${targetUid}/coins`] = rtdbIncrement(amount);
-    updates[`balances/${targetUid}/updatedAt`] = timestamp;
-    await update(ref(rtdb), updates);
-
-    await set(push(ref(rtdb, `coin_history/${targetUid}`)), {
-      amount: amount,
+    await supabase.from('coin_history').insert({
+      user_id: target.uid,
+      amount,
       type: 'award',
-      description: `Received from ${callerData.isAdmin ? 'System Admin' : 'Certified Seller'}`,
-      timestamp: timestamp
+      description: `Awarded by ${caller.is_admin ? 'Admin' : 'Seller'}`,
+      timestamp: Date.now()
     });
 
-    return { 
-      success: true, 
-      message: `Successfully awarded ${amount} coins to ${targetDoc.data().name}.` 
-    };
+    return { success: true, message: `Awarded ${amount} coins to ${target.name}.` };
   } catch (error: any) {
-    return { success: false, error: String(error.message || "An unexpected error occurred.") };
+    return { success: false, error: error.message };
   }
 }
 
-export async function toggleUserRoleAction(callerUid: string, targetMatchFlowId: string, role: 'isCoinSeller' | 'isAgent', value: boolean) {
-  const { firestore: db } = initializeFirebase();
-  if (!db) return { success: false, error: "Database not available." };
-
+export async function toggleUserRoleAction(callerUid: string, targetMatchFlowId: string, role: string, value: boolean) {
   try {
-    const callerSnap = await getDoc(doc(db, "users", callerUid));
-    if (!callerSnap.exists() || !callerSnap.data()?.isAdmin) {
-      return { success: false, error: "Unauthorized. Admin privileges required." };
-    }
+    const { data: caller } = await supabase.from('users').select('is_admin').eq('uid', callerUid).single();
+    if (!caller?.is_admin) return { success: false, error: "Admin only." };
 
-    const targetQuery = query(collection(db, "users"), where("matchFlowId", "==", targetMatchFlowId.trim()));
-    const targetSnap = await getDocs(targetQuery);
-    if (targetSnap.empty) return { success: false, error: "User not found." };
-
-    const targetDoc = targetSnap.docs[0];
-    await updateDoc(doc(db, "users", targetDoc.id), {
-      [role]: value,
-      updatedAt: serverTimestamp()
-    });
-
-    return { success: true, message: `Role updated successfully.` };
+    await supabase.from('users').update({ [role]: value }).eq('match_flow_id', targetMatchFlowId.trim());
+    return { success: true, message: `Role updated.` };
   } catch (error: any) {
-    return { success: false, error: String(error.message) };
+    return { success: false, error: error.message };
   }
 }
 
 export async function createAgencyAction(agentUid: string, agencyName: string) {
-  const { firestore: db } = initializeFirebase();
-  if (!db) return { success: false, error: "Database not available." };
-
   try {
-    const agentRef = doc(db, "users", agentUid);
-    const agentSnap = await getDoc(agentRef);
-    if (!agentSnap.exists() || !agentSnap.data().isAgent) return { success: false, error: "Only Agents can create agencies." };
-    
-    let code = "";
-    let isUnique = false;
-    while (!isUnique) {
-      code = Math.floor(10000 + Math.random() * 90000).toString();
-      const check = await getDoc(doc(db, "agencies", code));
-      if (!check.exists()) isUnique = true;
-    }
-    
-    await setDoc(doc(db, "agencies", code), { 
-      code, 
-      agentUid, 
-      name: agencyName || "QIVO Agency", 
-      createdAt: serverTimestamp() 
-    });
-    
-    await updateDoc(agentRef, { 
-      agencyId: code, 
-      agencyStatus: 'approved', 
-      updatedAt: serverTimestamp() 
-    });
-    
+    const code = Math.floor(10000 + Math.random() * 90000).toString();
+    await supabase.from('agencies').insert({ code, agent_uid: agentUid, name: agencyName });
+    await supabase.from('users').update({ agency_id: code, agency_status: 'approved' }).eq('uid', agentUid);
     return { success: true, code };
-  } catch (error: any) { return { success: false, error: String(error.message) }; }
+  } catch (error: any) { return { success: false, error: error.message }; }
 }
 
 export async function requestWithdrawalAction(uid: string, diamonds: number, amountKes: number, agencyId: string) {
-  const { firestore: db, database: rtdb } = initializeFirebase();
-  if (!db || !rtdb) return { success: false, error: "Database not available." };
-
   try {
-    const userRef = doc(db, "users", uid);
-    const userSnap = await getDoc(userRef);
-    const balSnap = await get(ref(rtdb, `balances/${uid}`));
-    const currentDiamonds = balSnap.val()?.diamonds || 0;
-    
-    if (!userSnap.exists() || currentDiamonds < diamonds) return { success: false, error: "Insufficient diamonds." };
-    
-    await update(ref(rtdb, `balances/${uid}`), { 
-      diamonds: rtdbIncrement(-diamonds), 
-      updatedAt: Date.now() 
-    });
-    
-    await addDoc(collection(db, "agencies", agencyId, "withdrawals"), { 
-      uid, 
-      userName: userSnap.data().name || "Unknown", 
-      agencyId, 
+    const { data: bal } = await supabase.from('balances').select('diamonds').eq('user_id', uid).single();
+    if ((bal?.diamonds || 0) < diamonds) return { success: false, error: "Insufficient diamonds." };
+
+    await supabase.from('balances').update({ diamonds: (bal?.diamonds || 0) - diamonds }).eq('user_id', uid);
+    await supabase.from('withdrawals').insert({ 
+      user_id: uid, 
+      agency_id: agencyId, 
       diamonds, 
-      amountKes, 
-      status: 'pending', 
-      createdAt: serverTimestamp() 
+      amount_kes: amountKes, 
+      status: 'pending' 
     });
     
     return { success: true };
-  } catch (error: any) { return { success: false, error: String(error.message) }; }
-}
-
-export async function updateWithdrawalStatusAction(agentUid: string, agencyId: string, withdrawalId: string, status: 'paid' | 'rejected') {
-  const { firestore: db, database: rtdb } = initializeFirebase();
-  if (!db || !rtdb) return { success: false, error: "Database not available." };
-
-  try {
-    const withdrawalRef = doc(db, "agencies", agencyId, "withdrawals", withdrawalId);
-    const withdrawalSnap = await getDoc(withdrawalRef);
-    if (!withdrawalSnap.exists()) return { success: false, error: "Request not found." };
-    
-    const data = withdrawalSnap.data();
-    if (status === 'rejected') {
-      await update(ref(rtdb, `balances/${data.uid}`), { 
-        diamonds: rtdbIncrement(data.diamonds), 
-        updatedAt: Date.now() 
-      });
-    } else if (status === 'paid') {
-      const timestamp = Date.now();
-      await push(ref(rtdb, `notifications/${data.uid}`), { 
-        text: `Your withdrawal of Ksh ${data.amountKes} has been paid out!`, 
-        type: 'payout', 
-        timestamp 
-      });
-    }
-    
-    await updateDoc(withdrawalRef, { status, updatedAt: serverTimestamp() });
-    return { success: true };
-  } catch (error: any) { return { success: false, error: String(error.message) }; }
+  } catch (error: any) { return { success: false, error: error.message }; }
 }
 
 export async function joinAgencyAction(userUid: string, agencyCode: string) {
-  const { firestore: db } = initializeFirebase();
-  if (!db) return { success: false, error: "Database not available." };
-
   try {
-    const userRef = doc(db, "users", userUid);
-    const userSnap = await getDoc(userRef);
-    if (!userSnap.exists() || userSnap.data().gender !== 'female') return { success: false, error: "Only female users can join agencies." };
+    const { data: agency } = await supabase.from('agencies').select('code').eq('code', agencyCode.trim()).single();
+    if (!agency) return { success: false, error: "Invalid Agency Code." };
     
-    const agencySnap = await getDoc(doc(db, "agencies", agencyCode.trim()));
-    if (!agencySnap.exists()) return { success: false, error: "Invalid Agency Code." };
-    
-    await updateDoc(userRef, { 
-      agencyId: agencyCode.trim(), 
-      agencyStatus: 'pending', 
-      updatedAt: serverTimestamp() 
-    });
-    
+    await supabase.from('users').update({ agency_id: agencyCode.trim(), agency_status: 'pending' }).eq('uid', userUid);
     return { success: true };
-  } catch (error: any) { return { success: false, error: String(error.message) }; }
-}
-
-export async function reviewRecruitmentAction(agentUid: string, targetUid: string, status: 'approved' | 'rejected') {
-  const { firestore: db } = initializeFirebase();
-  if (!db) return { success: false, error: "Database not available." };
-
-  try {
-    if (status === 'approved') {
-      const agentSnap = await getDoc(doc(db, "users", agentUid));
-      const agencyId = agentSnap.data()?.agencyId;
-      if (!agencyId) return { success: false, error: "Agency not found." };
-      
-      const membersSnap = await getDocs(query(collection(db, "users"), where("agencyId", "==", agencyId), where("agencyStatus", "==", "approved")));
-      if (membersSnap.size >= 59) return { success: false, error: "Agency limit reached." };
-    }
-    await updateDoc(doc(db, "users", targetUid), { 
-      agencyStatus: status, 
-      updatedAt: serverTimestamp() 
-    });
-    return { success: true };
-  } catch (error: any) { return { success: false, error: String(error.message) }; }
+  } catch (error: any) { return { success: false, error: error.message }; }
 }

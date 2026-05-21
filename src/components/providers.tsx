@@ -1,9 +1,6 @@
-
 'use client';
 
 import React from 'react';
-import { FirebaseClientProvider } from '@/firebase/client-provider';
-import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
 import { Toaster } from "@/components/ui/toaster";
 import { usePresence } from '@/hooks/use-presence';
 import { InstallPrompt } from '@/components/layout/InstallPrompt';
@@ -19,20 +16,17 @@ function PresenceManager({ children }: { children: React.ReactNode }) {
 
 /**
  * Root providers wrapper for the application.
- * Composes Firebase, Presence, UI notifications, and PWA prompts.
+ * Supabase handles auth and database via the single client in @/lib/supabase.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <FirebaseClientProvider>
-      <FirebaseErrorListener />
-      <PresenceManager>
-        <div className="native-page-transition flex-1 flex flex-col">
-          {children}
-        </div>
-        <Toaster />
-        <InstallPrompt />
-        <CallManager />
-      </PresenceManager>
-    </FirebaseClientProvider>
+    <PresenceManager>
+      <div className="native-page-transition flex-1 flex flex-col">
+        {children}
+      </div>
+      <Toaster />
+      <InstallPrompt />
+      <CallManager />
+    </PresenceManager>
   );
 }

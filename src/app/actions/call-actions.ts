@@ -1,65 +1,37 @@
 'use server';
 
-import { initializeFirebase } from '@/firebase';
-import { ref, update, increment as rtdbIncrement, push, set, get } from 'firebase/database';
+import { supabase } from '@/lib/supabase';
 
 /**
- * Deducts coins from a user for an active call.
+ * Deducts coins from a user for an active call using Supabase.
  */
 export async function deductCallCoinsAction(uid: string, type: 'video' | 'voice', partnerName: string) {
-  const { database: rtdb } = initializeFirebase();
-  if (!rtdb) return { success: false, error: "Database not available." };
-
   const cost = type === 'video' ? 150 : 70;
 
   try {
-    const balanceSnap = await get(ref(rtdb, `balances/${uid}`));
-    const currentBalance = balanceSnap.val()?.coins || 0;
+    const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', uid).single();
+    const currentCoins = bal?.coins || 0;
 
-    if (currentBalance < cost) {
-      return { success: false, error: "Insufficient balance to continue call." };
-    }
+    if (currentCoins < cost) return { success: false, error: "Insufficient balance." };
 
-    const timestamp = Date.now();
-    const updates: any = {};
-    updates[`balances/${uid}/coins`] = rtdbIncrement(-cost);
-    updates[`balances/${uid}/updatedAt`] = timestamp;
-
-    await update(ref(rtdb), updates);
-
-    // Log to history
-    const historyRef = push(ref(rtdb, `coin_history/${uid}`));
-    await set(historyRef, {
+    await supabase.from('balances').update({ coins: currentCoins - cost }).eq('user_id', uid);
+    await supabase.from('coin_history').insert({
+      user_id: uid,
       amount: -cost,
       type: 'call',
-      description: `${type.charAt(0).toUpperCase() + type.slice(1)} call with ${partnerName}`,
-      timestamp
+      description: `${type} call with ${partnerName}`,
+      timestamp: Date.now()
     });
 
-    return { success: true, newBalance: currentBalance - cost };
+    return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
 
-/**
- * Checks if a user has enough coins to start a call.
- */
 export async function checkCallBalanceAction(uid: string, type: 'video' | 'voice') {
-  const { database: rtdb } = initializeFirebase();
-  if (!rtdb) return { success: false, error: "Database not available." };
-  
   const minRequired = type === 'video' ? 150 : 70;
-  
-  try {
-    const balanceSnap = await get(ref(rtdb, `balances/${uid}`));
-    const currentBalance = balanceSnap.val()?.coins || 0;
-    
-    if (currentBalance < minRequired) {
-      return { success: false, error: `You need at least ${minRequired} coins for a 1-minute call.` };
-    }
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: "Failed to verify balance." };
-  }
+  const { data } = await supabase.from('balances').select('coins').eq('user_id', uid).single();
+  if ((data?.coins || 0) < minRequired) return { success: false, error: "Low balance." };
+  return { success: true };
 }
