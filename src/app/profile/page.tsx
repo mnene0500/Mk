@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -22,7 +23,8 @@ import {
   UserPlus,
   Wallet,
   Shield,
-  User
+  User,
+  Ban
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -112,7 +114,6 @@ export default function MePage() {
   useEffect(() => {
     if (!user && isInitialized && !authLoading) router.replace("/welcome")
     if (user) {
-      // Load Profile
       supabase.from('users').select('*').eq('uid', user.id).single().then(({ data }) => {
         if (data) {
           setProfile(data)
@@ -120,12 +121,10 @@ export default function MePage() {
           setIsReady(true)
         }
       })
-      // Load Balances
       supabase.from('balances').select('*').eq('user_id', user.id).single().then(({ data }) => {
         if (data) setBalances({ coins: data.coins || 0, diamonds: Number(data.diamonds) || 0 })
       })
       
-      // Realtime Balance Listener
       const channel = supabase.channel(`balance:${user.id}`)
         .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
           setBalances({ coins: payload.new.coins, diamonds: Number(payload.new.diamonds) })
@@ -134,7 +133,7 @@ export default function MePage() {
         
       return () => { supabase.removeChannel(channel) }
     }
-  }, [user, isInitialized, authLoading])
+  }, [user, isInitialized, authLoading, router])
 
   const handleCopyId = () => {
     if (profile?.match_flow_id) { 
@@ -169,6 +168,7 @@ export default function MePage() {
             {profile?.agency_status === 'approved' && (<Button onClick={() => router.push("/agency-wallet")} className="h-24 bg-gradient-to-br from-indigo-700 via-blue-600 to-blue-500 rounded-[2.2rem] shadow-2xl flex flex-col items-center justify-center text-white col-span-2 mt-4"><div className="flex items-center gap-4"><div className="bg-white/15 p-3 rounded-2xl"><Wallet className="w-7 h-7 text-white" /></div><span className="text-base font-black uppercase tracking-widest">Agency Wallet</span></div></Button>)}
           </div>
           <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col">
+            <Button variant="ghost" className="h-16 justify-between px-5 rounded-none" asChild><Link href="/blocked-list"><div className="flex items-center gap-4"><div className="bg-red-50 p-2.5 rounded-xl"><Ban className="w-5 h-5 text-red-500" /></div><span className="font-semibold text-xs text-black">Blocked List</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link></Button>
             <Button variant="ghost" className="h-16 justify-between px-5 rounded-none" asChild><Link href="/support"><div className="flex items-center gap-4"><div className="bg-blue-50 p-2.5 rounded-xl"><Headphones className="w-5 h-5 text-blue-600" /></div><span className="font-semibold text-xs text-black">Support Center</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link></Button>
             <Button variant="ghost" className="h-16 justify-between px-5 rounded-none" asChild><Link href="/settings"><div className="flex items-center gap-4"><div className="bg-gray-50 p-2.5 rounded-xl"><Settings className="w-5 h-5 text-gray-600" /></div><span className="font-semibold text-xs text-black">Settings</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link></Button>
           </div>

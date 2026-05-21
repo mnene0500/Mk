@@ -1,10 +1,11 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ChevronLeft, ChevronRight, ShieldAlert, Info, RefreshCw, CreditCard, LogOut, Trash2, Loader2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, ShieldAlert, Info, RefreshCw, CreditCard, LogOut, Trash2, Loader2, Ban } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
@@ -110,6 +111,7 @@ export default function SettingsPage() {
       <main className="flex-1">
         <div className="flex flex-col mt-4">
           <SettingItem label="Charge settings" href="/pricing" icon={<CreditCard className="w-5 h-5 text-blue-500" />} />
+          <SettingItem label="Blocked List" href="/blocked-list" icon={<Ban className="w-5 h-5 text-red-400" />} />
           <SettingItem label="About QIVO" href="/about" icon={<Info className="w-5 h-5 text-gray-500" />} />
           <SettingItem label="Clear Cache" onClick={handleClearCache} icon={<RefreshCw className="w-5 h-5 text-orange-500" />} />
 

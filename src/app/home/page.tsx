@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react"
@@ -5,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { BottomNav } from "@/components/layout/BottomNav"
-import { Target, RotateCw, FileText, BadgeCheck, Loader2 } from "lucide-react"
+import { Target, RotateCw, FileText, BadgeCheck, Loader2, MessageSquare } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
@@ -61,7 +62,6 @@ export default function HomePage() {
           .maybeSingle();
 
         if (error || !data) {
-          console.warn("Profile not found, redirecting to onboarding.");
           router.replace("/fastonboard");
           return;
         }
@@ -71,7 +71,6 @@ export default function HomePage() {
           router.replace("/fastonboard");
         }
       } catch (err) {
-        console.error("Home profile check failed:", err);
         router.replace("/fastonboard");
       }
     };
@@ -97,7 +96,7 @@ export default function HomePage() {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('users')
         .select('*')
         .eq('onboarding_complete', true)
@@ -167,9 +166,18 @@ export default function HomePage() {
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {filteredUsers.map((u) => (
-                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.2] rounded-2xl shadow-xl bg-white" onClick={() => router.push(`/users/${u.uid}`)}>
+                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.2] rounded-2xl shadow-xl bg-white group" onClick={() => router.push(`/users/${u.uid}`)}>
                   <Image src={u.photo_url || ""} alt={u.name} fill className="object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-90" />
+                  
+                  {/* Quick Chat Button */}
+                  <div 
+                    onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }}
+                    className="absolute top-3 right-3 w-10 h-10 bg-white/20 backdrop-blur-md border border-white/20 rounded-full flex items-center justify-center text-white shadow-lg active:scale-90 transition-all opacity-0 group-hover:opacity-100 max-sm:opacity-100"
+                  >
+                    <MessageSquare className="w-5 h-5 fill-current" />
+                  </div>
+
                   <div className="absolute inset-x-0 bottom-0 p-3 text-white">
                     <div className="flex items-center gap-1.5"><h4 className="font-bold text-sm truncate">{u.name}</h4>{u.is_verified && <BadgeCheck className="w-4 h-4 text-[#00A2FF] fill-white" />}</div>
                     <div className="flex items-center gap-1.5 mt-1"><span className="bg-[#006400] text-white font-bold text-[10px] px-2 py-0.5 rounded-full">{calculateAge(u.dob)}</span><span className="text-white/60 text-[10px]">{u.country}</span></div>
