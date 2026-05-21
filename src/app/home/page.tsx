@@ -58,10 +58,10 @@ export default function HomePage() {
           .from('users')
           .select('*')
           .eq('uid', currentUser.id)
-          .single();
+          .maybeSingle();
 
         if (error || !data) {
-          console.warn("Profile not found or permission error, redirecting to onboarding.");
+          console.warn("Profile not found, redirecting to onboarding.");
           router.replace("/fastonboard");
           return;
         }

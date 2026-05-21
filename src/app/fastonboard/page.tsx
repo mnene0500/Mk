@@ -50,11 +50,10 @@ export default function FastOnboardingPage() {
       const timestamp = Date.now()
       const qId = Math.floor(1000000 + Math.random() * 900000000).toString();
 
-      // Ensure we pick up metadata from Google/Social providers if available
       const socialName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || "User";
       const socialPhoto = user.user_metadata?.avatar_url || user.user_metadata?.picture || `https://picsum.photos/seed/${user.id}/400/400`;
 
-      // 1. Create or Update Profile (UPSERT fixes the FK constraint errors)
+      // 1. Create Profile
       const { error: profileErr } = await supabase.from('users').upsert({
         uid: user.id,
         email: user.email,
@@ -66,20 +65,18 @@ export default function FastOnboardingPage() {
         match_flow_id: qId,
         photo_url: socialPhoto,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'uid' })
+      })
 
       if (profileErr) throw profileErr;
       
       // 2. Setup Initial Balance
-      const { error: balanceErr } = await supabase.from('balances').upsert({
+      await supabase.from('balances').upsert({
         user_id: user.id,
         coins: initialCoins,
         diamonds: initialDiamonds
-      }, { onConflict: 'user_id' })
+      })
 
-      if (balanceErr) throw balanceErr;
-
-      // 3. Log initial bonus in history
+      // 3. Log initial bonus
       if (initialCoins > 0) {
         await supabase.from('coin_history').insert({
           user_id: user.id,
