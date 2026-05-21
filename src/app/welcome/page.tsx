@@ -52,7 +52,7 @@ export default function WelcomePage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: typeof window !== 'undefined' ? window.location.origin + '/home' : ''
+          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/home` : ''
         }
       })
       if (error) throw error
