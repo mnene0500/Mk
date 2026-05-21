@@ -1,18 +1,13 @@
-
 "use client"
 
-import { useState } from "react"
-import { useFirestore, useUser, useDoc } from "@/firebase"
-import { useMemoFirebase } from "@/firebase/utils-client"
-import { errorEmitter } from "@/firebase/error-emitter"
-import { FirestorePermissionError } from "@/firebase/errors"
-import { doc, deleteDoc } from "firebase/firestore"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ChevronLeft, ChevronRight, ShieldAlert, Info, RefreshCw, CreditCard, LogOut, Trash2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, ShieldAlert, Info, RefreshCw, CreditCard, LogOut, Trash2, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
+import { useUser } from "@/firebase/auth/use-user"
 import Link from "next/link"
 import {
   AlertDialog,
@@ -26,15 +21,11 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
-interface UserProfile {
-  isAdmin?: boolean
-}
-
 interface SettingItemProps {
   label: string
   onClick?: () => void
   href?: string
-  icon?: React.ReactNode
+  icon: React.ReactNode
   variant?: 'default' | 'destructive'
 }
 
@@ -58,12 +49,20 @@ function SettingItem({ label, onClick, href, icon, variant = 'default' }: Settin
 export default function SettingsPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const db = useFirestore()
   const { user } = useUser()
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [profile, setProfile] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
-  const profileRef = useMemoFirebase(() => (user?.id && db) ? doc(db, "users", user.id) : null, [db, user?.id])
-  const { data: profile } = useDoc<UserProfile>(profileRef)
+  useEffect(() => {
+    if (!user?.id) return
+    const fetchProfile = async () => {
+      const { data } = await supabase.from('users').select('*').eq('uid', user.id).single()
+      setProfile(data)
+      setLoading(false)
+    }
+    fetchProfile()
+  }, [user?.id])
 
   const handleSignOut = async () => {
     try {
@@ -89,29 +88,16 @@ export default function SettingsPage() {
     if (!user || deleteConfirmText.toUpperCase() !== "DELETE") return
 
     try {
-      const uid = user.id
-      const userRef = doc(db!, "users", uid)
+      // 1. Mark user as deleted in Supabase
+      await supabase.from('users').update({ is_deleted: true, onboarding_complete: false }).eq('uid', user.id)
       
-      // Delete user profile from Firestore
-      await deleteDoc(userRef).catch(async () => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: userRef.path,
-          operation: 'delete',
-        }))
-      })
-
-      // Note: Full account deletion via Supabase typically requires a server-side action
-      // For this prototype, we'll sign the user out.
+      // 2. Sign out
       await supabase.auth.signOut()
       window.location.replace("/welcome")
       
       toast({ title: "Account Deletion Requested", description: "Your data has been scheduled for removal." })
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Deletion failed",
-        description: error.message,
-      })
+      toast({ variant: "destructive", title: "Deletion failed", description: error.message })
     }
   }
 
@@ -131,7 +117,7 @@ export default function SettingsPage() {
           <SettingItem label="About QIVO" href="/about" icon={<Info className="w-5 h-5 text-gray-500" />} />
           <SettingItem label="Clear Cache" onClick={handleClearCache} icon={<RefreshCw className="w-5 h-5 text-orange-500" />} />
 
-          {!profile?.isAdmin && (
+          {!profile?.is_admin && !loading && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <div className="flex items-center justify-between py-5 px-6 border-b border-gray-50 active:bg-gray-50 transition-colors cursor-pointer bg-white">

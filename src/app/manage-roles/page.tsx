@@ -5,23 +5,22 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ChevronLeft, Users, Loader2, UserPlus, UserMinus, Search } from "lucide-react"
-import { useUser, useFirestore } from "@/firebase"
 import { useToast } from "@/hooks/use-toast"
 import { toggleUserRoleAction } from "@/app/actions/matchflow-actions"
-import { collection, query, where, getDocs } from "firebase/firestore"
+import { supabase } from "@/lib/supabase"
+import { useUser } from "@/firebase/auth/use-user"
 
 interface TargetUser {
   uid: string
   name: string
-  matchFlowId: string
-  isCoinSeller: boolean
-  isAgent: boolean
+  match_flow_id: string
+  is_coin_seller: boolean
+  is_agent: boolean
 }
 
 export default function ManageRolesPage() {
   const router = useRouter()
   const { user } = useUser()
-  const db = useFirestore()
   const { toast } = useToast()
   const [targetId, setTargetId] = useState("")
   const [targetUser, setTargetUser] = useState<TargetUser | null>(null)
@@ -30,17 +29,11 @@ export default function ManageRolesPage() {
 
   const handleSearch = async () => {
     if (!targetId.trim()) return
-    if (!db) {
-       toast({ variant: "destructive", title: "Error", description: "Database connection pending..." });
-       return;
-    }
     setSearching(true)
     try {
-      const q = query(collection(db, "users"), where("matchFlowId", "==", targetId.trim()))
-      const snap = await getDocs(q)
-      if (!snap.empty) {
-        const d = snap.docs[0]
-        setTargetUser({ uid: d.id, ...d.data() } as TargetUser)
+      const { data, error } = await supabase.from("users").select('*').eq("match_flow_id", targetId.trim()).maybeSingle()
+      if (data) {
+        setTargetUser(data as any)
       } else {
         setTargetUser(null)
         toast({ variant: "destructive", title: "User not found" })
@@ -52,14 +45,13 @@ export default function ManageRolesPage() {
     }
   }
 
-  const handleRoleUpdate = async (role: 'isCoinSeller' | 'isAgent', value: boolean) => {
+  const handleRoleUpdate = async (role: 'is_coin_seller' | 'is_agent', value: boolean) => {
     if (!user || !targetUser) return
     setLoading(true)
     try {
-      const result = await toggleUserRoleAction(user.uid, targetUser.matchFlowId, role, value)
+      const result = await toggleUserRoleAction(user.id, targetUser.match_flow_id, role, value)
       if (result.success) {
         toast({ title: "Success", description: result.message })
-        // Refresh local state
         setTargetUser(prev => prev ? { ...prev, [role]: value } : null)
       } else {
         toast({ variant: "destructive", title: "Error", description: result.error })
@@ -80,58 +72,23 @@ export default function ManageRolesPage() {
       </header>
 
       <main className="flex-1 p-8 flex flex-col items-center space-y-10">
-        <div className="text-center space-y-4">
-          <div className="w-20 h-20 bg-purple-50 rounded-[2.5rem] flex items-center justify-center mx-auto">
-            <Users className="w-10 h-10 text-purple-600" />
-          </div>
-          <h2 className="text-2xl font-black text-black tracking-tight">Authority Management</h2>
-        </div>
+        <div className="text-center space-y-4"><div className="w-20 h-20 bg-purple-50 rounded-[2.5rem] flex items-center justify-center mx-auto"><Users className="w-10 h-10 text-purple-600" /></div><h2 className="text-2xl font-black text-black tracking-tight">Authority Management</h2></div>
 
         <div className="w-full max-w-sm space-y-6">
           <div className="flex gap-2">
-            <Input 
-              placeholder="QIVO ID" 
-              value={targetId} 
-              onChange={(e) => setTargetId(e.target.value)} 
-              className="rounded-2xl h-14 border-gray-100 bg-gray-50 font-bold"
-            />
-            <Button onClick={handleSearch} disabled={searching} className="h-14 w-14 rounded-2xl bg-black">
-              {searching ? <Loader2 className="animate-spin text-white" /> : <Search className="w-5 h-5 text-white" />}
-            </Button>
+            <Input placeholder="QIVO ID" value={targetId} onChange={(e) => setTargetId(e.target.value)} className="rounded-2xl h-14 border-gray-100 bg-gray-50 font-bold" />
+            <Button onClick={handleSearch} disabled={searching} className="h-14 w-14 rounded-2xl bg-black">{searching ? <Loader2 className="animate-spin text-white" /> : <Search className="w-5 h-5 text-white" />}</Button>
           </div>
 
           {targetUser && (
             <div className="space-y-8 animate-in fade-in duration-300">
-              <div className="p-4 bg-gray-50 rounded-2xl text-center">
-                <p className="text-sm font-bold">{targetUser.name}</p>
-                <p className="text-[10px] text-gray-400">UID: {targetUser.uid}</p>
-              </div>
-
+              <div className="p-4 bg-gray-50 rounded-2xl text-center"><p className="text-sm font-bold">{targetUser.name}</p><p className="text-[10px] text-gray-400">UID: {targetUser.uid}</p></div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <p className="text-[9px] font-black text-center text-gray-400 uppercase">Coin Seller</p>
-                  {targetUser.isCoinSeller ? (
-                    <Button onClick={() => handleRoleUpdate('isCoinSeller', false)} disabled={loading} className="w-full h-14 rounded-2xl bg-red-50 text-red-600 border border-red-100 font-bold text-[10px] uppercase gap-2">
-                      <UserMinus className="w-4 h-4" /> Revoke
-                    </Button>
-                  ) : (
-                    <Button onClick={() => handleRoleUpdate('isCoinSeller', true)} disabled={loading} className="w-full h-14 rounded-2xl bg-blue-600 text-white font-bold text-[10px] uppercase gap-2">
-                      <UserPlus className="w-4 h-4" /> Appoint
-                    </Button>
-                  )}
+                <div className="space-y-3"><p className="text-[9px] font-black text-center text-gray-400 uppercase">Coin Seller</p>
+                  {targetUser.is_coin_seller ? <Button onClick={() => handleRoleUpdate('is_coin_seller', false)} disabled={loading} className="w-full h-14 rounded-2xl bg-red-50 text-red-600 border border-red-100 font-bold text-[10px] uppercase gap-2"><UserMinus className="w-4 h-4" /> Revoke</Button> : <Button onClick={() => handleRoleUpdate('is_coin_seller', true)} disabled={loading} className="w-full h-14 rounded-2xl bg-blue-600 text-white font-bold text-[10px] uppercase gap-2"><UserPlus className="w-4 h-4" /> Appoint</Button>}
                 </div>
-
-                <div className="space-y-3">
-                  <p className="text-[9px] font-black text-center text-gray-400 uppercase">Agency Agent</p>
-                  {targetUser.isAgent ? (
-                    <Button onClick={() => handleRoleUpdate('isAgent', false)} disabled={loading} className="w-full h-14 rounded-2xl bg-red-50 text-red-600 border border-red-100 font-bold text-[10px] uppercase gap-2">
-                      <UserMinus className="w-4 h-4" /> Revoke
-                    </Button>
-                  ) : (
-                    <Button onClick={() => handleRoleUpdate('isAgent', true)} disabled={loading} className="w-full h-14 rounded-2xl bg-purple-600 text-white font-bold text-[10px] uppercase gap-2">
-                      <UserPlus className="w-4 h-4" /> Appoint
-                    </Button>
-                  )}
+                <div className="space-y-3"><p className="text-[9px] font-black text-center text-gray-400 uppercase">Agency Agent</p>
+                  {targetUser.is_agent ? <Button onClick={() => handleRoleUpdate('is_agent', false)} disabled={loading} className="w-full h-14 rounded-2xl bg-red-50 text-red-600 border border-red-100 font-bold text-[10px] uppercase gap-2"><UserMinus className="w-4 h-4" /> Revoke</Button> : <Button onClick={() => handleRoleUpdate('is_agent', true)} disabled={loading} className="w-full h-14 rounded-2xl bg-purple-600 text-white font-bold text-[10px] uppercase gap-2"><UserPlus className="w-4 h-4" /> Appoint</Button>}
                 </div>
               </div>
             </div>

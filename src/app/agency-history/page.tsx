@@ -1,8 +1,8 @@
 "use client"
 
-import { useMemo } from "react"
-import { collection, query, where, limit, doc } from "firebase/firestore"
-import { useFirestore, useUser, useCollection, useDoc } from "@/firebase"
+import { useEffect, useState, useMemo } from "react"
+import { supabase } from "@/lib/supabase"
+import { useUser } from "@/firebase/auth/use-user"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, Banknote, Clock, CheckCircle2, XCircle, Loader2 } from "lucide-react"
@@ -12,47 +12,41 @@ import { cn } from "@/lib/utils"
 interface WithdrawalRequest {
   id: string
   diamonds: number
-  amountKes: number
+  amount_kes: number
   status: 'pending' | 'paid' | 'rejected'
-  createdAt: any
-  agencyId: string
-}
-
-interface UserProfile {
-  agencyId?: string
+  timestamp: number
+  agency_id: string
 }
 
 export default function AgencyHistoryPage() {
   const router = useRouter()
   const { user } = useUser()
-  const db = useFirestore()
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const { data: profile } = useDoc<UserProfile>(user?.uid && db ? doc(db, "users", user.uid) : null)
+  useEffect(() => {
+    if (!user?.id) return
+    
+    const fetchWithdrawals = async () => {
+      const { data } = await supabase
+        .from('withdrawals')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('timestamp', { ascending: false })
+        .limit(50)
+      
+      if (data) setWithdrawals(data as any)
+      setLoading(false)
+    }
 
-  const withdrawalsQuery = useMemo(() => {
-    if (!db || !user?.uid || !profile?.agencyId) return null
-    return query(
-      collection(db, "agencies", profile.agencyId, "withdrawals"),
-      where("uid", "==", user.uid),
-      limit(50) 
-    )
-  }, [db, user?.uid, profile?.agencyId])
+    fetchWithdrawals()
 
-  const { data: withdrawals, loading } = useCollection<WithdrawalRequest>(withdrawalsQuery)
+    const channel = supabase.channel(`agency-withdrawals:${user.id}`)
+      .on('postgres_changes', { event: '*', table: 'withdrawals', filter: `user_id=eq.${user.id}` }, () => fetchWithdrawals())
+      .subscribe()
 
-  const sortedWithdrawals = useMemo(() => {
-    return [...withdrawals].sort((a, b) => {
-      const aTime = a.createdAt?.toMillis?.() || (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0)
-      const bTime = b.createdAt?.toMillis?.() || (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0)
-      return bTime - aTime
-    })
-  }, [withdrawals])
-
-  const formatTimestamp = (ts: any) => {
-    if (!ts) return "---"
-    const date = ts.toDate ? ts.toDate() : (ts.seconds ? new Date(ts.seconds * 1000) : new Date(ts))
-    return format(date, "MMM d, HH:mm")
-  }
+    return () => { supabase.removeChannel(channel) }
+  }, [user?.id])
 
   return (
     <div className="flex-1 bg-white min-h-screen flex flex-col">
@@ -69,7 +63,7 @@ export default function AgencyHistoryPage() {
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-[#00A2FF]" />
           </div>
-        ) : sortedWithdrawals.length === 0 ? (
+        ) : withdrawals.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-32 px-12 text-center space-y-4 opacity-40">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
               <Banknote className="w-8 h-8 text-gray-400" />
@@ -81,34 +75,27 @@ export default function AgencyHistoryPage() {
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
-            {sortedWithdrawals.map((req) => (
+            {withdrawals.map((req) => (
               <div key={req.id} className="p-6 hover:bg-gray-50/50 transition-colors">
                 <div className="flex justify-between items-start mb-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <p className="text-lg font-black text-black">Ksh {req.amountKes}</p>
+                      <p className="text-lg font-black text-black">Ksh {req.amount_kes}</p>
                       <StatusBadge status={req.status} />
                     </div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                      {formatTimestamp(req.createdAt)} • {req.diamonds} Diamonds
+                      {format(req.timestamp, "MMM d, HH:mm")} • {req.diamonds} Diamonds
                     </p>
                   </div>
                 </div>
-                
                 <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-xl w-fit">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Agency ID: {req.agencyId}</p>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Agency ID: {req.agency_id}</p>
                 </div>
               </div>
             ))}
           </div>
         )}
       </main>
-
-      <footer className="p-8 text-center bg-gray-50/50">
-        <p className="text-[10px] font-bold text-gray-300 uppercase tracking-[0.2em] leading-relaxed">
-          Showing last 50 transactions. Contact your agent if a payment is missing.
-        </p>
-      </footer>
     </div>
   )
 }

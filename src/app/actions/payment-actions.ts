@@ -132,7 +132,6 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
     
     // Status 1 = Completed
     if (status && status.status_code === 1) {
-      // Extraction: QV_{uid}_{timestamp}
       const parts = merchantReference.split('_');
       const uid = parts[1];
 
@@ -141,7 +140,7 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
         return { success: false, error: "Invalid User Reference" };
       }
 
-      // 1. Idempotency Check via Supabase
+      // 1. Idempotency Check
       const { data: existing } = await supabase
         .from('processed_payments')
         .select('*')
@@ -167,11 +166,11 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
       if (coinsToAward > 0) {
         const timestamp = Date.now();
 
-        // 2. Award Coins (Atomic Update)
+        // 2. Award Coins (Atomically fetch and update)
         const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', uid).single();
         const currentCoins = bal?.coins || 0;
         
-        const { error: updateErr } = await supabase
+        await supabase
           .from('balances')
           .update({ 
             coins: currentCoins + coinsToAward,
@@ -179,9 +178,7 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
           })
           .eq('user_id', uid);
 
-        if (updateErr) throw updateErr;
-
-        // 3. Log to Coin History
+        // 3. Log to History
         await supabase.from('coin_history').insert({
           user_id: uid,
           amount: coinsToAward,
@@ -200,12 +197,11 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
           timestamp: timestamp
         });
 
-        console.log(`[PesaPal Fulfillment] SUCCESS: Awarded ${coinsToAward} coins to ${uid}`);
         return { success: true, coins: coinsToAward };
       }
       return { success: false, error: "Amount too low for coins" };
     }
-    return { success: false, error: "Payment verification failed or pending" };
+    return { success: false, error: "Payment verification failed" };
   } catch (err: any) {
     console.error("[PesaPal Fulfillment] ERROR:", err.message);
     return { success: false, error: err.message };
