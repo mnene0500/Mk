@@ -5,8 +5,9 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 /**
  * @fileOverview Central Supabase Client for Auth, Database, and Realtime.
+ * Validates configuration to prevent 'Failed to fetch' crashes.
  */
-const isSupabaseConfigured = !!(supabaseUrl && supabaseUrl.startsWith('https://') && supabaseAnonKey);
+export const isSupabaseConfigured = !!(supabaseUrl && supabaseUrl.startsWith('https://') && supabaseAnonKey && supabaseAnonKey !== 'placeholder-key');
 
 export const supabase = createClient(
   isSupabaseConfigured ? supabaseUrl : 'https://placeholder-project.supabase.co',

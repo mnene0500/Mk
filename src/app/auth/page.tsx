@@ -2,15 +2,12 @@
 
 import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
-import { doc, setDoc, serverTimestamp } from "firebase/firestore"
-import { ref, set as rtdbSet } from "firebase/database"
-import { useFirestore, useDatabase } from "@/firebase"
+import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { ChevronLeft, Mail, UserPlus, Loader2 } from "lucide-react"
+import { ChevronLeft, Mail, UserPlus, Loader2, AlertCircle } from "lucide-react"
 
 export default function UnifiedAuthPage() {
   const [email, setEmail] = useState("")
@@ -18,8 +15,6 @@ export default function UnifiedAuthPage() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
-  const db = useFirestore()
-  const rtdb = useDatabase()
 
   const passwordStrength = useMemo(() => {
     if (!password) return 0
@@ -34,6 +29,10 @@ export default function UnifiedAuthPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!isSupabaseConfigured) {
+      toast({ variant: "destructive", title: "Configuration Missing", description: "Supabase URL and Key must be set in environment variables." })
+      return
+    }
     if (!email || !password) return
     setLoading(true)
     try {
@@ -41,14 +40,19 @@ export default function UnifiedAuthPage() {
       if (error) throw error
       router.push("/home")
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Login failed", description: error.message })
+      const msg = error.message === 'Failed to fetch' ? "Network error. Check your internet or Supabase URL." : error.message;
+      toast({ variant: "destructive", title: "Login failed", description: msg })
     } finally {
       setLoading(false)
     }
   }
 
   const handleRegister = async () => {
-    if (!email || !password || !db || !rtdb) return
+    if (!isSupabaseConfigured) {
+      toast({ variant: "destructive", title: "Configuration Missing", description: "Supabase URL and Key must be set in environment variables." })
+      return
+    }
+    if (!email || !password) return
     if (passwordStrength < 40) {
       toast({ variant: "destructive", title: "Weak Password", description: "Please use a stronger password." })
       return
@@ -62,35 +66,27 @@ export default function UnifiedAuthPage() {
       const user = data.user
       if (!user) throw new Error("Registration failed to return user data.")
 
-      // AUTO-NAME FROM EMAIL
+      // Initialize Profile in Supabase
       const emailPrefix = email.split('@')[0];
       const nameFromEmail = emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1).replace(/[._]/g, ' ');
-      
       const qId = Math.floor(1000000 + Math.random() * 900000000).toString();
-      const userData = {
+
+      await supabase.from('users').insert({
         uid: user.id,
         email: user.email,
         name: nameFromEmail,
-        matchFlowId: qId,
-        onboardingComplete: false, 
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        gender: "not specified",
-        dob: "2000-01-01",
+        match_flow_id: qId,
+        onboarding_complete: false,
         country: "Kenya",
-        photoURL: `https://picsum.photos/seed/${user.id}/400/400`,
-        isVerified: false,
-        isAdmin: false,
-        isDeleted: false,
-        blocking: [],
-        blockedBy: []
-      }
+        photo_url: `https://picsum.photos/seed/${user.id}/400/400`,
+        is_verified: false,
+        is_admin: false
+      })
 
-      await setDoc(doc(db, "users", user.id), userData)
-      await rtdbSet(ref(rtdb, `balances/${user.id}`), {
+      await supabase.from('balances').insert({
+        user_id: user.id,
         coins: 150,
-        diamonds: 0,
-        updatedAt: Date.now()
+        diamonds: 0
       })
 
       router.push("/fastonboard")
@@ -111,6 +107,15 @@ export default function UnifiedAuthPage() {
       </header>
 
       <div className="flex-1 flex flex-col justify-center space-y-8 max-w-sm mx-auto w-full">
+        {!isSupabaseConfigured && (
+          <div className="bg-red-50 p-4 rounded-2xl flex items-start gap-3 border border-red-100">
+            <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <p className="text-[10px] font-bold text-red-700 uppercase tracking-tight leading-relaxed">
+              Supabase is not configured. Please add NEXT_PUBLIC_SUPABASE_URL and ANON_KEY to your Vercel project and redeploy.
+            </p>
+          </div>
+        )}
+
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-black text-black tracking-tight">Welcome</h1>
           <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Login or Join QIVO</p>
@@ -129,7 +134,7 @@ export default function UnifiedAuthPage() {
           </div>
 
           <div className="space-y-4 pt-4">
-            <Button type="submit" disabled={loading} className="w-full rounded-full h-14 text-base font-bold bg-[#00A2FF] hover:bg-[#0081CC] shadow-xl shadow-blue-100 flex items-center justify-center gap-2">
+            <Button type="submit" disabled={loading || !isSupabaseConfigured} className="w-full rounded-full h-14 text-base font-bold bg-[#00A2FF] hover:bg-[#0081CC] shadow-xl shadow-blue-100 flex items-center justify-center gap-2">
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Mail className="w-5 h-5" /> Login</>}
             </Button>
 
@@ -139,7 +144,7 @@ export default function UnifiedAuthPage() {
               <div className="flex-grow border-t border-gray-100"></div>
             </div>
 
-            <Button type="button" variant="outline" disabled={loading} onClick={handleRegister} className="w-full rounded-full h-14 text-base font-bold border-2 border-gray-100 text-black hover:bg-gray-50 flex items-center justify-center gap-2">
+            <Button type="button" variant="outline" disabled={loading || !isSupabaseConfigured} onClick={handleRegister} className="w-full rounded-full h-14 text-base font-bold border-2 border-gray-100 text-black hover:bg-gray-50 flex items-center justify-center gap-2">
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><UserPlus className="w-5 h-5" /> Create Account</>}
             </Button>
           </div>

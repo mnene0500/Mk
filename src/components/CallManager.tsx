@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Button } from "@/components/ui/button"
 import { Phone, PhoneOff, Video, User } from "lucide-react"
 
 export function CallManager() {
@@ -16,6 +15,7 @@ export function CallManager() {
   useEffect(() => {
     if (!user?.id) return
 
+    // Listen for global broadcast events via Supabase Realtime
     const channel = supabase.channel(`calls:${user.id}`)
       .on('broadcast', { event: 'incoming-call' }, (payload) => {
         setIncomingCall(payload.payload)
@@ -31,12 +31,15 @@ export function CallManager() {
   }, [user?.id])
 
   const handleAccept = () => {
+    if (!incomingCall) return
     const { chatId, type, callerName, callerId, callerPhoto } = incomingCall
     setIncomingCall(null)
     router.push(`/call/${chatId}?type=${type}&partner=${encodeURIComponent(callerName)}&partnerId=${callerId}&partnerPhoto=${encodeURIComponent(callerPhoto)}&caller=false`)
   }
 
   const handleReject = () => {
+    if (!incomingCall) return
+    // Signal the caller that we declined
     supabase.channel(`calls:${incomingCall.callerId}`).send({
       type: 'broadcast',
       event: 'call-rejected',
@@ -59,8 +62,8 @@ export function CallManager() {
           <p className="text-[#00A2FF] font-bold uppercase tracking-widest mt-2">Incoming {incomingCall.type} call...</p>
         </div>
         <div className="flex gap-12 mt-8">
-          <button onClick={handleReject} className="w-20 h-20 rounded-full bg-red-500 flex items-center justify-center shadow-xl"><PhoneOff className="text-white" /></button>
-          <button onClick={handleAccept} className="w-20 h-20 rounded-full bg-green-500 flex items-center justify-center shadow-xl animate-bounce">
+          <button onClick={handleReject} className="w-20 h-20 rounded-full bg-red-500 flex items-center justify-center shadow-xl transition-transform active:scale-90"><PhoneOff className="text-white" /></button>
+          <button onClick={handleAccept} className="w-20 h-20 rounded-full bg-green-500 flex items-center justify-center shadow-xl animate-bounce transition-transform active:scale-90">
             {incomingCall.type === 'video' ? <Video className="text-white" /> : <Phone className="text-white" />}
           </button>
         </div>

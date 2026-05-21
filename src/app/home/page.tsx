@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { BottomNav } from "@/components/layout/BottomNav"
-import { Target, RotateCw, FileText, ChevronDown, BadgeCheck, Loader2 } from "lucide-react"
+import { Target, RotateCw, FileText, BadgeCheck, Loader2 } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -44,7 +44,6 @@ export default function HomePage() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [users, setUsers] = useState<UserProfile[]>(globalUserCache)
   const [initialLoading, setInitialLoading] = useState(globalUserCache.length === 0)
-  const [displayLimit, setDisplayLimit] = useState(globalUserCache.length > 0 ? globalUserCache.length : 12)
   const [activeTab, setActiveTab] = useState<'Recommend' | 'Nearby'>('Recommend')
   const [profile, setProfile] = useState<UserProfile | null>(null)
 
@@ -61,7 +60,10 @@ export default function HomePage() {
   }, [isInitialized, currentUser, authLoading, router])
 
   useEffect(() => {
-    if (!initialLoading) window.scrollTo(0, globalScrollY)
+    if (!initialLoading) {
+       // Restore scroll position
+       setTimeout(() => window.scrollTo(0, globalScrollY), 50);
+    }
     const handleScroll = () => { globalScrollY = window.scrollY }
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
@@ -101,9 +103,6 @@ export default function HomePage() {
     return users
   }, [users, activeTab, profile])
 
-  const paginatedUsers = useMemo(() => filteredUsers.slice(0, displayLimit), [filteredUsers, displayLimit])
-  const hasMore = paginatedUsers.length < filteredUsers.length
-
   if (initialLoading && users.length === 0 && isInitialized) {
     return <div className="flex-1 bg-white min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00A2FF] w-8 h-8" /></div>
   }
@@ -129,7 +128,7 @@ export default function HomePage() {
         </div>
         <main className="px-4 pt-3">
           <div className="grid grid-cols-2 gap-3">
-            {paginatedUsers.map((u) => (
+            {filteredUsers.map((u) => (
               <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.2] rounded-2xl shadow-xl bg-white" onClick={() => router.push(`/users/${u.uid}`)}>
                 <Image src={u.photo_url || ""} alt={u.name} fill className="object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-90" />
@@ -140,7 +139,6 @@ export default function HomePage() {
               </Card>
             ))}
           </div>
-          {hasMore && <div className="flex justify-center pb-8 pt-4"><Button variant="ghost" onClick={() => setDisplayLimit(prev => prev + 24)}>Show more</Button></div>}
         </main>
       </div>
       <BottomNav />
