@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 
 /**
  * @fileOverview PesaPal integration actions for API v3 using Supabase.
- * Includes IPN registration and listing for admin diagnostics.
+ * Optimized for reliable fulfillment and transaction logging.
  */
 
 export interface TransactionStatusResponse {
@@ -140,6 +140,10 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
   }
 }
 
+/**
+ * Fulfills a payment by awarding coins to the user.
+ * Uses UPSERT to ensure the balance record exists.
+ */
 export async function fulfillPaymentAction(orderTrackingId: string, merchantReference: string) {
   try {
     const token = await getAccessToken();
@@ -151,26 +155,52 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
     if (!statusRes.ok) return { success: false, error: "Status check failed" };
     const status = await statusRes.json();
     
+    // status_code 1 = Success
     if (status && status.status_code === 1) {
       const uid = merchantReference.split('_')[1];
       if (!uid) return { success: false, error: "Invalid Ref" };
 
-      const { data: existing } = await supabase.from('processed_payments').select('*').eq('order_tracking_id', orderTrackingId).maybeSingle();
-      if (existing) return { success: true, coins: existing.coins };
+      // 1. Check if already processed to prevent double crediting
+      const { data: existing } = await supabase
+        .from('processed_payments')
+        .select('*')
+        .eq('order_tracking_id', orderTrackingId)
+        .maybeSingle();
+
+      if (existing) {
+        console.log(`[Payment] Order ${orderTrackingId} already processed.`);
+        return { success: true, coins: existing.coins };
+      }
 
       const amount = Number(status.amount);
       // Award Logic: KES 1 = 10 Coins
       let coinsToAward = Math.floor(amount * 10);
-
-      const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', uid).single();
-      const currentCoins = bal?.coins || 0;
-      
       const timestamp = Date.now();
+
+      // 2. Fetch current balance
+      const { data: balData, error: fetchErr } = await supabase
+        .from('balances')
+        .select('coins')
+        .eq('user_id', uid)
+        .maybeSingle();
+
+      const currentCoins = balData?.coins || 0;
       
-      // Update balance
-      await supabase.from('balances').update({ coins: currentCoins + coinsToAward }).eq('user_id', uid);
+      // 3. Update or Create Balance (UPSERT is more reliable)
+      const { error: upsertErr } = await supabase
+        .from('balances')
+        .upsert({ 
+          user_id: uid, 
+          coins: currentCoins + coinsToAward,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' });
+
+      if (upsertErr) {
+        console.error("[Payment] Balance Update Error:", upsertErr.message);
+        throw upsertErr;
+      }
       
-      // Log Recharge History
+      // 4. Log Recharge History
       await supabase.from('coin_history').insert({ 
         user_id: uid, 
         amount: coinsToAward, 
@@ -179,20 +209,23 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
         timestamp 
       });
       
-      // Mark payment as processed
+      // 5. Mark payment as processed
       await supabase.from('processed_payments').insert({ 
         order_tracking_id: orderTrackingId, 
         user_id: uid, 
         amount, 
         coins: coinsToAward, 
-        payment_method: status.payment_method, 
+        payment_method: status.payment_method || 'pesapal', 
         timestamp 
       });
 
+      console.log(`[Payment] Successfully awarded ${coinsToAward} coins to ${uid}`);
       return { success: true, coins: coinsToAward };
     }
-    return { success: false, error: "Payment not completed" };
+    
+    return { success: false, error: `Payment not completed (Status: ${status.status_code})` };
   } catch (err: any) {
+    console.error("[Payment] Fulfillment Critical Error:", err.message);
     return { success: false, error: err.message };
   }
 }
