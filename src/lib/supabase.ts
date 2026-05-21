@@ -1,21 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://taxmenbtzsiotgcvptue.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRheG1lbmJ0enNpb3RnY3ZwdHVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTUzOTMsImV4cCI6MjA5NDY5MTM5M30.KToHUbmwdKus6jDoP7ojmM2xILcbIae3G-9E6Wb4xTw';
+const supabaseUrl = 'https://taxmenbtzsiotgcvptue.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRheG1lbmJ0enNpb3RnY3ZwdHVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTUzOTMsImV4cCI6MjA5NDY5MTM5M30.KToHUbmwdKus6jDoP7ojmM2xILcbIae3G-9E6Wb4xTw';
 
 /**
- * @fileOverview Central Supabase Client.
+ * @fileOverview Central Supabase Client with hardcoded production credentials.
  */
-export const isSupabaseConfigured = true;
-
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 /**
  * Helper to upload a base64 image to Supabase Storage.
  */
 export async function uploadBase64Image(base64: string, bucket: string, path: string): Promise<string> {
-  if (!isSupabaseConfigured) return base64;
-
   try {
     const matches = base64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/);
     if (!matches || matches.length !== 3) {

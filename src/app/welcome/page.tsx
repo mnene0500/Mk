@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -34,7 +33,7 @@ export default function WelcomePage() {
         .from('users')
         .select('onboarding_complete')
         .eq('uid', uid)
-        .maybeSingle(); // Better than .single() as it handles missing records gracefully
+        .maybeSingle();
       
       if (data?.onboarding_complete) {
         router.replace("/home")
@@ -53,7 +52,7 @@ export default function WelcomePage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin + '/home'
+          redirectTo: typeof window !== 'undefined' ? window.location.origin + '/home' : ''
         }
       })
       if (error) throw error

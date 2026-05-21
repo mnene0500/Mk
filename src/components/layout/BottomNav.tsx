@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import Link from "link"
 import { usePathname } from "next/navigation"
 import { Home, MessageSquare, User } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -26,8 +26,6 @@ export function BottomNav() {
         .select('participant_ids, last_message_at')
         .contains('participant_ids', [user.id])
       
-      // Prototype logic: simply showing a badge if there are active chats
-      // Real implementation would compare last_read timestamps per participant
       if (data) setTotalUnread(data.length > 0 ? 1 : 0)
     }
 
