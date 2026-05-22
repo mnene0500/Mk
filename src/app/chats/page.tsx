@@ -8,11 +8,12 @@ import { BottomNav } from "@/components/layout/BottomNav"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Send, ChevronLeft, Loader2, User, Trash2, MoreVertical, Sparkles, AlertCircle, Gift } from "lucide-react"
+import { Send, ChevronLeft, Loader2, User, Trash2, MoreVertical, Sparkles, AlertCircle, Gift, Phone, Video } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
 import { sendGiftAction } from "@/app/actions/matchflow-actions"
+import { checkCallBalanceAction } from "@/app/actions/call-actions"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -186,7 +187,6 @@ function ChatsContent() {
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !chatId || !currentUser?.id || !startWithId || !userProfile) return
     
-    // FREE PRIVILEGE: Admin, Coin Seller, or texting an Admin/Seller is FREE
     const isPrivileged = 
       userProfile.is_admin || 
       userProfile.is_coin_seller || 
@@ -225,9 +225,27 @@ function ChatsContent() {
 
   const handleSendGift = async () => {
     if (!currentUser || !startWithId) return
-    const res = await sendGiftAction(currentUser.id, startWithId, 200, "Rose")
+    const res = await sendGiftAction(startWithId, 200, "Rose")
     if (res.success) toast({ title: "Gift Sent!" })
     else toast({ variant: "destructive", title: "Error", description: res.error })
+  }
+
+  const handleCall = async (type: 'voice' | 'video') => {
+    if (!currentUser || !startWithId || !partnerProfile || !chatId) return
+    
+    // Privilege check (free for admin/seller)
+    const isPrivileged = userProfile?.is_admin || userProfile?.is_coin_seller;
+    
+    if (!isPrivileged && userProfile?.gender === 'male') {
+      const balanceCheck = await checkCallBalanceAction(currentUser.id, type)
+      if (!balanceCheck.success) {
+        toast({ variant: "destructive", title: "Insufficient Balance", description: `You need ${type === 'video' ? '150' : '70'} coins to start.` })
+        router.push("/recharge")
+        return
+      }
+    }
+
+    router.push(`/call/${chatId}?type=${type}&partner=${encodeURIComponent(partnerProfile.name)}&partnerId=${startWithId}&partnerPhoto=${encodeURIComponent(partnerProfile.photo_url)}&caller=true`)
   }
 
   const handleClearChat = async (targetId?: string) => {
@@ -316,7 +334,8 @@ function ChatsContent() {
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" onClick={handleSendGift} className="rounded-full text-pink-500"><Gift className="w-5 h-5" /></Button>
+          <Button variant="ghost" size="icon" onClick={() => handleCall('voice')} className="rounded-full text-black"><Phone className="w-5 h-5" /></Button>
+          <Button variant="ghost" size="icon" onClick={() => handleCall('video')} className="rounded-full text-black"><Video className="w-5 h-5" /></Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="rounded-full"><MoreVertical className="w-5 h-5 text-gray-400" /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="rounded-2xl min-w-[160px]"><DropdownMenuItem onClick={() => handleClearChat()} className="text-red-500 font-bold gap-2 p-3"><Trash2 className="w-4 h-4" /> Delete Chat</DropdownMenuItem></DropdownMenuContent>
@@ -336,6 +355,7 @@ function ChatsContent() {
         {userProfile?.gender === 'male' && !isPrivileged && <div className="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-2 mb-1">Message cost: 15 Coins</div>}
         {isPrivileged && <div className="text-[9px] font-bold text-blue-500 uppercase tracking-widest px-2 mb-1">VIP: Free Communication Enabled</div>}
         <div className="flex gap-2 items-center">
+          <Button variant="ghost" size="icon" onClick={handleSendGift} className="rounded-full h-12 w-12 text-pink-500 hover:bg-pink-50"><Gift className="w-6 h-6" /></Button>
           <input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendMessage()} className="flex-1 h-12 bg-gray-50 rounded-2xl px-5 text-sm font-bold placeholder:text-gray-300 outline-none" placeholder="Say something nice..." />
           <Button onClick={handleSendMessage} disabled={!newMessage.trim() || isSending} size="icon" className="rounded-full h-12 w-12 bg-[#00A2FF] hover:bg-[#0081CC] shadow-lg"><Send className="w-5 h-5 text-white" /></Button>
         </div>
