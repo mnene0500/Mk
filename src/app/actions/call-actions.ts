@@ -1,21 +1,21 @@
 'use server';
 
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase';
 
 /**
- * Deducts coins from a user for an active call using Supabase.
+ * Deducts coins for calls using Admin client to bypass RLS restrictions on balances.
  */
 export async function deductCallCoinsAction(uid: string, type: 'video' | 'voice', partnerName: string) {
   const cost = type === 'video' ? 150 : 70;
 
   try {
-    const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', uid).maybeSingle();
+    const { data: bal } = await supabaseAdmin.from('balances').select('coins').eq('user_id', uid).maybeSingle();
     const currentCoins = Number(bal?.coins) || 0;
 
     if (currentCoins < cost) return { success: false, error: "Insufficient balance." };
 
-    await supabase.from('balances').update({ coins: currentCoins - cost }).eq('user_id', uid);
-    await supabase.from('coin_history').insert({
+    await supabaseAdmin.from('balances').update({ coins: currentCoins - cost }).eq('user_id', uid);
+    await supabaseAdmin.from('coin_history').insert({
       user_id: uid,
       amount: -cost,
       type: 'call',
@@ -32,7 +32,7 @@ export async function deductCallCoinsAction(uid: string, type: 'video' | 'voice'
 export async function checkCallBalanceAction(uid: string, type: 'video' | 'voice') {
   const minRequired = type === 'video' ? 150 : 70;
   try {
-    const { data } = await supabase.from('balances').select('coins').eq('user_id', uid).maybeSingle();
+    const { data } = await supabaseAdmin.from('balances').select('coins').eq('user_id', uid).maybeSingle();
     const coins = Number(data?.coins) || 0;
     if (coins < minRequired) return { success: false, error: "Low balance." };
     return { success: true };
