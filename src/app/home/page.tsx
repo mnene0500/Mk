@@ -4,7 +4,6 @@ import { useMemo, useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
-import { BottomNav } from "@/components/layout/BottomNav"
 import { RotateCw, BadgeCheck, Loader2, FileText, Target } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
@@ -251,7 +250,6 @@ export default function HomePage() {
           </div>
         )}
       </main>
-      <BottomNav />
     </div>
   )
 }

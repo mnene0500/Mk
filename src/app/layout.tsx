@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Inter, Pacifico } from 'next/font/google';
 import { Providers } from '@/components/providers';
+import { AppShell } from '@/components/layout/AppShell';
 import Script from 'next/script';
 
 const inter = Inter({
@@ -50,7 +51,9 @@ export default function RootLayout({
     >
       <body className="font-body antialiased bg-background min-h-screen flex flex-col">
         <Providers>
-          {children}
+          <AppShell>
+            {children}
+          </AppShell>
         </Providers>
         <Script id="register-sw" strategy="afterInteractive">
           {`

@@ -3,7 +3,6 @@
 import { useEffect, useState, Suspense, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { BottomNav } from "@/components/layout/BottomNav"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
@@ -345,7 +344,6 @@ function ChatsContent() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <BottomNav />
     </div>
   )
 

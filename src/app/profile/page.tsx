@@ -1,10 +1,8 @@
-
 "use client"
 
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
-import { BottomNav } from "@/components/layout/BottomNav"
 import { Button } from "@/components/ui/button"
 import { 
   Settings, 
@@ -355,7 +353,6 @@ export default function MePage() {
           </div>
         </main>
       </div>
-      <BottomNav />
     </div>
   )
 }
