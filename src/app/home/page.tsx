@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react"
@@ -148,21 +149,13 @@ export default function HomePage() {
 
   return (
     <div className="flex-1 pb-24 bg-[#F9FAFB] min-h-screen relative select-none animate-in fade-in duration-300">
-      {/* BRANDING HEADER - THE STAMP BACKGROUND */}
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b shadow-sm h-24 flex items-center justify-between px-6 overflow-hidden">
-        {/* QIVO STAMP: Positioned absolutely behind buttons */}
-        <h1 className="absolute left-6 top-1/2 -translate-y-1/2 text-7xl font-logo font-black text-[#00A2FF]/20 tracking-tighter transform -rotate-12 origin-left pointer-events-none z-0">
+      {/* BRANDING HEADER - CLEAN & MINIMAL */}
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b shadow-sm h-16 flex items-center justify-between px-6">
+        <h1 className="text-2xl font-logo font-black text-[#00A2FF] tracking-tighter">
           QIVO
         </h1>
-
-        <div className="relative z-10 ml-auto">
-          <button 
-            onClick={() => fetchUsers(true)} 
-            disabled={isRefreshing}
-            className={cn("p-2 text-[#00A2FF] transition-transform active:scale-90", isRefreshing && "animate-spin")}
-          >
-            <RotateCw className="w-6 h-6" />
-          </button>
+        <div className="flex items-center gap-3">
+          <Sparkles className="w-5 h-5 text-blue-100" />
         </div>
       </header>
 
@@ -179,10 +172,37 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* FEED SELECTOR */}
-        <div className="flex items-center gap-6 pb-2 border-b border-black/5">
-          <button onClick={() => setActiveTab('Recommend')} className={cn("text-xs font-black uppercase tracking-[0.2em] transition-colors", activeTab === 'Recommend' ? "text-[#00A2FF]" : "text-gray-300")}>Recommend</button>
-          <button onClick={() => setActiveTab('Nearby')} className={cn("text-xs font-black uppercase tracking-[0.2em] transition-colors", activeTab === 'Nearby' ? "text-[#00A2FF]" : "text-gray-300")}>Nearby</button>
+        {/* FEED SELECTOR WITH INTEGRATED REFRESH */}
+        <div className="flex items-center gap-6 pb-2 border-b border-black/5 relative">
+          <button 
+            onClick={() => setActiveTab('Recommend')} 
+            className={cn(
+              "text-xs font-black uppercase tracking-[0.2em] transition-colors", 
+              activeTab === 'Recommend' ? "text-[#00A2FF]" : "text-gray-300"
+            )}
+          >
+            Recommend
+          </button>
+          <button 
+            onClick={() => setActiveTab('Nearby')} 
+            className={cn(
+              "text-xs font-black uppercase tracking-[0.2em] transition-colors", 
+              activeTab === 'Nearby' ? "text-[#00A2FF]" : "text-gray-300"
+            )}
+          >
+            Nearby
+          </button>
+          
+          <button 
+            onClick={() => fetchUsers(true)} 
+            disabled={isRefreshing}
+            className={cn(
+              "ml-auto p-1.5 text-[#00A2FF] transition-transform active:scale-90", 
+              isRefreshing && "animate-spin"
+            )}
+          >
+            <RotateCw className="w-4 h-4" />
+          </button>
         </div>
 
         {/* MAIN FEED */}
