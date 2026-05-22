@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo } from "react"
@@ -61,7 +62,7 @@ export default function UnifiedAuthPage() {
           redirectTo,
           queryParams: {
             access_type: 'offline',
-            prompt: 'consent',
+            prompt: 'consent', // Force identity selection to help separate accounts
           },
         }
       })
