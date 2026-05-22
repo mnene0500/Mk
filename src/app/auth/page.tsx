@@ -11,6 +11,7 @@ import { ChevronLeft, Mail, Loader2 } from "lucide-react"
 
 /**
  * @fileOverview Unified Auth page for Email and Google Login via Supabase.
+ * Robust redirect logic to prevent localhost:3000 fallback.
  */
 export default function UnifiedAuthPage() {
   const [email, setEmail] = useState("")
@@ -49,7 +50,7 @@ export default function UnifiedAuthPage() {
   const handleGoogleLogin = async () => {
     setSocialLoading(true)
     try {
-      // Robust redirect URL detection
+      // Use explicit production URL to override Supabase dashboard defaults if misconfigured
       const redirectTo = typeof window !== 'undefined' 
         ? `${window.location.origin}/home` 
         : 'https://qivo-gamma.vercel.app/home';

@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast"
 
 /**
  * @fileOverview Cinematic Welcome Page with Supabase Auth Gates.
+ * Optimized Google Login redirect logic.
  */
 export default function WelcomePage() {
   const [mounted, setMounted] = useState(false)
@@ -51,10 +52,18 @@ export default function WelcomePage() {
   const handleGoogleLogin = async () => {
     setLoading(true)
     try {
+      const redirectTo = typeof window !== 'undefined' 
+        ? `${window.location.origin}/home` 
+        : 'https://qivo-gamma.vercel.app/home';
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/home` : ''
+          redirectTo,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         }
       })
       if (error) throw error
