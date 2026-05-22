@@ -19,30 +19,50 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 /**
  * Helper to upload a base64 image to Supabase Storage.
+ * Ensures the bucket name is correct and handles base64 stripping robustly.
  */
 export async function uploadBase64Image(base64: string, bucket: string, path: string): Promise<string> {
   try {
+    // 1. Validate if it's already a URL
+    if (base64.startsWith('http')) return base64;
+
+    // 2. Extract mime type and actual base64 data
     const matches = base64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/);
     if (!matches || matches.length !== 3) {
-      if (base64.startsWith('http')) return base64;
-      throw new Error("Invalid base64 format");
+      throw new Error("Invalid image format. Please select another photo.");
     }
 
     const mimeType = matches[1];
     const base64Data = matches[2];
+
+    // 3. Convert to Blob
     const byteCharacters = atob(base64Data);
     const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
     const byteArray = new Uint8Array(byteNumbers);
     const blob = new Blob([byteArray], { type: mimeType });
 
-    const { error } = await supabase.storage.from(bucket).upload(path, blob, { contentType: mimeType, upsert: true });
-    if (error) throw error;
+    // 4. Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(path, blob, { 
+        contentType: mimeType, 
+        upsert: true,
+        cacheControl: '3600'
+      });
 
+    if (error) {
+      console.error("Storage Error:", error.message);
+      throw error;
+    }
+
+    // 5. Retrieve Public URL
     const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(path);
     return publicUrl;
   } catch (err: any) {
-    console.error("Upload failed:", err.message);
-    throw err;
+    console.error("Upload process crashed:", err.message);
+    throw new Error(`Upload failed: ${err.message}`);
   }
 }

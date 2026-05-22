@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 
 /**
  * @fileOverview Secure Economy Actions via Supabase Edge Functions.
- * These actions invoke your Edge Functions where keys are stored.
+ * Enhanced error handling to prevent generic "System busy" messages.
  */
 
 export async function dailyCheckInAction(uid: string) {
@@ -13,11 +13,20 @@ export async function dailyCheckInAction(uid: string) {
     const { data, error } = await supabase.functions.invoke('economy-ops', {
       body: { action: 'daily-check-in', uid }
     });
-    if (error) throw error;
+    
+    if (error) {
+      console.error("Function Invocation Error:", error);
+      return { success: false, error: "Task service currently unavailable." };
+    }
+
+    if (!data.success) {
+      return { success: false, error: data.error || "Could not complete check-in." };
+    }
+
     return data;
   } catch (error: any) { 
-    console.error("Check-in Error:", error.message);
-    return { success: false, error: "Service busy. Try again shortly." }; 
+    console.error("Check-in Crash:", error.message);
+    return { success: false, error: "Network error. Please try again." }; 
   }
 }
 

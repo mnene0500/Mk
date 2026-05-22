@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, Suspense, useEffect, useRef } from "react"
@@ -11,7 +12,8 @@ import {
   History, 
   CheckCircle2,
   Zap,
-  ShieldCheck
+  ShieldCheck,
+  X
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
@@ -42,14 +44,14 @@ function RechargeContent() {
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null)
   const [isFulfilling, setIsFulfilling] = useState(false)
   const [fulfillmentSuccess, setFulfillmentSuccess] = useState(false)
-  
   const [currentCoins, setCurrentCoins] = useState<number | null>(null)
   
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null)
   const successTriggeredRef = useRef(false)
 
-  // 1. FAST REALTIME PULSE
-  // Listens for the balance increment directly from the database (via IPN or manual fulfill)
+  // Only consider active if params are actually present in the URL
+  const hasOrderParams = !!(searchParams.get("OrderTrackingId") || searchParams.get("orderTrackingId"))
+
   useEffect(() => {
     if (!user?.id) return
     
@@ -66,13 +68,11 @@ function RechargeContent() {
         filter: `user_id=eq.${user.id}` 
       }, (payload) => {
         const newBal = Number(payload.new.coins) || 0
-        // If balance increases, we know fulfillment happened
         if (currentCoins !== null && newBal > currentCoins && !successTriggeredRef.current) {
           successTriggeredRef.current = true
           setFulfillmentSuccess(true)
           setIsFulfilling(false)
           if (pollTimerRef.current) clearInterval(pollTimerRef.current)
-          toast({ title: "Coins Added!", description: "Balance updated successfully." })
         }
       })
       .subscribe()
@@ -83,15 +83,12 @@ function RechargeContent() {
     }
   }, [user?.id, currentCoins])
 
-  // 2. AGGRESSIVE AUTO-VERIFY
-  // If we return to the app with OrderTrackingId, start checking immediately
   useEffect(() => {
     const orderId = searchParams.get("OrderTrackingId") || searchParams.get("orderTrackingId")
     const merchantRef = searchParams.get("OrderMerchantReference") || searchParams.get("orderMerchantReference")
 
     if (orderId && merchantRef && !fulfillmentSuccess && !successTriggeredRef.current) {
       setIsFulfilling(true)
-      
       const verify = async () => {
         if (successTriggeredRef.current) return
         const res = await fulfillPaymentAction(orderId, merchantRef)
@@ -101,14 +98,9 @@ function RechargeContent() {
           setIsFulfilling(false)
         }
       }
-
-      // First check immediate
       verify()
-      // Then poll every 2 seconds for 1 minute
-      pollTimerRef.current = setInterval(verify, 2000)
-      setTimeout(() => { if (pollTimerRef.current) clearInterval(pollTimerRef.current) }, 60000)
+      pollTimerRef.current = setInterval(verify, 3000)
     }
-
     return () => { if (pollTimerRef.current) clearInterval(pollTimerRef.current) }
   }, [searchParams, fulfillmentSuccess])
 
@@ -134,10 +126,15 @@ function RechargeContent() {
     }
   }
 
+  const handleCloseSuccess = () => {
+    // Clear URL parameters and reset state
+    router.replace('/profile')
+  }
+
   if (authLoading || !isInitialized) return <div className="flex-1 flex items-center justify-center h-screen bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
 
-  // FULFILLMENT SUCCESS VIEW
-  if (isFulfilling || fulfillmentSuccess || searchParams.get("OrderTrackingId")) {
+  // FULFILLMENT / VERIFICATION VIEW
+  if (isFulfilling || fulfillmentSuccess || hasOrderParams) {
     return (
       <div className="flex-1 bg-white min-h-screen flex flex-col items-center justify-center p-8 space-y-10 animate-in fade-in duration-300">
         <div className="relative">
@@ -158,8 +155,12 @@ function RechargeContent() {
           </h2>
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.4em]">{fulfillmentSuccess ? "FULFILLMENT COMPLETE" : "STAY ON THIS PAGE"}</p>
         </div>
-        {fulfillmentSuccess && (
-          <Button onClick={() => router.replace("/profile")} className="rounded-full bg-black text-white font-black uppercase text-[10px] tracking-widest h-16 px-12 shadow-2xl animate-in slide-in-from-bottom-4">Enter Wallet</Button>
+        {fulfillmentSuccess ? (
+          <Button onClick={handleCloseSuccess} className="rounded-full bg-black text-white font-black uppercase text-[10px] tracking-widest h-16 px-12 shadow-2xl animate-in slide-in-from-bottom-4">Enter Wallet</Button>
+        ) : (
+          <Button variant="ghost" onClick={() => router.replace('/recharge')} className="text-gray-300 font-bold uppercase text-[9px] tracking-widest gap-2">
+             <X className="w-3 h-3" /> Cancel Verification
+          </Button>
         )}
       </div>
     )
@@ -224,7 +225,6 @@ function RechargeContent() {
         </Button>
       </footer>
 
-      {/* SECURE CHECKOUT IFRAME MODAL */}
       <Dialog open={!!paymentUrl} onOpenChange={(open) => !open && setPaymentUrl(null)}>
         <DialogContent className="max-w-none w-full h-[100dvh] p-0 border-none bg-white rounded-none flex flex-col z-[9999] [&>button]:hidden">
           <DialogTitle className="sr-only">Secure Checkout</DialogTitle>

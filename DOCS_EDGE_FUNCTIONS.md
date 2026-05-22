@@ -1,12 +1,15 @@
 
 # QIVO Edge Function Deployment Guide
 
-Create 4 separate functions in your Supabase Dashboard using the **"Via Editor"** method. For each one, delete the default code and paste the corresponding block below. Ensure you name the function correctly at the bottom of the screen before deploying.
+Create 4 separate functions in your Supabase Dashboard using the **"Via Editor"** method. 
+For each one, delete the default code and paste the corresponding block below. 
+**Crucial**: Name the function exactly as shown before deploying.
 
 ---
 
 ## 1. Function Name: `payment-ops`
-**File**: `index.ts`
+**Purpose**: Handles PesaPal payment initiation and automatic coin fulfillment.
+
 ```typescript
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -24,6 +27,7 @@ serve(async (req) => {
 
     if (action === 'initiate') {
       const { amount, user } = params
+      // MOCK: In production, this calls PesaPal API.
       const mockUrl = `https://qivo-gamma.vercel.app/recharge?OrderTrackingId=MOCK_${Date.now()}&OrderMerchantReference=${user.uid}|${Math.floor(amount * 6.25)}`
       return new Response(JSON.stringify({ success: true, redirect_url: mockUrl }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
@@ -32,7 +36,19 @@ serve(async (req) => {
       const { orderTrackingId, merchantReference } = params
       const [uid, coinsStr] = merchantReference.split('|')
       const coins = parseInt(coinsStr)
+      
+      // Atomic increment
       await supabase.rpc('increment_coins', { user_uid: uid, amount: coins })
+      
+      // Log history
+      await supabase.from('coin_history').insert({
+        user_id: uid,
+        amount: coins,
+        type: 'recharge',
+        description: `Purchased ${coins} coins`,
+        timestamp: Date.now()
+      })
+
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
     
@@ -46,7 +62,8 @@ serve(async (req) => {
 ---
 
 ## 2. Function Name: `economy-ops`
-**File**: `index.ts`
+**Purpose**: Manages daily rewards, gifting, and recruitment.
+
 ```typescript
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -64,10 +81,18 @@ serve(async (req) => {
 
     if (action === 'daily-check-in') {
       const { uid } = params
-      const { data: user } = await supabase.from('users').select('*').eq('uid', uid).single()
+      const { data: user, error: userError } = await supabase.from('users').select('*').eq('uid', uid).single()
+      
+      if (userError || !user) throw new Error("Profile record not found. Please setup profile first.")
+      
       const reward = 5
       await supabase.rpc('increment_coins', { user_uid: uid, amount: reward })
-      await supabase.from('users').update({ last_check_in_date: new Date().toISOString(), check_in_streak: (user.check_in_streak || 0) + 1 }).eq('uid', uid)
+      
+      await supabase.from('users').update({ 
+        last_check_in_date: new Date().toISOString(), 
+        check_in_streak: (user.check_in_streak || 0) + 1 
+      }).eq('uid', uid)
+      
       return new Response(JSON.stringify({ success: true, amount: reward, day: (user.check_in_streak || 0) + 1 }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
@@ -88,7 +113,8 @@ serve(async (req) => {
 ---
 
 ## 3. Function Name: `calling-ops`
-**File**: `index.ts`
+**Purpose**: Secure ZegoCloud logic and per-minute call billing.
+
 ```typescript
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -126,7 +152,8 @@ serve(async (req) => {
 ---
 
 ## 4. Function Name: `ai-ops`
-**File**: `index.ts`
+**Purpose**: Biometric identity matching using Google Gemini.
+
 ```typescript
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
