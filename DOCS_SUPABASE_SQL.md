@@ -3,10 +3,10 @@
 
 To enable the economy, gifting, reporting, and realtime systems, copy and run the following script in your **Supabase SQL Editor**. 
 
-**IMPORTANT**: This script uses `UUID` for all primary and foreign keys to ensure compatibility with Supabase Auth. It will reset your tables to fix type mismatches.
+**IMPORTANT**: This script resets your tables to fix type mismatches (UUID vs TEXT) and explicitly grants permissions to resolve "Permission Denied" errors.
 
 ```sql
--- 1. RESET TABLES (Ensures clean slate for UUID types)
+-- 1. RESET TABLES
 DROP TABLE IF EXISTS public.users, public.balances, public.coin_history, public.diamond_history, public.processed_payments, public.chats, public.messages, public.agencies, public.withdrawals, public.reports CASCADE;
 
 -- 2. EXTEND USERS TABLE (Strict UUID)
@@ -135,7 +135,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.users;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.withdrawals;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.reports;
 
--- 11. PERMISSIONS (Disabled for Prototype Speed)
+-- 11. PERMISSIONS & ROLES
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.balances DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coin_history DISABLE ROW LEVEL SECURITY;
@@ -146,4 +146,9 @@ ALTER TABLE public.messages DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.agencies DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.withdrawals DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports DISABLE ROW LEVEL SECURITY;
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated;
 ```
