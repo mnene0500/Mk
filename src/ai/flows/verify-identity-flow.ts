@@ -1,14 +1,12 @@
 'use server';
 /**
- * @fileOverview A Genkit flow for identity verification via face comparison.
- *
- * - verifyIdentity - A function that compares a profile photo with a live selfie.
- * - VerifyIdentityInput - The input type (profile URL and selfie data URI).
- * - VerifyIdentityOutput - The verification result (match status and confidence).
+ * @fileOverview Biometric Verification via Supabase Edge Functions.
+ * Since GenAI keys are now stored in Supabase, we delegate the analysis 
+ * to an AI Edge Function to maintain security.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { supabase } from '@/lib/supabase';
+import { z } from 'genkit';
 
 const VerifyIdentityInputSchema = z.object({
   profilePhotoUrl: z.string().describe('The URL of the user\'s existing profile photo.'),
@@ -28,36 +26,27 @@ const VerifyIdentityOutputSchema = z.object({
 export type VerifyIdentityOutput = z.infer<typeof VerifyIdentityOutputSchema>;
 
 export async function verifyIdentity(input: VerifyIdentityInput): Promise<VerifyIdentityOutput> {
-  return verifyIdentityFlow(input);
-}
+  try {
+    const { data, error } = await supabase.functions.invoke('ai-ops', {
+      body: { 
+        action: 'verify-identity',
+        profilePhotoUrl: input.profilePhotoUrl,
+        selfieDataUri: input.selfieDataUri
+      }
+    });
 
-const verifyIdentityPrompt = ai.definePrompt({
-  name: 'verifyIdentityPrompt',
-  input: {schema: VerifyIdentityInputSchema},
-  output: {schema: VerifyIdentityOutputSchema},
-  prompt: `You are an expert biometric security analyst. 
+    if (error || !data) {
+      console.error("AI Edge Function Error:", error);
+      throw new Error("Identity verification service timed out.");
+    }
 
-Compare the person in these two images:
-1. Profile Photo: {{media url=profilePhotoUrl}}
-2. Live Selfie: {{media url=selfieDataUri}}
-
-Determine if they are the same person. Consider facial features, structure, and identifying characteristics. 
-Ignore differences in lighting, background, or minor clothing changes.
-
-Provide your result as JSON with:
-- isMatch: true/false
-- confidence: a value between 0 and 1 (0.8+ usually indicates a strong match)
-- reasoning: a short sentence explaining your conclusion.`,
-});
-
-const verifyIdentityFlow = ai.defineFlow(
-  {
-    name: 'verifyIdentityFlow',
-    inputSchema: VerifyIdentityInputSchema,
-    outputSchema: VerifyIdentityOutputSchema,
-  },
-  async input => {
-    const {output} = await verifyIdentityPrompt(input);
-    return output!;
+    return {
+      isMatch: data.isMatch || false,
+      confidence: data.confidence || 0,
+      reasoning: data.reasoning || "Verification completed via edge function."
+    };
+  } catch (err: any) {
+    console.error("VerifyIdentity Flow Proxy Error:", err.message);
+    throw err;
   }
-);
+}
