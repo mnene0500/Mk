@@ -149,11 +149,9 @@ export default function HomePage() {
 
   return (
     <div className="flex-1 pb-24 bg-[#F9FAFB] min-h-screen relative select-none animate-in fade-in duration-300">
-      {/* BRANDING HEADER - CLEAN & MINIMAL */}
+      {/* MINIMAL HEADER - LOGO REMOVED */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b shadow-sm h-16 flex items-center justify-between px-6">
-        <h1 className="text-2xl font-logo font-black text-[#00A2FF] tracking-tighter">
-          QIVO
-        </h1>
+        <div />
         <div className="flex items-center gap-3">
           <Sparkles className="w-5 h-5 text-blue-100" />
         </div>
@@ -172,7 +170,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* FEED SELECTOR WITH INTEGRATED REFRESH */}
+        {/* FEED SELECTOR WITH REFRESH NEXT TO NEARBY */}
         <div className="flex items-center gap-6 pb-2 border-b border-black/5 relative">
           <button 
             onClick={() => setActiveTab('Recommend')} 
@@ -183,26 +181,27 @@ export default function HomePage() {
           >
             Recommend
           </button>
-          <button 
-            onClick={() => setActiveTab('Nearby')} 
-            className={cn(
-              "text-xs font-black uppercase tracking-[0.2em] transition-colors", 
-              activeTab === 'Nearby' ? "text-[#00A2FF]" : "text-gray-300"
-            )}
-          >
-            Nearby
-          </button>
-          
-          <button 
-            onClick={() => fetchUsers(true)} 
-            disabled={isRefreshing}
-            className={cn(
-              "ml-auto p-1.5 text-[#00A2FF] transition-transform active:scale-90", 
-              isRefreshing && "animate-spin"
-            )}
-          >
-            <RotateCw className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setActiveTab('Nearby')} 
+              className={cn(
+                "text-xs font-black uppercase tracking-[0.2em] transition-colors", 
+                activeTab === 'Nearby' ? "text-[#00A2FF]" : "text-gray-300"
+              )}
+            >
+              Nearby
+            </button>
+            <button 
+              onClick={() => fetchUsers(true)} 
+              disabled={isRefreshing}
+              className={cn(
+                "p-1 text-[#00A2FF] transition-transform active:scale-90", 
+                isRefreshing && "animate-spin"
+              )}
+            >
+              <RotateCw className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* MAIN FEED */}
