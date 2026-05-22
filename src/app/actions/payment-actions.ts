@@ -113,7 +113,7 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
     const token = await getAccessToken();
     const statusRes = await fetch(`${PESAPAL_CONFIG.API_BASE_URL}/api/Transactions/GetTransactionStatus?orderTrackingId=${orderTrackingId}`, {
       method: 'GET',
-      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
     });
     
     if (!statusRes.ok) return { success: false, error: "PesaPal status check failed." };
@@ -136,12 +136,13 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
 
       const timestamp = Date.now();
       
-      // 3. ATOMIC UPDATES via Admin Client
-      // We use RPC or Upsert to ensure we don't need a separate SELECT call first
+      // 3. ATOMIC UPDATES via Admin Client (using the dedicated function)
       const { error: balErr } = await supabaseAdmin.rpc('increment_coins', { 
         user_uid: uid, 
         amount: coinsToAward 
       });
+
+      if (balErr) throw balErr;
 
       // Log both history and processing record
       await Promise.all([

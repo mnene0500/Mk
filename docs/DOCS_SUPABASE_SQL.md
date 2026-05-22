@@ -3,13 +3,34 @@
 
 To enable the economy, gifting, reporting, and realtime systems, copy and run the following script in your **Supabase SQL Editor**. 
 
-**IMPORTANT**: This script enables **Row Level Security (RLS)** with corrected policies for initial profile creation (INSERT).
+**IMPORTANT**: This script includes atomic functions for adding coins and diamonds safely.
 
 ```sql
--- 1. RESET TABLES
+-- 1. SETUP HELPER FUNCTIONS
+CREATE OR REPLACE FUNCTION public.increment_diamonds(user_id UUID, amount NUMERIC)
+RETURNS VOID AS $$
+BEGIN
+  INSERT INTO public.balances (user_id, diamonds)
+  VALUES (user_id, amount)
+  ON CONFLICT (user_id)
+  DO UPDATE SET diamonds = balances.diamonds + amount, updated_at = NOW();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.increment_coins(user_uid UUID, amount BIGINT)
+RETURNS VOID AS $$
+BEGIN
+  INSERT INTO public.balances (user_id, coins)
+  VALUES (user_uid, amount)
+  ON CONFLICT (user_id)
+  DO UPDATE SET coins = balances.coins + amount, updated_at = NOW();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 2. RESET TABLES
 DROP TABLE IF EXISTS public.users, public.balances, public.coin_history, public.diamond_history, public.processed_payments, public.chats, public.messages, public.agencies, public.withdrawals, public.reports CASCADE;
 
--- 2. EXTEND USERS TABLE
+-- 3. EXTEND USERS TABLE
 CREATE TABLE public.users (
   uid UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT UNIQUE,
@@ -38,7 +59,7 @@ CREATE TABLE public.users (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. WALLET BALANCES
+-- 4. WALLET BALANCES
 CREATE TABLE public.balances (
   user_id UUID PRIMARY KEY REFERENCES public.users(uid) ON DELETE CASCADE,
   coins BIGINT DEFAULT 0,
@@ -46,7 +67,7 @@ CREATE TABLE public.balances (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. COIN LEDGER
+-- 5. COIN LEDGER
 CREATE TABLE public.coin_history (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
@@ -56,7 +77,7 @@ CREATE TABLE public.coin_history (
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
--- 5. DIAMOND LEDGER
+-- 6. DIAMOND LEDGER
 CREATE TABLE public.diamond_history (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
@@ -66,7 +87,7 @@ CREATE TABLE public.diamond_history (
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
--- 6. PAYMENT TRACKING
+-- 7. PAYMENT TRACKING
 CREATE TABLE public.processed_payments (
   order_tracking_id TEXT PRIMARY KEY,
   user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
@@ -76,7 +97,7 @@ CREATE TABLE public.processed_payments (
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
--- 7. CHATS & MESSAGING
+-- 8. CHATS & MESSAGING
 CREATE TABLE public.chats (
   id TEXT PRIMARY KEY,
   participant_ids UUID[] NOT NULL,
@@ -95,7 +116,7 @@ CREATE TABLE public.messages (
   is_gift BOOLEAN DEFAULT FALSE
 );
 
--- 8. AGENCY SYSTEM
+-- 9. AGENCY SYSTEM
 CREATE TABLE public.agencies (
   code TEXT PRIMARY KEY,
   agent_uid UUID REFERENCES public.users(uid) ON DELETE CASCADE,
@@ -113,7 +134,7 @@ CREATE TABLE public.withdrawals (
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
--- 9. REPORTING SYSTEM
+-- 10. REPORTING SYSTEM
 CREATE TABLE public.reports (
   id BIGSERIAL PRIMARY KEY,
   reporter_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
@@ -125,10 +146,10 @@ CREATE TABLE public.reports (
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
--- 10. ENABLE REALTIME REPLICATION
+-- 11. ENABLE REALTIME REPLICATION
 ALTER PUBLICATION supabase_realtime ADD TABLE public.balances, public.coin_history, public.diamond_history, public.chats, public.messages, public.users, public.withdrawals, public.reports;
 
--- 11. ENABLE ROW LEVEL SECURITY (RLS)
+-- 12. ENABLE ROW LEVEL SECURITY (RLS)
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.balances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coin_history ENABLE ROW LEVEL SECURITY;
@@ -140,7 +161,7 @@ ALTER TABLE public.agencies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.withdrawals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 
--- 12. DEFINE SECURITY POLICIES
+-- 13. DEFINE SECURITY POLICIES
 
 -- USERS
 CREATE POLICY "Public profiles are viewable by everyone" ON public.users FOR SELECT USING (true);
@@ -169,7 +190,7 @@ CREATE POLICY "Participants can view messages" ON public.messages FOR SELECT USI
 ));
 CREATE POLICY "Participants can send messages" ON public.messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
 
--- 13. GRANT PERMISSIONS
+-- 14. GRANT PERMISSIONS
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
