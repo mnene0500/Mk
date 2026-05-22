@@ -61,13 +61,11 @@ function RechargeContent() {
     }
     fetchData()
 
-    // REALTIME: Sync balance changes immediately
     const channel = supabase.channel(`recharge-bal:${user.id}`)
       .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
         const newBal = payload.new.coins || 0
         setCurrentCoins(newBal)
         
-        // If we were waiting for fulfillment and coins just arrived via REALTIME (IPN)
         if (isFulfilling && newBal > currentCoins) {
           setIsFulfilling(false)
           setFulfillmentSuccess(true)
@@ -87,14 +85,12 @@ function RechargeContent() {
         setIsFulfilling(true);
         setFulfillmentError(null);
         try {
-          // Manual fulfillment attempt
           const res = await fulfillPaymentAction(orderId, merchantRef);
           if (res.success) {
             setFulfillmentSuccess(true);
             toast({ title: "Success!", description: `Coins added to your wallet.` });
             setTimeout(() => router.replace("/profile"), 2500);
           } else {
-            // We don't error out immediately; realtime might pick it up if IPN is slow
             console.log("Manual fulfillment pending... waiting for realtime stream.");
             setTimeout(() => {
                if (!fulfillmentSuccess) {
