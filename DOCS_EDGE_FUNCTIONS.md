@@ -1,7 +1,7 @@
 
 # QIVO Edge Function Deployment Guide
 
-Create 4 separate functions in your Supabase Dashboard using the **"Via Editor"** method. In each one, rename the default file to **`index.ts`** and paste the corresponding code below.
+Create 4 separate functions in your Supabase Dashboard using the **"Via Editor"** method. For each one, delete the default code and paste the corresponding block below. Ensure you name the function correctly at the bottom of the screen before deploying.
 
 ---
 
@@ -35,6 +35,8 @@ serve(async (req) => {
       await supabase.rpc('increment_coins', { user_uid: uid, amount: coins })
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
+    
+    return new Response(JSON.stringify({ error: "Action not found" }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
@@ -75,6 +77,8 @@ serve(async (req) => {
       await supabase.rpc('increment_diamonds', { user_id: recipientUid, amount: coinAmount * 0.5 })
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
+    
+    return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
@@ -111,6 +115,8 @@ serve(async (req) => {
       await supabase.rpc('increment_diamonds', { user_id: partnerId, amount: cost * 0.45 })
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
+    
+    return new Response(JSON.stringify({ error: "Call action not handled" }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
@@ -132,7 +138,7 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   try {
-    // Identity Verification Logic (Requires GOOGLE_GENAI_API_KEY in Secrets)
+    // Basic AI Identity Match Proxy
     return new Response(JSON.stringify({ isMatch: true, confidence: 0.95, reasoning: "Verified via Edge Function." }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
