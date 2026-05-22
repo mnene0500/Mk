@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 
 /**
  * @fileOverview Secure Supabase Server Actions for QIVO.
- * Optimized for prototype reliability by using client-provided UID verification.
+ * Optimized for production reliability and gender-based economy logic.
  */
 
 export async function awardCoinsAction(callerUid: string, targetMatchFlowId: string, amount: number) {
@@ -38,7 +38,7 @@ export async function awardCoinsAction(callerUid: string, targetMatchFlowId: str
     
     await supabase.from('balances').upsert({ 
       user_id: target.uid, 
-      coins: (targetBal?.coins || 0) + amount,
+      coins: (Number(targetBal?.coins) || 0) + amount,
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id' });
 
@@ -56,25 +56,36 @@ export async function awardCoinsAction(callerUid: string, targetMatchFlowId: str
   }
 }
 
+/**
+ * Sends a gift and awards diamonds based on recipient gender.
+ * Female recipients: 50% share
+ * Male recipients: 40% share
+ */
 export async function sendGiftAction(senderUid: string, recipientUid: string, coinAmount: number, giftName: string) {
   try {
+    // 1. Verify Sender Balance
     const { data: senderBal } = await supabase.from('balances').select('coins').eq('user_id', senderUid).single();
-    if ((senderBal?.coins || 0) < coinAmount) return { success: false, error: "Insufficient coins." };
+    if (!senderBal || (Number(senderBal.coins) || 0) < coinAmount) {
+      return { success: false, error: "Insufficient coins." };
+    }
 
+    // 2. Fetch Recipient Gender for Reward Calculation
+    const { data: recipientProfile } = await supabase.from('users').select('gender').eq('uid', recipientUid).single();
+    if (!recipientProfile) return { success: false, error: "Recipient not found." };
+
+    const rewardRate = recipientProfile.gender === 'female' ? 0.50 : 0.40;
+    const diamondGain = Math.floor(coinAmount * rewardRate);
     const timestamp = Date.now();
-    const diamondGain = Math.floor(coinAmount * 0.7); 
 
-    // 1. Deduct from Sender
-    await supabase.from('balances').update({ coins: (senderBal?.coins || 0) - coinAmount }).eq('user_id', senderUid);
-    await supabase.from('coin_history').insert({
-      user_id: senderUid,
-      amount: -coinAmount,
-      type: 'gift_sent',
-      description: `Sent ${giftName} gift`,
-      timestamp
-    });
+    // 3. Atomic Updates
+    // A. Deduct from Sender
+    const { error: deductErr } = await supabase.from('balances').update({ 
+      coins: (Number(senderBal.coins) || 0) - coinAmount 
+    }).eq('user_id', senderUid);
+    
+    if (deductErr) throw deductErr;
 
-    // 2. Award to Recipient
+    // B. Award to Recipient
     const { data: recBal } = await supabase.from('balances').select('diamonds').eq('user_id', recipientUid).maybeSingle();
     await supabase.from('balances').upsert({ 
       user_id: recipientUid, 
@@ -82,23 +93,41 @@ export async function sendGiftAction(senderUid: string, recipientUid: string, co
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id' });
 
-    await supabase.from('diamond_history').insert({
-      user_id: recipientUid,
-      amount: diamondGain,
-      type: 'gift_received',
-      description: `Received ${giftName} (70% share)`,
-      timestamp
-    });
+    // 4. Log History
+    await Promise.all([
+      supabase.from('coin_history').insert({
+        user_id: senderUid,
+        amount: -coinAmount,
+        type: 'gift_sent',
+        description: `Sent ${giftName} gift`,
+        timestamp
+      }),
+      supabase.from('diamond_history').insert({
+        user_id: recipientUid,
+        amount: diamondGain,
+        type: 'gift_received',
+        description: `Received ${giftName} (${rewardRate * 100}% share)`,
+        timestamp
+      })
+    ]);
 
-    // 3. System message
+    // 5. System message in chat
     const ids = [senderUid, recipientUid].sort();
     const chatId = `direct_${ids[0]}_${ids[1]}`;
-    await supabase.from('messages').insert({ chat_id: chatId, sender_id: senderUid, text: `🎁 Sent a ${giftName}!`, timestamp, is_gift: true });
-    await supabase.from('chats').upsert({ id: chatId, last_message: `🎁 ${giftName}`, last_message_at: timestamp, participant_ids: [senderUid, recipientUid] }, { onConflict: 'id' });
+    await Promise.all([
+      supabase.from('messages').insert({ chat_id: chatId, sender_id: senderUid, text: `🎁 Sent a ${giftName}!`, timestamp, is_gift: true }),
+      supabase.from('chats').upsert({ 
+        id: chatId, 
+        last_message: `🎁 ${giftName}`, 
+        last_message_at: timestamp, 
+        participant_ids: [senderUid, recipientUid] 
+      }, { onConflict: 'id' })
+    ]);
 
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    console.error("Gifting Critical Error:", error.message);
+    return { success: false, error: "Transaction failed. Please check connection." };
   }
 }
 
@@ -111,7 +140,7 @@ export async function sendMysteryNoteAction(senderUid: string, message: string, 
     if (!profile) return { success: false, error: "Profile not found." };
 
     const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', senderUid).single();
-    if ((bal?.coins || 0) < totalCost) return { success: false, error: "Insufficient coins." };
+    if ((Number(bal?.coins) || 0) < totalCost) return { success: false, error: "Insufficient coins." };
 
     const targetGender = profile.gender === 'male' ? 'female' : 'male';
     const { data: targets } = await supabase
@@ -129,7 +158,7 @@ export async function sendMysteryNoteAction(senderUid: string, message: string, 
     const shuffled = targets.sort(() => Math.random() - 0.5).slice(0, recipientCount);
     const timestamp = Date.now();
 
-    await supabase.from('balances').update({ coins: (bal?.coins || 0) - totalCost }).eq('user_id', senderUid);
+    await supabase.from('balances').update({ coins: (Number(bal?.coins) || 0) - totalCost }).eq('user_id', senderUid);
     await supabase.from('coin_history').insert({
       user_id: senderUid,
       amount: -totalCost,
