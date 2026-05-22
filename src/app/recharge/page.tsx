@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dialog"
 
 const PACKAGES = [
-  { amount: 10, price: 1.0 }, // Test Package: 10 Coins for KES 1
+  { amount: 200, price: 1.0 }, // Test Package: 200 Coins for KES 1
   { amount: 500, price: 80.0 },
   { amount: 1000, price: 120.0 },
   { amount: 2000, price: 230.0 },

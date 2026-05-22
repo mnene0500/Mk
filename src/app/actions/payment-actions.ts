@@ -1,3 +1,4 @@
+
 'use server';
 
 import { PESAPAL_CONFIG } from '@/lib/pesapal-config';
@@ -165,8 +166,8 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
       const amount = Number(status.amount);
       let coinsToAward = Math.floor(amount * 10);
       
-      // Test Package Fix: KES 1 = 10 Coins
-      if (amount === 1) coinsToAward = 10;
+      // Test Package Fix: KES 1 = 200 Coins
+      if (amount === 1) coinsToAward = 200;
 
       const timestamp = Date.now();
 
