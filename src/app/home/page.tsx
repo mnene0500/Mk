@@ -24,7 +24,6 @@ interface UserProfile {
 
 /**
  * GLOBAL PERSISTENCE CACHE
- * Prevents blink on tab switch and minimizes Supabase reads.
  */
 let globalUserCache: UserProfile[] = [];
 let globalScrollY = 0;
@@ -48,29 +47,45 @@ export default function HomePage() {
   const [initialLoading, setInitialLoading] = useState(globalUserCache.length === 0)
   const [activeTab, setActiveTab] = useState<'Recommend' | 'Nearby'>('Recommend')
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [statusChecked, setStatusChecked] = useState(false)
 
+  // MANDATORY SECURITY & ONBOARDING GATE
   useEffect(() => {
     if (!isInitialized || authLoading) return;
-    if (!currentUser) { router.replace("/welcome"); return; }
+    
+    if (!currentUser) { 
+      router.replace("/welcome"); 
+      return; 
+    }
 
     const checkProfile = async () => {
-      const { data } = await supabase.from('users').select('onboarding_complete, country, gender').eq('uid', currentUser.id).maybeSingle();
-      if (!data) { router.replace("/fastonboard"); return; }
+      const { data } = await supabase
+        .from('users')
+        .select('onboarding_complete, country, gender')
+        .eq('uid', currentUser.id)
+        .maybeSingle();
+      
+      if (!data || !data.onboarding_complete) { 
+        router.replace("/fastonboard"); 
+        return; 
+      }
+
       setProfile(data as any);
-      if (!data.onboarding_complete) router.replace("/fastonboard");
+      setStatusChecked(true);
     };
+
     checkProfile();
   }, [isInitialized, currentUser, authLoading, router])
 
   useEffect(() => {
-    // Restore scroll position when returning to this tab
+    if (!statusChecked) return;
     if (!initialLoading) {
       setTimeout(() => window.scrollTo({ top: globalScrollY, behavior: 'instant' }), 50);
     }
     const handleScroll = () => { globalScrollY = window.scrollY }
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
-  }, [initialLoading])
+  }, [initialLoading, statusChecked])
 
   const fetchUsers = useCallback(async (isManual = false) => {
     if (!profile?.gender) return;
@@ -108,17 +123,22 @@ export default function HomePage() {
   }, [currentUser?.id, profile?.gender, users.length])
 
   useEffect(() => {
-    if (isInitialized && currentUser && profile && users.length === 0) {
+    if (statusChecked && profile && users.length === 0) {
       fetchUsers();
     }
-  }, [isInitialized, currentUser, profile, users.length, fetchUsers])
+  }, [statusChecked, profile, users.length, fetchUsers])
 
   const filteredUsers = useMemo(() => {
     if (activeTab === 'Nearby' && profile) return users.filter(u => u.country === profile.country)
     return users
   }, [users, activeTab, profile])
 
-  if ((initialLoading && users.length === 0) && isInitialized) {
+  // Solid background while checking status to prevent Home blink
+  if (!statusChecked) {
+    return <div className="fixed inset-0 bg-white" />
+  }
+
+  if (initialLoading && users.length === 0) {
     return (
       <div className="flex-1 bg-white min-h-screen flex items-center justify-center">
         <Loader2 className="animate-spin text-[#00A2FF] w-8 h-8" />
@@ -127,15 +147,15 @@ export default function HomePage() {
   }
 
   return (
-    <div className="flex-1 pb-24 bg-[#F9FAFB] min-h-screen relative select-none">
-      {/* BRANDING HEADER - THE STAMP */}
+    <div className="flex-1 pb-24 bg-[#F9FAFB] min-h-screen relative select-none animate-in fade-in duration-300">
+      {/* BRANDING HEADER - THE STAMP BACKGROUND */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b shadow-sm h-24 flex items-center justify-between px-6 overflow-hidden">
-        <div className="relative">
-          <h1 className="text-6xl font-logo font-black text-[#00A2FF]/30 tracking-tighter transform -rotate-12 origin-left -translate-y-2 pointer-events-none">
-            QIVO
-          </h1>
-        </div>
-        <div className="flex items-center gap-4">
+        {/* QIVO STAMP: Positioned absolutely behind buttons */}
+        <h1 className="absolute left-6 top-1/2 -translate-y-1/2 text-7xl font-logo font-black text-[#00A2FF]/20 tracking-tighter transform -rotate-12 origin-left pointer-events-none z-0">
+          QIVO
+        </h1>
+
+        <div className="relative z-10 ml-auto">
           <button 
             onClick={() => fetchUsers(true)} 
             disabled={isRefreshing}
@@ -177,7 +197,7 @@ export default function HomePage() {
               {filteredUsers.map((u) => (
                 <Card 
                   key={u.uid} 
-                  className="relative overflow-hidden border-none aspect-[1/1.25] rounded-[2rem] shadow-xl bg-white group animate-in fade-in zoom-in-95"
+                  className="relative overflow-hidden border-none aspect-[1/1.25] rounded-[2rem] shadow-xl bg-white group active:scale-95 transition-all"
                   onClick={() => router.push(`/users/${u.uid}`)}
                 >
                   <Image 

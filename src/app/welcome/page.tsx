@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast"
 
 /**
  * @fileOverview Cinematic Welcome Page with Supabase Auth Gates.
- * Optimized to remove intrusive splash loaders.
+ * Optimized to remove intrusive splash loaders and ensure correct onboarding redirect.
  */
 export default function WelcomePage() {
   const [loading, setLoading] = useState(false)
@@ -74,9 +74,9 @@ export default function WelcomePage() {
     setTimeout(() => window.location.reload(), 1000)
   }
 
-  // If session is still loading or user is being redirected, show a silent black background
+  // If session is still loading or user is being redirected, show a silent white background
   if (!isInitialized || (isInitialized && user)) {
-    return <div className="fixed inset-0 bg-black" />
+    return <div className="fixed inset-0 bg-white" />
   }
 
   return (
