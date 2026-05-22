@@ -133,6 +133,7 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
       return { success: false, error: "Missing tracking ID or reference." };
     }
 
+    // 1. Check if already processed to prevent double-awarding
     const { data: existing } = await supabase
       .from('processed_payments')
       .select('coins')
@@ -143,6 +144,7 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
       return { success: true, coins: existing.coins };
     }
 
+    // 2. Verify status with PesaPal API
     const token = await getAccessToken();
     const statusRes = await fetch(`${PESAPAL_CONFIG.API_BASE_URL}/api/Transactions/GetTransactionStatus?orderTrackingId=${orderTrackingId}`, {
       method: 'GET',
@@ -152,18 +154,22 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
     if (!statusRes.ok) return { success: false, error: "PesaPal status check failed." };
     const status = await statusRes.json();
     
-    if (status && (status.status_code === 1 || status.payment_status_description === 'Completed')) {
+    // Status Code 1 = Completed
+    const isCompleted = status && (status.status_code === 1 || status.payment_status_description === 'Completed');
+    
+    if (isCompleted) {
       const uid = merchantReference.split('_')[1];
-      if (!uid) return { success: false, error: "Invalid reference." };
+      if (!uid) return { success: false, error: "Invalid reference format." };
 
       const amount = Number(status.amount);
       let coinsToAward = Math.floor(amount * 10);
       
       // Test Package Fix: KES 1 = 200 Coins
-      if (amount === 1) coinsToAward = 200;
+      if (Math.abs(amount - 1) < 0.01) coinsToAward = 200;
 
       const timestamp = Date.now();
 
+      // 3. Update Balance Atomically (Fetch-then-Upsert)
       const { data: balData } = await supabase
         .from('balances')
         .select('coins, diamonds')
@@ -182,6 +188,7 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
 
       if (upsertErr) throw upsertErr;
       
+      // 4. Log transactions
       await Promise.all([
         supabase.from('coin_history').insert({ 
           user_id: uid, 
@@ -203,8 +210,9 @@ export async function fulfillPaymentAction(orderTrackingId: string, merchantRefe
       return { success: true, coins: coinsToAward };
     }
     
-    return { success: false, error: "Payment not confirmed." };
+    return { success: false, error: "Payment status not marked as completed yet." };
   } catch (err: any) {
+    console.error("[Fulfillment Action] Critical Error:", err.message);
     return { success: false, error: err.message };
   }
 }

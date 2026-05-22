@@ -13,7 +13,8 @@ import {
   ArrowRight,
   AlertCircle,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  RefreshCw
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
@@ -59,6 +60,7 @@ function RechargeContent() {
 
   useEffect(() => {
     if (!user?.id) return
+    
     const fetchData = async () => {
       const { data: u } = await supabase.from('users').select('*').eq('uid', user.id).single()
       const { data: b } = await supabase.from('balances').select('coins').eq('user_id', user.id).single()
@@ -70,9 +72,9 @@ function RechargeContent() {
     const channel = supabase.channel(`recharge-bal:${user.id}`)
       .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
         const newBal = payload.new.coins || 0
-        setCurrentCoins(newBal)
         
-        if (isFulfilling && newBal > currentCoins) {
+        if (newBal > currentCoins) {
+          setCurrentCoins(newBal)
           setIsFulfilling(false)
           setFulfillmentSuccess(true)
         }
@@ -80,39 +82,37 @@ function RechargeContent() {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [user?.id, isFulfilling, currentCoins])
+  }, [user?.id, currentCoins])
 
-  useEffect(() => {
+  const triggerVerification = async () => {
     const orderId = searchParams.get("OrderTrackingId") || searchParams.get("orderTrackingId");
     const merchantRef = searchParams.get("OrderMerchantReference") || searchParams.get("orderMerchantReference");
     
-    if (orderId && merchantRef) {
-      const runFulfillment = async () => {
-        setIsFulfilling(true);
-        setFulfillmentError(null);
-        try {
-          const res = await fulfillPaymentAction(orderId, merchantRef);
-          if (res.success) {
-            setFulfillmentSuccess(true);
-            toast({ title: "Success!", description: `Coins added to your wallet.` });
-            setTimeout(() => router.replace("/profile"), 2500);
-          } else {
-            console.log("Manual fulfillment pending... waiting for realtime stream.");
-            setTimeout(() => {
-               if (!fulfillmentSuccess) {
-                 setFulfillmentError("Fulfillment taking longer than expected. Check your profile in a moment.");
-                 setTimeout(() => router.replace("/profile"), 4000);
-               }
-            }, 8000);
-          }
-        } catch (e: any) {
-          setFulfillmentError("Fulfillment issue. Please check history.");
-          setTimeout(() => router.replace("/profile"), 5000);
+    if (orderId && merchantRef && !fulfillmentSuccess) {
+      setIsFulfilling(true);
+      setFulfillmentError(null);
+      try {
+        const res = await fulfillPaymentAction(orderId, merchantRef);
+        if (res.success) {
+          setFulfillmentSuccess(true);
+          toast({ title: "Success!", description: `Coins added to your wallet.` });
+          setTimeout(() => router.replace("/profile"), 2500);
+        } else {
+          // If the status isn't "Completed" yet, we wait for the IPN or manual refresh
+          console.warn("Fulfillment pending:", res.error);
+          // Don't set error immediately, let the user manually refresh or wait
         }
-      };
-      runFulfillment();
+      } catch (e: any) {
+        setFulfillmentError("Connection issue. Please try refreshing.");
+      } finally {
+        setIsFulfilling(false);
+      }
     }
-  }, [searchParams, router, toast, fulfillmentSuccess]);
+  }
+
+  useEffect(() => {
+    triggerVerification();
+  }, [searchParams]);
 
   const handlePayment = async () => {
     const pkg = PACKAGES.find(p => p.amount === selectedPackage)
@@ -137,7 +137,7 @@ function RechargeContent() {
     return <div className="flex-1 flex items-center justify-center h-screen bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
   }
 
-  if (isFulfilling || fulfillmentError || fulfillmentSuccess) {
+  if (isFulfilling || fulfillmentError || fulfillmentSuccess || searchParams.get("OrderTrackingId")) {
     return (
       <div className="flex-1 bg-white min-h-screen flex flex-col items-center justify-center p-8 space-y-8 animate-in fade-in duration-500 select-none">
         <div className="relative">
@@ -154,18 +154,38 @@ function RechargeContent() {
             </div>
           )}
         </div>
+        
         <div className="text-center space-y-3">
           <h2 className="text-2xl font-black text-black uppercase tracking-tight">
-            {isFulfilling ? "Verifying..." : (fulfillmentSuccess ? "Payment Confirmed!" : "Check Wallet")}
+            {isFulfilling ? "Verifying..." : (fulfillmentSuccess ? "Payment Confirmed!" : "Pending Confirmation")}
           </h2>
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] leading-relaxed max-w-[200px] mx-auto">
-            {isFulfilling ? "Synchronizing ledger via Realtime..." : (fulfillmentSuccess ? "Coins added successfully." : fulfillmentError)}
+            {isFulfilling ? "Synchronizing ledger via Realtime..." : (fulfillmentSuccess ? "Coins added successfully." : (fulfillmentError || "Waiting for payment confirmation from provider."))}
           </p>
         </div>
-        {!isFulfilling && (
-          <Button variant="ghost" className="text-[9px] font-black text-gray-300 uppercase tracking-widest" onClick={() => router.replace("/profile")}>
-            Returning to profile...
-          </Button>
+
+        {!fulfillmentSuccess && !isFulfilling && (
+          <div className="flex flex-col gap-4 w-full max-w-[200px]">
+            <Button 
+              onClick={triggerVerification}
+              className="rounded-full bg-black text-white font-black uppercase text-[10px] tracking-widest h-12"
+            >
+              <RefreshCw className="w-3 h-3 mr-2" /> Verify Now
+            </Button>
+            <Button 
+              variant="ghost" 
+              className="text-[9px] font-black text-gray-300 uppercase tracking-widest" 
+              onClick={() => router.replace("/profile")}
+            >
+              Skip and check later
+            </Button>
+          </div>
+        )}
+
+        {fulfillmentSuccess && (
+          <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest animate-pulse">
+            Redirecting to profile...
+          </p>
         )}
       </div>
     )
