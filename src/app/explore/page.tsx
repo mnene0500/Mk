@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo, useEffect, useCallback } from "react"
@@ -48,13 +47,20 @@ function calculateAge(dob: string) {
 
 export default function ExplorePage() {
   const router = useRouter()
-  const { user: currentUser, loading: authLoading } = useUser()
+  const { user: currentUser, loading: authLoading, isInitialized } = useUser()
   
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedInterest, setSelectedInterest] = useState<string | null>(null)
   const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<UserProfile | null>(null)
+
+  // Auth Guard
+  useEffect(() => {
+    if (isInitialized && !authLoading && !currentUser) {
+      router.replace("/welcome")
+    }
+  }, [currentUser, isInitialized, authLoading, router])
 
   useEffect(() => {
     if (currentUser?.id) {
@@ -110,7 +116,7 @@ export default function ExplorePage() {
     return result
   }, [users, searchQuery, selectedInterest])
 
-  if (authLoading && !users.length) {
+  if ((authLoading || !isInitialized) && !users.length) {
     return (
       <div className="flex-1 bg-white min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-[#00A2FF]" />

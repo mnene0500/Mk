@@ -63,7 +63,7 @@ function ChatsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { toast } = useToast()
-  const { user: currentUser } = useUser()
+  const { user: currentUser, loading: authLoading, isInitialized } = useUser()
   const startWithId = searchParams.get("startWith")
   
   const [chatId, setChatId] = useState<string | null>(null)
@@ -81,6 +81,13 @@ function ChatsContent() {
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null)
   const [isLongPressing, setIsLongPressing] = useState(false)
   const [showGiftSelector, setShowGiftSelector] = useState(false)
+
+  // Auth Guard
+  useEffect(() => {
+    if (isInitialized && !authLoading && !currentUser) {
+      router.replace("/welcome")
+    }
+  }, [currentUser, isInitialized, authLoading, router])
 
   const markAsSeen = async (id: string, customTime?: number) => {
     if (!currentUser?.id) return
@@ -299,6 +306,10 @@ function ChatsContent() {
   const handleTouchEnd = (chat: ChatSummary) => {
     if (longPressTimer) { clearTimeout(longPressTimer); setLongPressTimer(null); }
     if (!isLongPressing) { router.push(`/chats?startWith=${chat.partner_id}`) }
+  }
+
+  if (authLoading || !isInitialized) {
+    return <div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
   }
 
   if (!startWithId) return (

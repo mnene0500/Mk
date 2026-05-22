@@ -37,7 +37,7 @@ const PACKAGES = [
 function RechargeContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user } = useUser()
+  const { user, loading: authLoading, isInitialized } = useUser()
   const { toast } = useToast()
   
   const [selectedPackage, setSelectedPackage] = useState<number | null>(null)
@@ -49,6 +49,13 @@ function RechargeContent() {
   
   const [currentCoins, setCurrentCoins] = useState(0)
   const [profile, setProfile] = useState<any>(null)
+
+  // Auth Guard
+  useEffect(() => {
+    if (isInitialized && !authLoading && !user) {
+      router.replace("/welcome")
+    }
+  }, [user, isInitialized, authLoading, router])
 
   useEffect(() => {
     if (!user?.id) return
@@ -124,6 +131,10 @@ function RechargeContent() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (authLoading || !isInitialized) {
+    return <div className="flex-1 flex items-center justify-center h-screen bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
   }
 
   if (isFulfilling || fulfillmentError || fulfillmentSuccess) {

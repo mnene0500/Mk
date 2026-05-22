@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast"
 
 /**
  * @fileOverview Cinematic Welcome Page with Supabase Auth Gates.
- * Optimized to remove intrusive splash loaders and ensure correct onboarding redirect.
+ * Implements a back-button trap to ensure users can't return to account screens after logging out.
  */
 export default function WelcomePage() {
   const [loading, setLoading] = useState(false)
@@ -23,6 +23,15 @@ export default function WelcomePage() {
     if (isInitialized && !authLoading && user) {
       checkProfileStatus(user.id)
     }
+    
+    // BACK BUTTON TRAP: If user is on welcome screen and logged out, clicking back should stay here (or exit)
+    if (isInitialized && !user) {
+      window.history.pushState(null, '', window.location.href);
+      window.onpopstate = function() {
+        window.history.pushState(null, '', window.location.href);
+      };
+    }
+    return () => { window.onpopstate = null; };
   }, [user, isInitialized, authLoading])
 
   const checkProfileStatus = async (uid: string) => {
@@ -68,7 +77,13 @@ export default function WelcomePage() {
   }
 
   const handleClearCache = () => {
-    localStorage.clear()
+    // SAFE CLEAR: preserve supabase tokens
+    const keys = Object.keys(localStorage);
+    for (const key of keys) {
+      if (!key.includes('auth-token')) {
+        localStorage.removeItem(key);
+      }
+    }
     sessionStorage.clear()
     toast({ title: "App Reset", description: "Storage cleared. Refreshing..." })
     setTimeout(() => window.location.reload(), 1000)
