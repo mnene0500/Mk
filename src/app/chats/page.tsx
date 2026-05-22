@@ -7,7 +7,7 @@ import { BottomNav } from "@/components/layout/BottomNav"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Send, ChevronLeft, Loader2, User, Trash2, MoreVertical, AlertCircle, Gift, Phone, Video, Ban } from "lucide-react"
+import { Send, ChevronLeft, Loader2, User, Trash2, MoreVertical, AlertCircle, Gift, Phone, Video, Ban, X, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
@@ -51,6 +51,13 @@ interface ChatSummary {
   last_seen_at?: Record<string, number>
 }
 
+const GIFTS = [
+  { id: 'rose', name: 'Rose', price: 200, icon: '🌹' },
+  { id: 'watch', name: 'Luxury Watch', price: 1000, icon: '⌚' },
+  { id: 'ring', name: 'Engagement Ring', price: 5000, icon: '💍' },
+  { id: 'jet', name: 'Private Jet', price: 20000, icon: '🛩️' },
+]
+
 let globalChatSummaries: ChatSummary[] = [];
 
 function ChatsContent() {
@@ -74,6 +81,7 @@ function ChatsContent() {
   const [chatToDelete, setChatToDelete] = useState<ChatSummary | null>(null)
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null)
   const [isLongPressing, setIsLongPressing] = useState(false)
+  const [showGiftSelector, setShowGiftSelector] = useState(false)
 
   const markAsSeen = async (id: string, customTime?: number) => {
     if (!currentUser?.id) return
@@ -88,13 +96,13 @@ function ChatsContent() {
       const { data: p } = await supabase.from('users').select('*').eq('uid', currentUser.id).single()
       const { data: b } = await supabase.from('balances').select('coins').eq('user_id', currentUser.id).single()
       if (p) setUserProfile(p)
-      if (b) setUserBalance(b.coins || 0)
+      if (b) setUserBalance(Number(b.coins) || 0)
     }
     fetchMyInfo()
     
     const balChan = supabase.channel(`my-bal-${currentUser.id}`)
       .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${currentUser.id}` }, (payload) => {
-        setUserBalance(payload.new.coins)
+        setUserBalance(Number(payload.new.coins) || 0)
       }).subscribe()
     
     return () => { supabase.removeChannel(balChan) }
@@ -121,7 +129,6 @@ function ChatsContent() {
           if (c.last_message_at <= userClearedAt) return null
 
           const userSeenAt = c.last_seen_at?.[currentUser.id] || 0
-          // Unread logic: newer than seen AND I didn't send it
           const isUnread = c.last_message_at > userSeenAt && c.participant_ids[0] !== currentUser.id
 
           const { data: p } = await supabase.from('users').select('name, photo_url').eq('uid', pId).single()
@@ -218,7 +225,6 @@ function ChatsContent() {
         await supabase.from('coin_history').insert({ user_id: currentUser.id, amount: -cost, type: 'chat', description: `Chat with ${partnerProfile?.name || 'User'}`, timestamp })
       }
       
-      // Update seen time immediately to prevent own message from triggering unread count
       await markAsSeen(chatId, timestamp);
       
       await Promise.all([
@@ -236,20 +242,35 @@ function ChatsContent() {
     }
   }
 
-  const handleSendGift = async () => {
+  const handleSendGift = async (gift: typeof GIFTS[0]) => {
     if (!currentUser || !startWithId || isBlocked) return
-    const res = await sendGiftAction(startWithId, 200, "Rose")
-    if (res.success) toast({ title: "Gift Sent!" })
-    else toast({ variant: "destructive", title: "Error", description: res.error })
+    setIsSending(true)
+    const res = await sendGiftAction(currentUser.id, startWithId, gift.price, gift.name)
+    if (res.success) {
+      toast({ title: "Gift Sent!", description: `You sent a ${gift.name}.` })
+      setShowGiftSelector(false)
+    } else {
+      toast({ variant: "destructive", title: "Error", description: res.error })
+    }
+    setIsSending(false)
   }
 
   const handleCall = async (type: 'voice' | 'video') => {
     if (!currentUser || !startWithId || !partnerProfile || !chatId || isBlocked) return
     const isPrivileged = userProfile?.is_admin || userProfile?.is_coin_seller;
+    
+    // Safety check: verify local balance first for UX
+    const cost = type === 'video' ? 150 : 70;
+    if (!isPrivileged && userProfile?.gender === 'male' && userBalance < cost) {
+      toast({ variant: "destructive", title: "Insufficient Balance", description: `You need ${cost} coins to start.` })
+      router.push("/recharge")
+      return
+    }
+
     if (!isPrivileged && userProfile?.gender === 'male') {
       const balanceCheck = await checkCallBalanceAction(currentUser.id, type)
       if (!balanceCheck.success) {
-        toast({ variant: "destructive", title: "Insufficient Balance", description: `You need ${type === 'video' ? '150' : '70'} coins to start.` })
+        toast({ variant: "destructive", title: "Insufficient Balance", description: `You need ${cost} coins to start.` })
         router.push("/recharge")
         return
       }
@@ -331,7 +352,7 @@ function ChatsContent() {
   const isPrivileged = userProfile?.is_admin || userProfile?.is_coin_seller || partnerProfile?.is_admin || partnerProfile?.is_coin_seller;
 
   return (
-    <div className="flex flex-col h-screen bg-white select-none">
+    <div className="flex flex-col h-screen bg-white select-none relative overflow-hidden">
       <header className="h-16 border-b flex items-center px-4 gap-4 sticky top-0 bg-white z-50">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
         <div className="flex items-center gap-3 flex-1">
@@ -364,7 +385,7 @@ function ChatsContent() {
         ))}
       </main>
 
-      <footer className="p-4 pb-8 border-t bg-white flex flex-col gap-2">
+      <footer className="p-4 pb-8 border-t bg-white flex flex-col gap-2 relative">
         {!isBlocked && (
           <>
             {userProfile?.gender === 'male' && !isPrivileged && <div className="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-2 mb-1">Message cost: 15 Coins</div>}
@@ -378,13 +399,47 @@ function ChatsContent() {
             </div>
           ) : (
             <>
-              <Button variant="ghost" size="icon" onClick={handleSendGift} className="rounded-full h-12 w-12 text-pink-500 hover:bg-pink-50"><Gift className="w-6 h-6" /></Button>
+              <Button variant="ghost" size="icon" onClick={() => setShowGiftSelector(true)} className="rounded-full h-12 w-12 text-pink-500 hover:bg-pink-50"><Gift className="w-6 h-6" /></Button>
               <input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendMessage()} className="flex-1 h-12 bg-gray-50 rounded-2xl px-5 text-sm font-bold placeholder:text-gray-300 outline-none" placeholder="Say something nice..." />
               <Button onClick={handleSendMessage} disabled={!newMessage.trim() || isSending} size="icon" className="rounded-full h-12 w-12 bg-[#00A2FF] hover:bg-[#0081CC] shadow-lg"><Send className="w-5 h-5 text-white" /></Button>
             </>
           )}
         </div>
       </footer>
+
+      {/* GIFT SELECTOR OVERLAY */}
+      {showGiftSelector && (
+        <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 flex flex-col justify-end">
+          <div className="bg-white rounded-t-[3rem] p-8 space-y-6 shadow-2xl animate-in slide-in-from-bottom-full duration-500">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-pink-500" />
+                <h3 className="text-sm font-black uppercase tracking-widest">Select a Gift</h3>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setShowGiftSelector(false)} className="rounded-full"><X className="w-5 h-5" /></Button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              {GIFTS.map(gift => (
+                <button 
+                  key={gift.id} 
+                  disabled={isSending}
+                  onClick={() => handleSendGift(gift)}
+                  className="flex flex-col items-center p-6 bg-gray-50 rounded-3xl border border-gray-100 hover:border-pink-200 transition-all active:scale-95 group"
+                >
+                  <span className="text-4xl mb-3 group-hover:scale-110 transition-transform">{gift.icon}</span>
+                  <p className="text-[10px] font-black uppercase tracking-tight text-gray-800">{gift.name}</p>
+                  <p className="text-[9px] font-bold text-pink-500 mt-1">{gift.price} Coins</p>
+                </button>
+              ))}
+            </div>
+
+            <div className="pt-4 text-center">
+              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-[0.2em]">Gifts award diamonds to the recipient</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

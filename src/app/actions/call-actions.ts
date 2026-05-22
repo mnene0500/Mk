@@ -9,8 +9,8 @@ export async function deductCallCoinsAction(uid: string, type: 'video' | 'voice'
   const cost = type === 'video' ? 150 : 70;
 
   try {
-    const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', uid).single();
-    const currentCoins = bal?.coins || 0;
+    const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', uid).maybeSingle();
+    const currentCoins = Number(bal?.coins) || 0;
 
     if (currentCoins < cost) return { success: false, error: "Insufficient balance." };
 
@@ -31,7 +31,12 @@ export async function deductCallCoinsAction(uid: string, type: 'video' | 'voice'
 
 export async function checkCallBalanceAction(uid: string, type: 'video' | 'voice') {
   const minRequired = type === 'video' ? 150 : 70;
-  const { data } = await supabase.from('balances').select('coins').eq('user_id', uid).single();
-  if ((data?.coins || 0) < minRequired) return { success: false, error: "Low balance." };
-  return { success: true };
+  try {
+    const { data } = await supabase.from('balances').select('coins').eq('user_id', uid).maybeSingle();
+    const coins = Number(data?.coins) || 0;
+    if (coins < minRequired) return { success: false, error: "Low balance." };
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
 }
