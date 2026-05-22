@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo, useEffect, useCallback } from "react"
@@ -10,11 +11,9 @@ import {
   SlidersHorizontal, 
   Loader2, 
   BadgeCheck,
-  TrendingUp,
   Sparkles,
   MapPin
 } from "lucide-react"
-import { BottomNav } from "@/components/layout/BottomNav"
 import { Card } from "@/components/ui/card"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
@@ -219,7 +218,6 @@ export default function ExplorePage() {
           </div>
         )}
       </main>
-      <BottomNav />
     </div>
   )
 }

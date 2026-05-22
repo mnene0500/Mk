@@ -155,7 +155,7 @@ CREATE POLICY "Users can update own profile" ON public.users FOR UPDATE USING (a
 
 -- BALANCES: Only user can see/update their own balance
 CREATE POLICY "Users can view own balance" ON public.balances FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "System can update balance" ON public.balances FOR ALL USING (true); -- Simplified for prototype actions
+CREATE POLICY "System can update balance" ON public.balances FOR ALL USING (true); 
 
 -- LEDGERS: Only owner can view
 CREATE POLICY "Users can view own coin history" ON public.coin_history FOR SELECT USING (auth.uid() = user_id);
