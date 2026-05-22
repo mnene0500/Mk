@@ -133,15 +133,15 @@ export default function HomePage() {
 
   return (
     <div className="flex-1 pb-24 bg-white min-h-screen relative select-none animate-in fade-in duration-300">
-      {/* HEADER WITH BLUE BACKGROUND AND WATERMARK - REDUCED HEIGHT */}
-      <div className="bg-[#00A2FF] h-20 relative overflow-hidden">
+      {/* HEADER WITH BLUE BACKGROUND - HEIGHT SET TO 72PX */}
+      <div className="bg-[#00A2FF] h-[72px] relative overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-10">
           <span className="text-8xl font-logo font-black text-white -rotate-12 tracking-tighter">QIVO</span>
         </div>
       </div>
 
-      {/* TOP ACTION CARDS - ADJUSTED MARGIN */}
-      <div className="relative px-4 grid grid-cols-2 gap-3 -mt-8 z-20">
+      {/* TOP ACTION CARDS */}
+      <div className="relative px-4 grid grid-cols-2 gap-3 -mt-10 z-20">
         <button 
           onClick={() => router.push('/mystery-note')}
           className="h-28 bg-gradient-to-br from-[#FFA800] to-[#FF8A00] rounded-[1.5rem] p-4 flex flex-col items-start justify-end gap-1 shadow-xl active:scale-95 transition-all text-white text-left"
@@ -165,8 +165,8 @@ export default function HomePage() {
         </button>
       </div>
 
-      {/* TAB SELECTOR - COMPACT PADDING */}
-      <div className="px-6 py-2 flex items-center justify-between bg-white sticky top-0 z-30 shadow-sm sm:shadow-none">
+      {/* TAB SELECTOR */}
+      <div className="px-6 py-2 flex items-center justify-between bg-white sticky top-0 z-30">
         <div className="flex items-center gap-6">
           <button 
             onClick={() => setActiveTab('Recommend')} 
