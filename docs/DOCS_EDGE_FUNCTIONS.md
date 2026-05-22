@@ -68,9 +68,20 @@ serve(async (req) => {
 
       if (statusData.payment_status_description === "Completed") {
         const coins = Math.floor(Number(statusData.amount) * 6.25)
+        
+        // 1. Atomic Balance Update
         const { error: rpcError } = await supabase.rpc("increment_coins", { user_uid, amount: coins })
-        if (rpcError) throw rpcError
-        await supabase.from("coin_history").insert({ user_id: user_uid, amount: coins, type: "recharge", description: "Pesapal verified recharge", timestamp: new Date().toISOString() })
+        if (rpcError) throw new Error(`RPC Failed: ${rpcError.message}`);
+
+        // 2. Ledger Entry (CRITICAL: timestamp must be BIGINT compatible)
+        await supabase.from("coin_history").insert({ 
+          user_id: user_uid, 
+          amount: coins, 
+          type: "recharge", 
+          description: "Pesapal verified recharge", 
+          timestamp: Date.now() 
+        })
+
         return new Response(JSON.stringify({ success: true, verified: true, coins_added: coins }), { headers: { ...corsHeaders, "Content-Type": "application/json" } })
       }
       return new Response(JSON.stringify({ success: false, message: "Payment not completed" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } })
@@ -103,10 +114,16 @@ serve(async (req) => {
       const { uid } = params
       const { data: user } = await supabase.from("users").select("uid, check_in_streak").eq("uid", uid).maybeSingle()
       if (!user) return new Response(JSON.stringify({ error: "Profile not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } })
+      
       const reward = 5
       const newStreak = (user.check_in_streak || 0) + 1
+      
       await supabase.rpc("increment_coins", { user_uid: uid, amount: reward })
-      await supabase.from("users").update({ last_check_in_date: new Date().toISOString(), check_in_streak: newStreak }).eq("uid", uid)
+      await supabase.from("users").update({ 
+        last_check_in_date: new Date().toISOString(), 
+        check_in_streak: newStreak 
+      }).eq("uid", uid)
+      
       return new Response(JSON.stringify({ success: true, amount: reward, day: newStreak }), { headers: { ...corsHeaders, "Content-Type": "application/json" } })
     }
 
@@ -114,8 +131,16 @@ serve(async (req) => {
       const { targetMatchFlowId, amount } = params
       const { data: target } = await supabase.from("users").select("uid").eq("match_flow_id", targetMatchFlowId).single()
       if (!target) throw new Error("User ID not found.")
+      
       await supabase.rpc("increment_coins", { user_uid: target.uid, amount: amount })
-      await supabase.from("coin_history").insert({ user_id: target.uid, amount: amount, type: "transfer", description: "Merchant Award", timestamp: new Date().toISOString() })
+      await supabase.from("coin_history").insert({ 
+        user_id: target.uid, 
+        amount: amount, 
+        type: "transfer", 
+        description: "Merchant Award", 
+        timestamp: Date.now() 
+      })
+      
       return new Response(JSON.stringify({ success: true, message: `Awarded ${amount} coins.` }), { headers: { ...corsHeaders, "Content-Type": "application/json" } })
     }
 

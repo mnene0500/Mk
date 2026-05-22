@@ -45,6 +45,12 @@ function RechargeContent() {
 
   const orderTrackingId = searchParams.get("OrderTrackingId") || searchParams.get("orderTrackingId")
 
+  const handleRedirectHome = () => {
+    successTriggeredRef.current = true;
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    router.replace('/profile');
+  };
+
   // 1. Real-time balance listener for instant celebration
   useEffect(() => {
     if (!user?.id) return
@@ -58,17 +64,12 @@ function RechargeContent() {
     const channel = supabase.channel(`recharge-sync:${user.id}`)
       .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
         const newBal = Number(payload.new.coins) || 0
+        // Detect if balance actually increased
         if (currentCoins !== null && newBal > currentCoins && !successTriggeredRef.current) {
-          successTriggeredRef.current = true
           setFulfillmentSuccess(true)
           setIsVerifying(false)
-          if (pollTimerRef.current) clearInterval(pollTimerRef.current)
-          
-          toast({ title: "Coins Added!", description: "Transaction completed successfully." })
-          
-          setTimeout(() => {
-             router.replace('/profile')
-          }, 3000)
+          toast({ title: "Coins Received!", description: "Balance updated successfully." })
+          setTimeout(handleRedirectHome, 2500);
         }
       })
       .subscribe()
@@ -77,9 +78,9 @@ function RechargeContent() {
       supabase.removeChannel(channel)
       if (pollTimerRef.current) clearInterval(pollTimerRef.current)
     }
-  }, [user?.id, currentCoins, router, toast])
+  }, [user?.id, currentCoins])
 
-  // 2. Verification Flow (Initiated ONLY when tracking ID is present)
+  // 2. Verification Flow
   useEffect(() => {
     if (orderTrackingId && user?.id && !fulfillmentSuccess && !successTriggeredRef.current) {
       setIsVerifying(true);
@@ -88,28 +89,29 @@ function RechargeContent() {
       const runVerification = async () => {
         if (successTriggeredRef.current) return;
         
-        const res = await verifyPaymentAction(orderTrackingId, user.id);
-        
-        if (!res.success) {
-          // If the error message is NOT "not completed" (meaning it's still pending), it's a real failure
-          if (res.message && !res.message.toLowerCase().includes("not completed")) {
+        try {
+          const res = await verifyPaymentAction(orderTrackingId, user.id);
+          
+          if (res.success) {
+            setFulfillmentSuccess(true);
+            setIsVerifying(false);
+            if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+            setTimeout(handleRedirectHome, 2500);
+          } else if (res.message && !res.message.toLowerCase().includes("not completed")) {
+            // Only stop if it's a permanent error, not just 'pending'
             setErrorMessage(res.message || res.error || "Verification failed");
             if (pollTimerRef.current) clearInterval(pollTimerRef.current);
           }
-          // If it's just "not completed", we keep polling silently
-        } else {
-          // Success handled by real-time listener, but we can set local state too
-          setFulfillmentSuccess(true);
-          setIsVerifying(false);
-          if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+        } catch (err) {
+          // Keep polling silently on network errors
         }
       };
 
       runVerification();
-      pollTimerRef.current = setInterval(runVerification, 8000); // Poll every 8 seconds
+      pollTimerRef.current = setInterval(runVerification, 10000); 
     }
     return () => { if (pollTimerRef.current) clearInterval(pollTimerRef.current); };
-  }, [orderTrackingId, user?.id, fulfillmentSuccess]);
+  }, [orderTrackingId, user?.id]);
 
   const handlePayment = async () => {
     const pkg = PACKAGES.find(p => p.amount === selectedPackage)
@@ -126,14 +128,11 @@ function RechargeContent() {
       if (result.success && result.redirect_url) {
         window.location.href = result.redirect_url;
       } else {
-        const errorMsg = result.error || "Payment gateway returned an error.";
-        setErrorMessage(errorMsg)
-        toast({ variant: "destructive", title: "Gateway Error", description: errorMsg })
+        setErrorMessage(result.error || "Payment gateway connection failed.");
         setLoading(false)
       }
     } catch (err) {
-      setErrorMessage("Connection to payment server failed.")
-      toast({ variant: "destructive", title: "Network Error" })
+      setErrorMessage("Critical network failure.")
       setLoading(false)
     }
   }
@@ -166,7 +165,7 @@ function RechargeContent() {
           </p>
         </div>
         {errorMessage && (
-          <Button onClick={() => router.replace('/recharge')} className="rounded-full bg-black text-white font-bold uppercase tracking-widest px-8 h-14">Try Again</Button>
+          <Button onClick={() => { setErrorMessage(null); setIsVerifying(false); router.replace('/recharge'); }} className="rounded-full bg-black text-white font-bold uppercase tracking-widest px-8 h-14">Try Again</Button>
         )}
       </div>
     )
