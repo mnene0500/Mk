@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo, useEffect, useCallback } from "react"
@@ -68,11 +67,13 @@ export default function ExplorePage() {
     if (!profile) return
     setLoading(true)
     try {
-      // SOFT DELETE FILTER: Ensure we hide users marked as is_deleted
+      const oppositeGender = profile.gender === 'male' ? 'female' : 'male';
+
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('onboarding_complete', true)
+        .eq('gender', oppositeGender)
         .or('is_deleted.is.null,is_deleted.eq.false')
         .limit(40)
 

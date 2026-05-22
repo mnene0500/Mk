@@ -54,7 +54,7 @@ export default function HomePage() {
     if (!currentUser) { router.replace("/welcome"); return; }
 
     const checkProfile = async () => {
-      const { data } = await supabase.from('users').select('onboarding_complete, country').eq('uid', currentUser.id).maybeSingle();
+      const { data } = await supabase.from('users').select('onboarding_complete, country, gender').eq('uid', currentUser.id).maybeSingle();
       if (!data) { router.replace("/fastonboard"); return; }
       setProfile(data as any);
       if (!data.onboarding_complete) router.replace("/fastonboard");
@@ -73,6 +73,8 @@ export default function HomePage() {
   }, [initialLoading])
 
   const fetchUsers = useCallback(async (isManual = false) => {
+    if (!profile?.gender) return;
+    
     if (isManual) {
       setIsRefreshing(true);
       globalScrollY = 0;
@@ -81,10 +83,13 @@ export default function HomePage() {
     }
 
     try {
+      const oppositeGender = profile.gender === 'male' ? 'female' : 'male';
+      
       const { data } = await supabase
         .from('users')
-        .select('uid, name, photo_url, country, dob, is_verified, onboarding_complete, is_deleted')
+        .select('uid, name, photo_url, country, dob, is_verified, onboarding_complete, is_deleted, gender')
         .eq('onboarding_complete', true)
+        .eq('gender', oppositeGender)
         .or('is_deleted.is.null,is_deleted.eq.false')
         .limit(60);
 
@@ -100,11 +105,13 @@ export default function HomePage() {
       setIsRefreshing(false)
       setInitialLoading(false)
     }
-  }, [currentUser?.id, users.length])
+  }, [currentUser?.id, profile?.gender, users.length])
 
   useEffect(() => {
-    if (isInitialized && currentUser && users.length === 0) fetchUsers()
-  }, [isInitialized, currentUser, users.length, fetchUsers])
+    if (isInitialized && currentUser && profile && users.length === 0) {
+      fetchUsers();
+    }
+  }, [isInitialized, currentUser, profile, users.length, fetchUsers])
 
   const filteredUsers = useMemo(() => {
     if (activeTab === 'Nearby' && profile) return users.filter(u => u.country === profile.country)
