@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -237,7 +238,7 @@ export default function MePage() {
           <div className="absolute top-6 right-6">
             <div className="bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5">
               <span className="text-[9px] font-bold text-white uppercase tracking-widest">
-                {profile?.is_admin ? "ADMIN" : (profile?.is_agent ? "AGENT" : "VERIFIED")}
+                {profile?.is_admin ? "ADMIN" : (profile?.is_agent ? "AGENT" : (profile?.is_verified ? "VERIFIED" : "MEMBER"))}
               </span>
             </div>
           </div>
@@ -262,7 +263,7 @@ export default function MePage() {
 
           <div className="flex items-center justify-center gap-1.5 mb-1">
             <h2 className="text-xl font-bold text-white tracking-tight">{profile?.name || '...'}</h2>
-            {(profile?.is_verified || profile?.is_admin) && <BadgeCheck className="w-4 h-4 text-white fill-blue-500" />}
+            {profile?.is_verified && <BadgeCheck className="w-4 h-4 text-white fill-blue-500" />}
           </div>
           
           <div className="inline-flex items-center gap-1.5 cursor-pointer" onClick={handleCopyId}>
