@@ -1,27 +1,30 @@
 "use client"
 
-import { usePathname } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import { BottomNav } from "./BottomNav"
+import { Suspense } from "react"
 
 /**
- * List of paths where the Bottom Navigation MUST be visible.
- * All other paths (details, settings, forms, calls) will have the nav hidden.
+ * List of paths where the Bottom Navigation is allowed.
  */
-const SHOW_NAV_PATHS = [
+const ALLOWED_NAV_PATHS = [
   '/home',
   '/chats',
   '/profile'
 ]
 
 /**
- * @fileOverview Global App Shell that keeps the BottomNav persistent and stable.
- * Only shows the navigation bar on core top-level screens.
+ * Internal Shell component that handles navigation visibility logic.
  */
-export function AppShell({ children }: { children: React.ReactNode }) {
+function ShellContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   
-  // Only show nav if current path matches our allowed core screens
-  const isVisible = SHOW_NAV_PATHS.includes(pathname || "")
+  // Check if we are in a specific conversation detail view
+  const isChatDetail = pathname === '/chats' && searchParams.has('startWith')
+  
+  // Show nav only if on allowed paths AND not in a detailed sub-view (like a specific chat)
+  const isVisible = ALLOWED_NAV_PATHS.includes(pathname || "") && !isChatDetail
 
   return (
     <div className="flex-1 flex flex-col relative min-h-screen overflow-x-hidden">
@@ -30,5 +33,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
       {isVisible && <BottomNav />}
     </div>
+  )
+}
+
+/**
+ * @fileOverview Global App Shell that keeps the BottomNav persistent and stable.
+ * Uses Suspense to safely access search params during client-side transitions.
+ */
+export function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<div className="flex-1 bg-white" />}>
+      <ShellContent>
+        {children}
+      </ShellContent>
+    </Suspense>
   )
 }

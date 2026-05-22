@@ -395,11 +395,8 @@ function ChatsContent() {
       </main>
 
       <footer className="p-4 pb-8 border-t bg-white flex flex-col gap-2 relative">
-        {!isBlocked && (
-          <>
-            {userProfile?.gender === 'male' && !isPrivileged && <div className="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-2 mb-1">Message cost: 15 Coins</div>}
-            {isPrivileged && <div className="text-[9px] font-bold text-blue-500 uppercase tracking-widest px-2 mb-1">VIP: Free Communication Enabled</div>}
-          </>
+        {!isBlocked && isPrivileged && (
+          <div className="text-[9px] font-bold text-blue-500 uppercase tracking-widest px-2 mb-1">VIP: Free Communication Enabled</div>
         )}
         <div className="flex gap-2 items-center">
           {isBlocked ? (
