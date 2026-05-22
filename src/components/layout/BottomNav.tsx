@@ -9,7 +9,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
 
 /**
- * @fileOverview High-fidelity Bottom Navigation matching reference UI.
+ * @fileOverview High-fidelity Bottom Navigation with blue active states.
  */
 export function BottomNav() {
   const pathname = usePathname()
@@ -60,14 +60,14 @@ export function BottomNav() {
             href={item.href}
             className={cn(
               "flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-all relative",
-              isActive ? "text-black" : "text-gray-400"
+              isActive ? "text-[#00A2FF]" : "text-gray-400"
             )}
           >
             <div className={cn(
               "relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300",
-              isActive && item.href === '/home' && "bg-[#D9FF00]"
+              isActive && "bg-blue-50"
             )}>
-              <item.icon className={cn("w-6 h-6", isActive ? "text-black fill-current" : "text-gray-400")} />
+              <item.icon className={cn("w-6 h-6", isActive ? "text-[#00A2FF] fill-current" : "text-gray-400")} />
               {item.badge !== undefined && item.badge > 0 && (
                 <div className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white animate-in zoom-in">
                   {item.badge > 9 ? '9+' : item.badge}
