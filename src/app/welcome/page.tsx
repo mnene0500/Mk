@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -11,7 +12,6 @@ import { useToast } from "@/hooks/use-toast"
 
 /**
  * @fileOverview Cinematic Welcome Page with Supabase Auth Gates.
- * Implements a back-button trap to ensure users can't return to account screens after logging out.
  */
 export default function WelcomePage() {
   const [loading, setLoading] = useState(false)
@@ -21,43 +21,15 @@ export default function WelcomePage() {
 
   useEffect(() => {
     if (isInitialized && !authLoading && user) {
-      checkProfileStatus(user.id)
+      router.replace("/")
     }
-    
-    // BACK BUTTON TRAP: If user is on welcome screen and logged out, clicking back should stay here (or exit)
-    if (isInitialized && !user) {
-      window.history.pushState(null, '', window.location.href);
-      window.onpopstate = function() {
-        window.history.pushState(null, '', window.location.href);
-      };
-    }
-    return () => { window.onpopstate = null; };
-  }, [user, isInitialized, authLoading])
-
-  const checkProfileStatus = async (uid: string) => {
-    try {
-      const { data } = await supabase
-        .from('users')
-        .select('onboarding_complete')
-        .eq('uid', uid)
-        .maybeSingle();
-      
-      if (data?.onboarding_complete) {
-        router.replace("/home")
-      } else {
-        router.replace("/fastonboard")
-      }
-    } catch (err) {
-      router.replace("/fastonboard")
-    }
-  }
+  }, [user, isInitialized, authLoading, router])
 
   const handleGoogleLogin = async () => {
     setLoading(true)
     try {
-      const redirectTo = typeof window !== 'undefined' 
-        ? `${window.location.origin}/home` 
-        : 'https://qivo-five.vercel.app/home';
+      // REDIRECT TO ROOT: Ensures Supabase captures the session before routing
+      const redirectTo = typeof window !== 'undefined' ? window.location.origin : 'https://qivo-five.vercel.app';
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -77,7 +49,6 @@ export default function WelcomePage() {
   }
 
   const handleClearCache = () => {
-    // SAFE CLEAR: preserve supabase tokens
     const keys = Object.keys(localStorage);
     for (const key of keys) {
       if (!key.includes('auth-token')) {
@@ -89,7 +60,6 @@ export default function WelcomePage() {
     setTimeout(() => window.location.reload(), 1000)
   }
 
-  // If session is still loading or user is being redirected, show a silent white background
   if (!isInitialized || (isInitialized && user)) {
     return <div className="fixed inset-0 bg-white" />
   }

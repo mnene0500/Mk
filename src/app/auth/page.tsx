@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo } from "react"
@@ -39,7 +40,7 @@ export default function UnifiedAuthPage() {
       if (error) throw error
       
       toast({ title: "Welcome Back!" })
-      router.push("/home")
+      router.push("/")
     } catch (error: any) {
       console.error("[Login Error]:", error.message)
       toast({ variant: "destructive", title: "Login failed", description: error.message })
@@ -51,10 +52,13 @@ export default function UnifiedAuthPage() {
   const handleGoogleLogin = async () => {
     setSocialLoading(true)
     try {
+      // REDIRECT TO ROOT: Let root logic handle /home vs /fastonboard
+      const redirectTo = window.location.origin;
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/home`,
+          redirectTo,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',

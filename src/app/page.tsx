@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect } from "react"
@@ -33,13 +34,16 @@ export default function RootPage() {
         
         if (error) throw error;
 
-        if (data?.onboarding_complete) {
+        // Explicitly check for data presence
+        if (data && data.onboarding_complete) {
           router.replace("/home")
         } else {
+          // If no row exists or onboarding is false, send to onboarding
           router.replace("/fastonboard")
         }
       } catch (err) {
-        // Fallback to onboarding if profile check fails
+        console.error("[Root Logic Error]:", err)
+        // Fallback to onboarding if profile check fails (likely a new user)
         router.replace("/fastonboard")
       }
     }
@@ -48,6 +52,8 @@ export default function RootPage() {
   }, [user, isInitialized, authLoading, router])
 
   return (
-    <div className="fixed inset-0 bg-white" />
+    <div className="fixed inset-0 bg-white flex items-center justify-center">
+       <div className="w-8 h-8 border-4 border-[#00A2FF]/20 border-t-[#00A2FF] rounded-full animate-spin" />
+    </div>
   )
 }
