@@ -46,11 +46,13 @@ export async function verifyPaymentAction(orderTrackingId: string, user_uid: str
     });
 
     if (error) {
+      console.error("[Verify Action Error]:", error.message);
       return { success: false, error: error.message };
     }
     
     return data || { success: false, error: "Empty verification response." };
   } catch (err: any) { 
-    return { success: false, error: "Internal verification crash." }; 
+    console.error("[Verify Action Crash]:", err.message);
+    return { success: false, error: "Internal verification service offline." }; 
   }
 }

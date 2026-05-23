@@ -12,21 +12,29 @@ export async function GET(request: Request) {
   const orderTrackingId = searchParams.get('OrderTrackingId') || searchParams.get('orderTrackingId');
   const merchantReference = searchParams.get('OrderMerchantReference') || searchParams.get('orderMerchantReference');
 
-  if (!orderTrackingId || !merchantReference) {
-    return NextResponse.json({ status: 'Error', message: 'Missing parameters' }, { status: 400 });
+  if (!orderTrackingId) {
+    return NextResponse.json({ status: 'Error', message: 'Missing OrderTrackingId' }, { status: 400 });
   }
 
   try {
-    const result = await processFulfillment(orderTrackingId, merchantReference);
+    // merchantReference usually contains the user_uid for guest-initiated payments, 
+    // but the system now primarily uses the active session uid during polling.
+    // We pass merchantReference as the potential fallback UID.
+    const result = await processFulfillment(orderTrackingId, merchantReference || '');
     
     return NextResponse.json({
       OrderTrackingId: orderTrackingId,
       status: 'OK',
       processed: result.success,
-      reason: result.error || 'Success'
+      message: result.message || (result.success ? 'Success' : 'Pending or Error')
     });
   } catch (error: any) {
     console.error("[PesaPal IPN Route] Crash:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // Returning 200 with error details to prevent PesaPal from infinite retries on business logic failures
+    return NextResponse.json({ 
+      status: 'Error', 
+      processed: false,
+      error: error.message 
+    }, { status: 200 });
   }
 }
