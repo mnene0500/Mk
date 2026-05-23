@@ -34,7 +34,7 @@ export default function MysteryNotePage() {
 
     fetchBalance()
 
-    const channel = supabase.channel(`mystery-note-bal:${user.id}`)
+    const channel = supabase.channel(`mystery-note-bal-live:${user.id}`)
       .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
         setUserCoins(Number(payload.new.coins) || 0)
       })
@@ -43,17 +43,16 @@ export default function MysteryNotePage() {
     return () => { supabase.removeChannel(channel) }
   }, [user?.id])
 
-  const totalCost = recipientCount * COST_PER_PERSON
+  const totalCost = Number(recipientCount) * COST_PER_PERSON
 
   const handleSend = async () => {
     if (!user?.id || !message.trim()) return
     
-    // Safety check client side with strict number casting
     const currentCoins = Number(userCoins);
     const requiredCoins = Number(totalCost);
 
     if (currentCoins < requiredCoins) {
-      toast({ variant: "destructive", title: "Insufficient Coins", description: `You have ${currentCoins} but need ${requiredCoins}.` })
+      toast({ variant: "destructive", title: "Insufficient Coins", description: `Wallet Balance: ${currentCoins} coins.` })
       return
     }
 
@@ -61,69 +60,77 @@ export default function MysteryNotePage() {
     try {
       const res = await sendMysteryNoteAction(user.id, message, recipientCount)
       if (res.success) {
-        toast({ title: "Note Sent!", description: `Sent to ${recipientCount} people anonymously.` })
+        toast({ title: "Mystery Note Sent!", description: "Message has been blasted anonymously." })
         router.push("/chats")
       } else {
-        toast({ variant: "destructive", title: "Error", description: res.error })
+        toast({ variant: "destructive", title: "Submission Error", description: res.error })
       }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to connect to secure line." })
+      toast({ variant: "destructive", title: "System Error", description: "Failed to connect to the secure line." })
     } finally {
       setIsSending(false)
     }
   }
 
   return (
-    <div className="flex-1 bg-[#00A2FF] min-h-screen flex flex-col select-none relative overflow-hidden">
+    <div className="flex-1 bg-[#00A2FF] min-h-screen flex flex-col select-none relative overflow-hidden animate-in fade-in duration-500">
       <div className="absolute -top-10 -right-20 w-80 h-80 opacity-20 pointer-events-none rotate-12"><Sparkles className="w-full h-full text-white" /></div>
+      
       <header className="px-4 h-16 flex items-center bg-transparent z-50">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full text-white hover:bg-white/10"><ChevronLeft className="w-8 h-8" /></Button>
       </header>
+
       <main className="flex-1 px-6 pt-4 pb-10 space-y-12 overflow-y-auto no-scrollbar relative z-10">
-        <div className="space-y-2">
-          <h1 className="text-5xl font-black text-white tracking-tighter leading-tight animate-in fade-in slide-in-from-left-4 duration-700">Mystery<br/>Note</h1>
-          <p className="text-sm font-bold text-white/70 uppercase tracking-[0.2em] ml-1">Send a secret message</p>
+        <div className="space-y-2 px-2">
+          <h1 className="text-5xl font-black text-white tracking-tighter leading-tight">Mystery<br/>Note</h1>
+          <p className="text-[10px] font-black text-white/60 uppercase tracking-[0.3em] ml-1">Secure Anonymous Channel</p>
         </div>
-        <div className="bg-white/15 backdrop-blur-2xl border border-white/20 rounded-[3rem] p-8 shadow-2xl space-y-8">
+
+        <div className="bg-white/15 backdrop-blur-3xl border border-white/20 rounded-[3rem] p-8 shadow-2xl space-y-8">
           <div className="space-y-4">
             <div className="flex justify-between items-start">
-               <h2 className="text-2xl font-black text-white leading-tight">Write something<br/>anonymous...</h2>
+               <h2 className="text-2xl font-black text-white leading-tight">Write your<br/>secret...</h2>
                <div className="flex flex-col items-end">
                  <span className="text-[8px] font-black text-white/40 uppercase tracking-widest">My Balance</span>
-                 <span className="text-xs font-black text-white flex items-center gap-1"><Coins className="w-3 h-3 text-yellow-400" />{userCoins}</span>
+                 <span className="text-xs font-black text-white flex items-center gap-1.5 bg-black/20 px-3 py-1 rounded-full"><Coins className="w-3 h-3 text-yellow-400" />{userCoins}</span>
                </div>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-               <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-400 rounded-full shadow-lg"><Coins className="w-3.5 h-3.5 text-yellow-800" /><span className="text-[10px] font-black text-yellow-900">{COST_PER_PERSON} coins / user</span></div>
+               <div className="flex items-center gap-2 px-4 py-1.5 bg-yellow-400 rounded-full shadow-lg border border-yellow-300"><Coins className="w-3.5 h-3.5 text-yellow-800" /><span className="text-[10px] font-black text-yellow-900 tracking-tighter">{COST_PER_PERSON} coins / user</span></div>
                <div className="flex items-center gap-2 px-4 py-1.5 bg-white/10 rounded-full border border-white/20">
                   <Users className="w-3.5 h-3.5 text-white/80" />
                   <select 
                     value={recipientCount} 
                     onChange={(e) => setRecipientCount(Number(e.target.value))} 
-                    className="bg-transparent border-none text-[10px] font-black text-white outline-none cursor-pointer uppercase"
+                    className="bg-transparent border-none text-[10px] font-black text-white outline-none cursor-pointer uppercase appearance-none"
                   >
                     {RECIPIENT_OPTIONS.map(n => <option key={n} value={n} className="text-black">{n} People</option>)}
                   </select>
                </div>
             </div>
           </div>
+
           <Textarea 
-            placeholder="Type your note..." 
+            placeholder="Type your message..." 
             value={message} 
             onChange={(e) => setMessage(e.target.value)} 
-            className="bg-white rounded-[2rem] min-h-[180px] border-none text-black font-bold p-6 text-sm resize-none shadow-inner" 
+            className="bg-white rounded-[2rem] min-h-[200px] border-none text-black font-bold p-8 text-base shadow-inner focus-visible:ring-2 focus-visible:ring-white/20" 
           />
+
           <div className="space-y-4">
-            <div className="flex justify-between items-center px-4">
-              <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">Total Cost</span>
-              <span className="text-lg font-black text-white">{totalCost} Coins</span>
+            <div className="flex justify-between items-center px-6">
+              <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">Operation Cost</span>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-black text-white tracking-tighter">{totalCost}</span>
+                <Coins className="w-5 h-5 text-yellow-400" />
+              </div>
             </div>
             <Button 
               onClick={handleSend} 
               disabled={isSending || !message.trim()} 
-              className="w-full h-16 rounded-full bg-white text-[#00A2FF] font-black uppercase tracking-[0.2em] text-sm shadow-xl active:scale-95 transition-all"
+              className="w-full h-18 rounded-full bg-white text-[#00A2FF] font-black uppercase tracking-[0.2em] text-sm shadow-2xl active:scale-95 transition-all py-8"
             >
-              {isSending ? <Loader2 className="w-6 h-6 animate-spin" /> : <div className="flex items-center gap-2"><Send className="w-5 h-5" />Blast to {recipientCount} Users</div>}
+              {isSending ? <Loader2 className="w-6 h-6 animate-spin" /> : <div className="flex items-center gap-3"><Send className="w-5 h-5" />Blast Message</div>}
             </Button>
           </div>
         </div>

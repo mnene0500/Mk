@@ -39,7 +39,7 @@ export default function TaskCenterPage() {
     }
     fetchProfile()
 
-    const channel = supabase.channel(`task-user:${user.id}`)
+    const channel = supabase.channel(`task-user-live:${user.id}`)
       .on('postgres_changes', { event: 'UPDATE', table: 'users', filter: `uid=eq.${user.id}` }, (payload) => {
         setProfile(payload.new)
       })
@@ -66,22 +66,22 @@ export default function TaskCenterPage() {
       if (res.success) {
         toast({ 
           title: "Check-in Successful!", 
-          description: `You earned ${res.amount} coins. Day ${res.day} collected!` 
+          description: `You earned ${res.amount} coins. Streak updated!` 
         })
         // Optimistic UI lock
         setProfile({ ...profile, last_check_in_date: new Date().toISOString() })
       } else {
-        toast({ variant: "destructive", title: "Wait", description: res.error || "System busy" })
+        toast({ variant: "destructive", title: "Claim Error", description: res.error || "Please try again later." })
       }
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Task Failed", description: "Network error. Please try again." })
+      toast({ variant: "destructive", title: "Task Failed", description: "Connection interrupted." })
     } finally {
       setIsProcessing(false)
     }
   }
 
   return (
-    <div className="flex-1 bg-[#F8F9FA] min-h-screen pb-10 select-none">
+    <div className="flex-1 bg-[#F8F9FA] min-h-screen pb-10 select-none animate-in fade-in duration-300">
       <header className="bg-[#00A2FF] h-32 relative px-4 pt-12">
         <div className="flex items-center justify-between">
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-white rounded-full hover:bg-white/10">
@@ -98,13 +98,17 @@ export default function TaskCenterPage() {
         {loading ? (
           <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
         ) : (
-          <section className="bg-white p-6 rounded-3xl shadow-sm border border-black/5">
-            <div className="flex items-center justify-between mb-6">
+          <section className="bg-white p-6 rounded-[2rem] shadow-xl border border-black/5">
+            <div className="flex items-center justify-between mb-6 px-1">
               <div className="flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-yellow-500" />
-                <h2 className="text-xs font-bold text-black uppercase tracking-widest">Daily Rewards</h2>
+                <div className="w-8 h-8 bg-yellow-50 rounded-lg flex items-center justify-center">
+                  <Trophy className="w-4 h-4 text-yellow-500" />
+                </div>
+                <h2 className="text-xs font-black text-black uppercase tracking-widest">Daily Rewards</h2>
               </div>
-              <span className="text-[10px] font-semibold text-gray-400">Streak: {currentStreak} Days</span>
+              <span className="text-[10px] font-black text-[#00A2FF] uppercase tracking-widest bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
+                Streak: {currentStreak}
+              </span>
             </div>
             
             <div className="grid grid-cols-4 gap-3">
@@ -112,9 +116,7 @@ export default function TaskCenterPage() {
                 const dayNumber = i + 1
                 const currentCycleDay = (currentStreak % 7) || (currentStreak > 0 ? 7 : 0);
                 
-                // BOX STATUS:
-                // 1. If today is claimed, box is green if dayNumber <= currentCycleDay
-                // 2. If today is NOT claimed, box is green if dayNumber < currentCycleDay
+                // Hard locking visual logic
                 const isCollected = hasCheckedInToday 
                   ? dayNumber <= currentCycleDay
                   : dayNumber <= (currentStreak % 7);
@@ -124,7 +126,7 @@ export default function TaskCenterPage() {
                     key={i} 
                     className={cn(
                       "aspect-square rounded-2xl flex flex-col items-center justify-center border-2 transition-all duration-500", 
-                      isCollected ? "bg-green-50 border-green-200" : "bg-gray-50 border-transparent"
+                      isCollected ? "bg-green-50 border-green-200" : "bg-gray-50 border-transparent shadow-inner"
                     )}
                   >
                     {isCollected ? (
@@ -132,10 +134,10 @@ export default function TaskCenterPage() {
                     ) : (
                       <>
                         <Coins className="w-5 h-5 text-yellow-500 mb-1" />
-                        <span className="text-[10px] font-semibold text-gray-500">+{d.reward}</span>
+                        <span className="text-[10px] font-black text-gray-500">+{d.reward}</span>
                       </>
                     )}
-                    <span className="text-[8px] font-medium text-gray-400 uppercase mt-1">{d.day}</span>
+                    <span className="text-[8px] font-black text-gray-400 uppercase mt-1 tracking-tighter">{d.day}</span>
                   </div>
                 )
               })}
@@ -145,23 +147,23 @@ export default function TaskCenterPage() {
               onClick={handleCheckIn} 
               disabled={hasCheckedInToday || isProcessing}
               className={cn(
-                "w-full mt-6 h-14 rounded-full text-white font-bold uppercase tracking-widest text-sm shadow-lg active:scale-95 transition-all", 
-                hasCheckedInToday ? "bg-gray-100 text-gray-400 shadow-none cursor-default" : "bg-[#00A2FF] shadow-blue-100"
+                "w-full mt-8 h-16 rounded-full text-white font-black uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all", 
+                hasCheckedInToday ? "bg-gray-100 text-gray-300 shadow-none cursor-default" : "bg-[#00A2FF] shadow-blue-100"
               )}
             >
-              {isProcessing ? <Loader2 className="animate-spin" /> : hasCheckedInToday ? "Already Claimed" : "Claim Day " + ((currentStreak % 7) + 1) + " Reward"}
+              {isProcessing ? <Loader2 className="animate-spin" /> : hasCheckedInToday ? "Already Claimed" : "Collect Reward"}
             </Button>
           </section>
         )}
 
-        <section className="bg-white p-6 rounded-3xl shadow-sm border border-black/5 space-y-4">
-          <h2 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Identity Incentives</h2>
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
+        <section className="bg-white p-6 rounded-[2rem] shadow-sm border border-black/5 space-y-4">
+          <h2 className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Identity Bonus</h2>
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-black/5">
              <div className="flex items-center gap-3">
-               <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-500"><Trophy className="w-5 h-5" /></div>
-               <div><p className="text-xs font-bold">Profile Verification</p><p className="text-[9px] text-gray-400 font-medium">Get a badge & build trust</p></div>
+               <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-500 shadow-sm"><Trophy className="w-5 h-5" /></div>
+               <div><p className="text-xs font-black uppercase tracking-tight">Trust Badge</p><p className="text-[9px] text-gray-400 font-medium">Verify your face for extra trust</p></div>
              </div>
-             <Button size="sm" onClick={() => router.push('/verify-identity')} className="rounded-full bg-[#00A2FF] text-[9px] font-bold h-7">GO</Button>
+             <Button size="sm" onClick={() => router.push('/verify-identity')} className="rounded-full bg-[#00A2FF] text-[9px] font-black h-8 shadow-lg shadow-blue-100 px-4">GO</Button>
           </div>
         </section>
       </main>

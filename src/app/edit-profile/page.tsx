@@ -142,11 +142,13 @@ export default function EditProfilePage() {
     try {
       let finalPhotoUrl = formData.photo_url;
       
+      // 1. Upload Profile Photo if changed
       if (formData.photo_url.startsWith('data:image')) {
         const { blob } = base64ToBlob(formData.photo_url);
         finalPhotoUrl = await uploadProfilePhoto(blob, user.id);
       }
 
+      // 2. Upload Gallery Photos if changed
       const finalGalleryUrls: string[] = [];
       for (const p of formData.additional_photos) {
         if (p && p.startsWith('data:image')) {
@@ -171,20 +173,20 @@ export default function EditProfilePage() {
         updated_at: new Date().toISOString()
       };
 
-      // USE UPSERT TO ENSURE PERSISTENCE
+      // 3. Atomic DB Commit using UPSERT
       const { error: dbError } = await supabase
         .from('users')
         .upsert(updateData, { onConflict: 'uid' });
       
       if (dbError) throw dbError;
 
-      toast({ title: "Saved Successfully" })
+      toast({ title: "Profile Updated Successfully" })
       
-      // FORCE CACHE PURGE
+      // 4. Force Hard Refresh to bypass all caching
       window.location.replace('/profile');
     } catch (error: any) {
       console.error("[Profile Save Crash]", error);
-      toast({ variant: "destructive", title: "Save Failed", description: error.message })
+      toast({ variant: "destructive", title: "Update Failed", description: error.message })
       setSaving(false)
     }
   }
@@ -212,11 +214,11 @@ export default function EditProfilePage() {
             </Avatar>
             <div className="absolute bottom-1 right-1 bg-[#00A2FF] p-2.5 rounded-full text-white shadow-xl border-2 border-white"><Camera className="w-5 h-5" /></div>
           </div>
-          <p className="mt-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Change Avatar</p>
+          <p className="mt-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Update Avatar</p>
         </div>
 
         <div className="space-y-4">
-          <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">My Visuals (Max 4)</Label>
+          <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Personal Gallery (Max 4)</Label>
           <div className="grid grid-cols-4 gap-3">
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="relative aspect-square rounded-2xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden cursor-pointer active:scale-95 transition-transform" onClick={() => { setTargetPhotoIndex(i); fileInputRef.current?.click(); }}>
@@ -234,12 +236,12 @@ export default function EditProfilePage() {
         <div className="space-y-6 pt-4">
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Display Name</Label>
-            <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="rounded-2xl h-14 border-gray-100 bg-gray-50 font-bold text-black" placeholder="How users see you" />
+            <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="rounded-2xl h-14 border-gray-100 bg-gray-50 font-bold text-black" placeholder="Your public name" />
           </div>
 
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Bio & Interests</Label>
-            <Textarea value={formData.interests} onChange={(e) => setFormData({...formData, interests: e.target.value})} className="rounded-2xl min-h-[120px] border-gray-100 bg-gray-50 font-medium text-sm leading-relaxed" placeholder="Tell the community about yourself..." />
+            <Textarea value={formData.interests} onChange={(e) => setFormData({...formData, interests: e.target.value})} className="rounded-2xl min-h-[120px] border-gray-100 bg-gray-50 font-medium text-sm leading-relaxed" placeholder="Tell the world about you..." />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -248,7 +250,7 @@ export default function EditProfilePage() {
               <Input type="date" value={formData.dob} onChange={(e) => setFormData({...formData, dob: e.target.value})} className="rounded-2xl h-14 border-gray-100 bg-gray-50 font-bold" />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Home Region</Label>
+              <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Country</Label>
               <Select onValueChange={(val) => setFormData({...formData, country: val})} value={formData.country}>
                 <SelectTrigger className="rounded-2xl h-14 bg-gray-50 border-gray-100 font-bold"><SelectValue /></SelectTrigger>
                 <SelectContent className="rounded-2xl">{AFRICAN_COUNTRIES.map(c => <SelectItem key={c} value={c} className="font-bold">{c}</SelectItem>)}</SelectContent>
@@ -265,7 +267,7 @@ export default function EditProfilePage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Seeking</Label>
+              <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Status</Label>
               <Select onValueChange={(val) => setFormData({...formData, looking_for: val})} value={formData.looking_for}>
                 <SelectTrigger className="rounded-2xl h-14 bg-gray-50 border-gray-100 font-bold"><SelectValue /></SelectTrigger>
                 <SelectContent className="rounded-2xl">{LOOKING_FOR_OPTIONS.map(opt => <SelectItem key={opt} value={opt} className="font-bold">{opt}</SelectItem>)}</SelectContent>
@@ -285,11 +287,11 @@ export default function EditProfilePage() {
 
       <Dialog open={cropOpen} onOpenChange={setCropOpen}>
         <DialogContent className="max-w-md h-[500px] p-0 overflow-hidden rounded-[2.5rem] border-none">
-          <DialogHeader className="p-4 border-b bg-white"><DialogTitle className="text-center font-black uppercase text-[10px] tracking-widest">Perfect Crop</DialogTitle></DialogHeader>
+          <DialogHeader className="p-4 border-b bg-white"><DialogTitle className="text-center font-black uppercase text-[10px] tracking-widest">Adjust View</DialogTitle></DialogHeader>
           <div className="relative flex-1 bg-black h-full min-h-[300px]">
             {tempImage && (<Cropper image={tempImage} crop={crop} zoom={zoom} aspect={1} onCropChange={setCrop} onCropComplete={onCropComplete} onZoomChange={setZoom} />)}
           </div>
-          <DialogFooter className="p-4 bg-white"><Button onClick={handleCropSave} className="w-full h-14 rounded-full bg-[#00A2FF] text-white font-bold uppercase tracking-widest shadow-xl shadow-blue-100">Apply Crop</Button></DialogFooter>
+          <DialogFooter className="p-4 bg-white"><Button onClick={handleCropSave} className="w-full h-14 rounded-full bg-[#00A2FF] text-white font-bold uppercase tracking-widest shadow-xl">Apply Crop</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
