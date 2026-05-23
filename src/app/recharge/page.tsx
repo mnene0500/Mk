@@ -3,18 +3,16 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, Coins, CheckCircle2, ShieldCheck, Loader2, MessageSquare, ExternalLink, Zap } from "lucide-react"
+import { ChevronLeft, Coins, ShieldCheck, Loader2, MessageSquare, ExternalLink } from "lucide-react"
 import { useUser } from "@/firebase/auth/use-user"
 import { useToast } from "@/hooks/use-toast"
 import { initiatePesaPalPayment } from "@/app/actions/payment-actions"
 import { cn } from "@/lib/utils"
 
 const PACKAGES = [
-  { id: "micro", label: "Micro Pack", coins: 10, price: 1, color: "bg-rose-50", text: "text-rose-600" },
-  { id: "test", label: "Test Package", coins: 500, price: 50, color: "bg-green-50", text: "text-green-600", popular: true },
-  { id: "starter", label: "Starter Pack", coins: 2000, price: 200, color: "bg-blue-50", text: "text-blue-600" },
-  { id: "pro", label: "Pro Value", coins: 5500, price: 500, color: "bg-purple-50", text: "text-purple-600" },
-  { id: "elite", label: "Elite Bundle", coins: 12000, price: 1000, color: "bg-amber-50", text: "text-amber-600" },
+  { id: "micro", label: "Micro Pack", coins: 10, price: 1, color: "bg-gray-50", text: "text-gray-600" },
+  { id: "test", label: "Test Pack", coins: 500, price: 50, color: "bg-blue-50", text: "text-blue-600", popular: true },
+  { id: "starter", label: "Basic Pack", coins: 2000, price: 200, color: "bg-gray-50", text: "text-gray-600" },
 ]
 
 export default function RechargePage() {
@@ -51,21 +49,14 @@ export default function RechargePage() {
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full text-black">
           <ChevronLeft className="w-6 h-6" />
         </Button>
-        <h1 className="text-base font-black text-black">Recharge Coins</h1>
+        <h1 className="text-base font-black text-black">Top Up</h1>
         <div className="w-10" />
       </header>
 
       <main className="flex-1 p-6 space-y-8 pb-20">
-        <div className="bg-black rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl">
-          <Zap className="absolute -right-6 -bottom-6 w-32 h-32 text-white/5 rotate-12" />
-          <div className="relative z-10 space-y-4">
-            <div className="flex items-center gap-2 text-[#00A2FF]">
-              <ShieldCheck className="w-5 h-5 fill-current" />
-              <span className="text-[10px] font-black uppercase tracking-widest">Verified Payment System</span>
-            </div>
-            <h2 className="text-3xl font-black leading-tight tracking-tighter">Get QIVO Coins Instantly</h2>
-            <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.2em]">Secure Checkout • Instant Delivery</p>
-          </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-black tracking-tight text-black">Select Package</h2>
+          <p className="text-xs font-medium text-gray-400">Choose a coin bundle to continue.</p>
         </div>
 
         <div className="grid grid-cols-1 gap-4">
@@ -73,23 +64,17 @@ export default function RechargePage() {
             <div 
               key={pkg.id} 
               className={cn(
-                "relative group p-6 rounded-[2rem] border-2 transition-all active:scale-[0.98]",
-                pkg.popular ? "border-[#00A2FF] bg-blue-50/30" : "border-gray-50 bg-white"
+                "relative group p-6 rounded-2xl border transition-all active:scale-[0.98]",
+                pkg.popular ? "border-[#00A2FF] bg-blue-50/20" : "border-gray-100 bg-white"
               )}
             >
-              {pkg.popular && (
-                <div className="absolute -top-3 left-6 bg-[#00A2FF] text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-lg">
-                  Best Value
-                </div>
-              )}
-              
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center shadow-inner", pkg.color)}>
-                    <Coins className={cn("w-7 h-7", pkg.text)} />
+                  <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", pkg.color)}>
+                    <Coins className={cn("w-6 h-6", pkg.text)} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-black leading-none">{pkg.coins} Coins</h3>
+                    <h3 className="text-base font-bold text-black leading-none">{pkg.coins} Coins</h3>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{pkg.label}</p>
                   </div>
                 </div>
@@ -98,8 +83,8 @@ export default function RechargePage() {
                   onClick={() => handleBuy(pkg)}
                   disabled={!!loadingId}
                   className={cn(
-                    "rounded-full px-8 h-12 font-black text-xs uppercase tracking-widest shadow-xl transition-all",
-                    pkg.popular ? "bg-[#00A2FF] text-white hover:bg-blue-600" : "bg-black text-white hover:bg-gray-800"
+                    "rounded-full px-6 h-10 font-black text-xs uppercase tracking-widest transition-all",
+                    pkg.popular ? "bg-[#00A2FF] text-white" : "bg-black text-white"
                   )}
                 >
                   {loadingId === pkg.id ? <Loader2 className="w-4 h-4 animate-spin" /> : `KES ${pkg.price}`}
@@ -109,25 +94,29 @@ export default function RechargePage() {
           ))}
         </div>
 
-        <div className="space-y-4 pt-4">
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Alternative Methods</p>
+        <div className="pt-4 border-t border-gray-50">
           <Button 
             onClick={() => router.push('/coin-sellers')}
-            variant="outline"
-            className="w-full h-16 rounded-[2rem] border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-between px-8 text-black font-black uppercase tracking-widest text-[10px] hover:bg-white hover:border-gray-300 transition-all"
+            variant="ghost"
+            className="w-full h-14 rounded-2xl bg-gray-50 flex items-center justify-between px-6 text-black font-bold text-xs hover:bg-gray-100 transition-all"
           >
             <div className="flex items-center gap-3">
-              <div className="bg-white p-2 rounded-xl shadow-sm"><MessageSquare className="w-4 h-4 text-green-500" /></div>
+              <MessageSquare className="w-4 h-4 text-[#00A2FF]" />
               Buy from Certified Seller
             </div>
-            <ExternalLink className="w-4 h-4 opacity-20" />
+            <ExternalLink className="w-4 h-4 opacity-30" />
           </Button>
+        </div>
+
+        <div className="flex items-center justify-center gap-2 text-gray-300">
+          <ShieldCheck className="w-4 h-4" />
+          <span className="text-[10px] font-bold uppercase tracking-widest">Secure Checkout</span>
         </div>
       </main>
 
-      <footer className="p-8 text-center bg-gray-50">
+      <footer className="p-8 text-center">
         <p className="text-[9px] font-medium text-gray-400 leading-relaxed uppercase tracking-widest px-6">
-          By purchasing, you agree to our Virtual Currency Terms. All sales are final and non-refundable.
+          Coins are added instantly after payment.
         </p>
       </footer>
     </div>
