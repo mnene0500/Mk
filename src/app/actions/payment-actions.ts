@@ -3,6 +3,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
 
 const PESAPAL_BASE_URL = "https://pay.pesapal.com/v3";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://qivo-five.vercel.app";
 
 async function getAuthToken() {
   const res = await fetch(`${PESAPAL_BASE_URL}/api/Auth/RequestToken`, {
@@ -36,7 +37,7 @@ export async function initiatePesaPalPayment(uid: string, amount: number, coins:
       currency: "KES",
       amount: amount,
       description: `Purchase of ${coins} QIVO Coins`,
-      callback_url: `https://qivo-five.vercel.app/payment-success`,
+      callback_url: `${APP_URL}/payment-success`,
       notification_id: process.env.PESAPAL_IPN_ID,
       billing_address: { 
         email_address: "billing@qivo.app",
