@@ -1,11 +1,10 @@
 
-# QIVO Production SQL (Native Vercel Economy)
+# QIVO Production SQL (Fixed Idempotency)
 
-Run these in your **Supabase SQL Editor** to initialize the mandatory tables and atomic helpers. This script is idempotent (safe to run multiple times).
+Run these in your **Supabase SQL Editor** to initialize the mandatory tables and atomic helpers. This script uses `SET TABLE` for the publication to avoid Error 42710 if tables are already members.
 
 ```sql
--- 1. SETUP ATOMIC HELPERS (Hardened)
--- Standardized on 'user_id' parameter to match Vercel Server Actions
+-- 1. SETUP ATOMIC HELPERS (Hardened for Production)
 CREATE OR REPLACE FUNCTION public.increment_diamonds(user_id UUID, amount NUMERIC)
 RETURNS VOID AS $$
 BEGIN
@@ -26,7 +25,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 2. CREATE CORE TABLES
+-- 2. CREATE CORE TABLES (Idempotent)
 CREATE TABLE IF NOT EXISTS public.users (
   uid UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT UNIQUE,
@@ -142,7 +141,7 @@ CREATE TABLE IF NOT EXISTS public.reports (
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
--- 3. ENABLE REALTIME SAFELY (Defensive block for Error 42710)
+-- 3. ENABLE REALTIME SAFELY
 DO $$ 
 BEGIN 
   IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
@@ -150,7 +149,8 @@ BEGIN
   END IF;
 END $$;
 
-ALTER PUBLICATION supabase_realtime ADD TABLE 
+-- 'SET TABLE' replaces the list, avoiding Error 42710
+ALTER PUBLICATION supabase_realtime SET TABLE 
   public.balances, 
   public.coin_history, 
   public.diamond_history, 
@@ -158,7 +158,8 @@ ALTER PUBLICATION supabase_realtime ADD TABLE
   public.messages, 
   public.users, 
   public.withdrawals, 
-  public.reports;
+  public.reports,
+  public.pending_payments;
 
 -- 4. ENABLE RLS & POLICIES
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
@@ -172,7 +173,7 @@ ALTER TABLE public.agencies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.withdrawals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 
--- 5. CREATE POLICIES (UPSERT SUPPORTED)
+-- 5. CREATE POLICIES (Hardened for UPSERT)
 DROP POLICY IF EXISTS "Users can manage own profile" ON public.users;
 CREATE POLICY "Users can manage own profile" ON public.users 
 FOR ALL USING (auth.uid() = uid) WITH CHECK (auth.uid() = uid);
