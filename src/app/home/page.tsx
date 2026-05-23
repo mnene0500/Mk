@@ -120,7 +120,16 @@ export default function HomePage() {
       </header>
 
       <div className="relative px-4 grid grid-cols-2 gap-3 -mt-4 z-20 mb-4">
-        <button onClick={() => router.push('/mystery-note')} className="h-28 bg-gradient-to-br from-[#FFA800] to-[#FF8A00] rounded-[1.5rem] p-4 flex flex-col items-start justify-end gap-1 shadow-xl active:scale-95 transition-all text-white text-left"><div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center mb-1"><FileText className="w-4 h-4 text-white" /></div><p className="text-base font-black leading-none">Mystery Note</p><p className="text-[8px] font-bold opacity-80 tracking-widest uppercase">SEND A NOTE</p></button>
+        <button 
+          onClick={() => router.push('/mystery-note')} 
+          className="h-28 bg-gradient-to-br from-[#00A2FF] to-[#0081CC] rounded-[1.5rem] p-4 flex flex-col items-start justify-end gap-1 shadow-xl active:scale-95 transition-all text-white text-left"
+        >
+          <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center mb-1">
+            <FileText className="w-4 h-4 text-white" />
+          </div>
+          <p className="text-base font-black leading-none">Mystery Note</p>
+          <p className="text-[8px] font-bold opacity-80 tracking-widest uppercase">SEND A NOTE</p>
+        </button>
         <button onClick={() => router.push('/tasks')} className="h-28 bg-gradient-to-br from-[#7C69FF] to-[#A28EFF] rounded-[1.5rem] p-4 flex flex-col items-start justify-end gap-1 shadow-xl active:scale-95 transition-all text-white text-left"><div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center mb-1"><Target className="w-4 h-4 text-white" /></div><p className="text-base font-black leading-none">Task Center</p><p className="text-[8px] font-bold opacity-80 tracking-widest uppercase">EARN REWARDS</p></button>
       </div>
 
