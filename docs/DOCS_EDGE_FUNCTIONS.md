@@ -82,17 +82,14 @@ serve(async (req) => {
         else if (paidAmount === 550) coins = 5000
         else if (paidAmount === 1000) coins = 10000
         else if (paidAmount === 1800) coins = 20000
-        else coins = Math.floor(paidAmount * 6.25) // Fallback
+        else coins = Math.floor(paidAmount * 6.25)
 
-        // 1. Check if already processed
         const { data: existing } = await supabase.from('processed_payments').select('order_tracking_id').eq('order_tracking_id', orderTrackingId).maybeSingle()
         if (existing) return new Response(JSON.stringify({ success: true, message: "Already fulfilled" }), { headers: corsHeaders })
 
-        // 2. Atomic Update
         await supabase.rpc("increment_coins", { user_uid, amount: coins })
         await supabase.from('processed_payments').insert({ order_tracking_id: orderTrackingId, user_id: user_uid, amount: paidAmount, coins })
         
-        // 3. Log History
         await supabase.from("coin_history").insert({
           user_id: user_uid,
           amount: coins,
@@ -127,10 +124,6 @@ serve(async (req) => {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!)
     const { action, uid, type, partnerId } = await req.json()
 
-    if (action === "get-config") {
-      return new Response(JSON.stringify({ success: true, appId: Number(Deno.env.get("ZEGO_APP_ID")), serverSecret: Deno.env.get("ZEGO_SERVER_SECRET") }), { headers: corsHeaders })
-    }
-
     if (action === "check-balance") {
       const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', uid).single()
       const { data: user } = await supabase.from('users').select('is_admin, is_coin_seller').eq('uid', uid).single()
@@ -145,11 +138,9 @@ serve(async (req) => {
       const cost = type === 'video' ? 150 : 70
       const ts = Date.now()
       
-      // 1. Deduct Caller
       await supabase.rpc("increment_coins", { user_uid: uid, amount: -cost })
       await supabase.from("coin_history").insert({ user_id: uid, amount: -cost, type: "call_cost", description: `${type.toUpperCase()} Call Minute`, timestamp: ts })
 
-      // 2. Reward Recipient (Fixed 50 Diamonds for Female only if caller is Male)
       const { data: caller } = await supabase.from('users').select('gender, name').eq('uid', uid).single()
       const { data: recipient } = await supabase.from('users').select('gender').eq('uid', partnerId).single()
 
@@ -189,24 +180,10 @@ serve(async (req) => {
     const { action, ...params } = await req.json()
     const ts = Date.now()
 
-    if (action === "daily-check-in") {
-      const { uid } = params
-      const { data: user } = await supabase.from("users").select("*").eq("uid", uid).single()
-      if (!user) throw new Error("Profile not found")
-      
-      const streak = (user.check_in_streak || 0) + 1
-      const rewards = [2, 2, 5, 2, 2, 2, 10]
-      const amount = rewards[(streak - 1) % 7]
-
-      await supabase.from("users").update({ last_check_in_date: new Date().toISOString(), check_in_streak: streak }).eq("uid", uid)
-      await supabase.rpc("increment_coins", { user_uid: uid, amount })
-      await supabase.from("coin_history").insert({ user_id: uid, amount, type: "checkin", description: `Daily Check-in Day ${streak}`, timestamp: ts })
-      
-      return new Response(JSON.stringify({ success: true, amount, day: streak }), { headers: corsHeaders })
-    }
-
     if (action === "send-gift") {
       const { senderUid, recipientUid, coinAmount, giftName } = params
+      const ids = [senderUid, recipientUid].sort()
+      const chatId = `direct_${ids[0]}_${ids[1]}`
       
       // 1. Deduct Sender
       await supabase.rpc("increment_coins", { user_uid: senderUid, amount: -coinAmount })
@@ -229,21 +206,28 @@ serve(async (req) => {
         timestamp: ts 
       })
 
+      // 4. INSERT INTO CHAT CONVERSATION
+      const giftMsg = `[Gift: ${giftName}]`
+      await supabase.from('messages').insert({ chat_id: chatId, sender_id: senderUid, text: giftMsg, is_gift: true, timestamp: ts })
+      await supabase.from('chats').upsert({ id: chatId, last_message: giftMsg, last_message_at: ts, participant_ids: [senderUid, recipientUid] })
+
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders })
     }
 
-    if (action === "resolve-report") {
-      const { adminUid, reportId, reporterUid } = params
-      await supabase.from('reports').update({ status: 'resolved' }).eq('id', reportId)
+    if (action === "daily-check-in") {
+      const { uid } = params
+      const { data: user } = await supabase.from("users").select("*").eq("uid", uid).single()
+      if (!user) throw new Error("Profile not found")
       
-      const ids = [adminUid, reporterUid].sort()
-      const chatId = `direct_${ids[0]}_${ids[1]}`
-      const msg = "The QIVO team is resolving your complaint. Thank you for your patience."
+      const streak = (user.check_in_streak || 0) + 1
+      const rewards = [2, 2, 5, 2, 2, 2, 10]
+      const amount = rewards[(streak - 1) % 7]
+
+      await supabase.from("users").update({ last_check_in_date: new Date().toISOString(), check_in_streak: streak }).eq("uid", uid)
+      await supabase.rpc("increment_coins", { user_uid: uid, amount })
+      await supabase.from("coin_history").insert({ user_id: uid, amount, type: "checkin", description: `Daily Check-in Day ${streak}`, timestamp: ts })
       
-      await supabase.from('chats').upsert({ id: chatId, participant_ids: ids, last_message: msg, last_message_at: ts })
-      await supabase.from('messages').insert({ chat_id: chatId, sender_id: adminUid, text: msg, timestamp: ts })
-      
-      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders })
+      return new Response(JSON.stringify({ success: true, amount, day: streak }), { headers: corsHeaders })
     }
 
     return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400, headers: corsHeaders })

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, Suspense, useCallback, useRef } from "react"
@@ -6,7 +7,7 @@ import { supabase } from "@/lib/supabase"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Send, ChevronLeft, Loader2, User, Phone, Video, Ban, Lock, ShieldAlert } from "lucide-react"
+import { Send, ChevronLeft, Loader2, User, Phone, Video, Ban, Lock, ShieldAlert, Gem } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
@@ -17,6 +18,7 @@ interface Message {
   text: string
   sender_id: string
   timestamp: number
+  is_gift?: boolean
   is_optimistic?: boolean
 }
 
@@ -46,7 +48,6 @@ function ChatsContent() {
   const [partnerProfile, setPartnerProfile] = useState<any>(null)
   const [userProfile, setUserProfile] = useState<any>(null)
   const [activeChatClearedAt, setActiveChatClearedAt] = useState<number>(0)
-  const scrollRef = useRef<HTMLDivElement>(null)
 
   // Auth Guard
   useEffect(() => {
@@ -142,7 +143,6 @@ function ChatsContent() {
 
     const { error } = await supabase.from('messages').insert({ chat_id: chatId, text, sender_id: currentUser.id, timestamp })
     if (!error) {
-      // Ensure current user ID is at index 0 of participant_ids to mark them as the last sender for unread logic
       await supabase.from('chats').upsert({ id: chatId, last_message: text, last_message_at: timestamp, participant_ids: [currentUser.id, startWithId] })
       await markAsSeen(chatId, timestamp)
     } else {
@@ -153,19 +153,15 @@ function ChatsContent() {
 
   const handleCall = async (type: 'voice' | 'video') => {
     if (!currentUser || !startWithId || !partnerProfile || !chatId) return
-    
-    // STRICT PRE-CHECK: User must have coins for first minute to start
     const check = await checkCallBalanceAction(currentUser.id, type)
     if (!check.success) {
-      toast({ variant: "destructive", title: "Insufficient Coins", description: "You need more coins to start this call." })
+      toast({ variant: "destructive", title: "Insufficient Coins" })
       router.push("/recharge")
       return
     }
-    
     router.push(`/call/${chatId}?type=${type}&partner=${encodeURIComponent(partnerProfile.name)}&partnerId=${startWithId}&caller=true`)
   }
 
-  // CHECK BLOCK STATUS
   const isBlocked = userProfile && partnerProfile && (
     (userProfile.blocking || []).includes(partnerProfile.uid) || 
     (userProfile.blocked_by || []).includes(partnerProfile.uid)
@@ -209,12 +205,7 @@ function ChatsContent() {
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
         <div className="flex items-center gap-3 flex-1">
           <Avatar className="w-10 h-10 border"><AvatarImage src={partnerProfile?.photo_url} className="object-cover" /><AvatarFallback>{partnerProfile?.name?.[0]}</AvatarFallback></Avatar>
-          <div>
-            <p className="font-black text-sm leading-none">{partnerProfile?.name || '...'}</p>
-            <p className="text-[9px] font-bold text-green-500 uppercase tracking-widest mt-1">
-              {isBlocked ? "Unavailable" : "Available"}
-            </p>
-          </div>
+          <div><p className="font-black text-sm leading-none">{partnerProfile?.name || '...'}</p><p className="text-[9px] font-bold text-green-500 uppercase tracking-widest mt-1">{isBlocked ? "Unavailable" : "Available"}</p></div>
         </div>
         {!isBlocked && (
           <div className="flex gap-1">
@@ -226,7 +217,11 @@ function ChatsContent() {
 
       <main className="flex-1 overflow-y-auto p-6 flex flex-col-reverse gap-4 bg-gray-50 no-scrollbar">
         {messages.map(m => (
-          <div key={m.id} className={cn("max-w-[80%] p-4 rounded-[2rem] text-sm font-medium shadow-sm animate-in zoom-in-95", m.sender_id === currentUser?.id ? "bg-[#00A2FF] text-white self-end rounded-br-none" : "bg-white text-black self-start rounded-bl-none border")}>
+          <div key={m.id} className={cn("max-w-[80%] p-4 rounded-[2rem] text-sm font-medium shadow-sm animate-in zoom-in-95 relative", 
+            m.sender_id === currentUser?.id ? "bg-[#00A2FF] text-white self-end rounded-br-none" : "bg-white text-black self-start rounded-bl-none border",
+            m.is_gift && "bg-gradient-to-br from-pink-500 to-rose-600 text-white border-none"
+          )}>
+            {m.is_gift && <Gem className="w-4 h-4 text-white/40 absolute -top-2 -right-1" />}
             {m.text}
           </div>
         ))}
@@ -235,20 +230,13 @@ function ChatsContent() {
       <footer className="relative p-4 border-t bg-white">
         {isBlocked ? (
           <div className="absolute inset-0 bg-white/95 backdrop-blur-md z-50 flex items-center justify-center p-4">
-             <div className="flex items-center gap-3 bg-red-50 text-red-600 px-6 py-3 rounded-2xl border border-red-100 shadow-sm animate-in slide-in-from-bottom-2">
-                <ShieldAlert className="w-5 h-5" />
-                <span className="text-xs font-black uppercase tracking-widest">Communication Blocked</span>
+             <div className="flex items-center gap-3 bg-red-50 text-red-600 px-6 py-3 rounded-2xl border border-red-100">
+                <ShieldAlert className="w-5 h-5" /><span className="text-xs font-black uppercase tracking-widest">Communication Blocked</span>
              </div>
           </div>
         ) : (
           <div className="flex gap-2">
-            <input 
-              value={newMessage} 
-              onChange={e => setNewMessage(e.target.value)} 
-              onKeyDown={e => e.key === 'Enter' && handleSendMessage()} 
-              className="flex-1 h-12 bg-gray-50 rounded-2xl px-5 text-sm font-bold outline-none border border-transparent focus:border-[#00A2FF]/20 transition-all" 
-              placeholder="Type something..." 
-            />
+            <input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendMessage()} className="flex-1 h-12 bg-gray-50 rounded-2xl px-5 text-sm font-bold outline-none border border-transparent focus:border-[#00A2FF]/20 transition-all" placeholder="Type something..." />
             <Button onClick={handleSendMessage} size="icon" className="rounded-full h-12 w-12 bg-[#00A2FF] shadow-lg shadow-blue-100"><Send className="w-5 h-5" /></Button>
           </div>
         )}

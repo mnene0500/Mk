@@ -37,7 +37,7 @@
     "@radix-ui/react-toast": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.1.8",
     "@supabase/supabase-js": "^2.48.1",
-    "@zegocloud/zego-uikit-prebuilt": "^2.11.1",
+    "agora-rtc-sdk-ng": "^4.23.1",
     "browser-image-compression": "^2.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
