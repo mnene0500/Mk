@@ -137,43 +137,46 @@ export default function EditProfilePage() {
     try {
       const finalFormData = { ...formData };
       
-      // 1. Handle Profile Photo with Cache Buster logic
+      // 1. Upload Profile Avatar if changed (base64 check)
       if (formData.photo_url.startsWith('data:image')) {
         const { blob } = base64ToBlob(formData.photo_url);
-        const freshUrl = await uploadProfilePhoto(blob, user.id);
-        finalFormData.photo_url = freshUrl;
+        const uploadedUrl = await uploadProfilePhoto(blob, user.id);
+        finalFormData.photo_url = uploadedUrl;
       }
 
-      // 2. Handle Gallery Photos
-      const uploadedPhotos = [];
-      for (let p of formData.additional_photos) {
+      // 2. Upload Gallery Photos if changed
+      const finalGalleryUrls: string[] = [];
+      for (const p of formData.additional_photos) {
         if (p.startsWith('data:image')) {
           const { blob } = base64ToBlob(p);
-          const url = await uploadPostPhoto(blob, user.id);
-          uploadedPhotos.push(url);
-        } else {
-          uploadedPhotos.push(p);
+          const uploadedUrl = await uploadPostPhoto(blob, user.id);
+          finalGalleryUrls.push(uploadedUrl);
+        } else if (p) {
+          finalGalleryUrls.push(p);
         }
       }
-      finalFormData.additional_photos = uploadedPhotos;
+      finalFormData.additional_photos = finalGalleryUrls;
 
-      // 3. Update Database (Atomic Save)
+      // 3. ATOMIC DATABASE UPDATE
       const { error } = await supabase.from('users').update({
-        ...finalFormData,
+        name: finalFormData.name,
+        interests: finalFormData.interests,
+        dob: finalFormData.dob,
+        country: finalFormData.country,
+        looking_for: finalFormData.looking_for,
+        education_level: finalFormData.education_level,
+        photo_url: finalFormData.photo_url,
+        additional_photos: finalFormData.additional_photos,
         updated_at: new Date().toISOString()
       }).eq('uid', user.id)
       
       if (error) throw error;
 
-      // 4. Update Local State immediately
+      // 4. Force state update and cache clear
       setFormData(finalFormData);
-      
-      toast({ title: "Profile Saved", description: "Your changes are now live." })
-      
-      // Clear legacy caches to ensure other screens re-fetch
       sessionStorage.clear();
-      localStorage.removeItem('user-profile-cache');
       
+      toast({ title: "Profile Saved", description: "Your photos are now permanent." })
       router.replace('/profile')
     } catch (error: any) {
       console.error("[Profile Save Error]", error.message);
@@ -184,6 +187,8 @@ export default function EditProfilePage() {
   }
 
   if (loading) return <div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
+
+  const avatarKey = `${formData.photo_url}?t=${Date.now()}`;
 
   return (
     <div className="flex-1 bg-white min-h-screen flex flex-col pb-20">
@@ -196,7 +201,7 @@ export default function EditProfilePage() {
         <div className="flex flex-col items-center">
           <div className="relative group cursor-pointer" onClick={() => { setTargetPhotoIndex('profile'); fileInputRef.current?.click(); }}>
             <Avatar className="w-28 h-28 border-4 border-gray-50 shadow-xl overflow-hidden">
-              <AvatarImage src={formData.photo_url} key={formData.photo_url} className="object-cover" />
+              <AvatarImage key={avatarKey} src={avatarKey} className="object-cover" />
               <AvatarFallback className="bg-gray-100"><Camera className="w-8 h-8 text-gray-300" /></AvatarFallback>
             </Avatar>
             <div className="absolute bottom-0 right-0 bg-[#00A2FF] p-2 rounded-full text-white shadow-lg"><Camera className="w-4 h-4" /></div>
@@ -208,7 +213,12 @@ export default function EditProfilePage() {
           <div className="grid grid-cols-4 gap-3">
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="relative aspect-square rounded-2xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden cursor-pointer" onClick={() => { setTargetPhotoIndex(i); fileInputRef.current?.click(); }}>
-                {formData.additional_photos[i] ? (<><Image src={formData.additional_photos[i]} key={formData.additional_photos[i]} alt={`P${i}`} fill className="object-cover" sizes="25vw" /><button onClick={(e) => { e.stopPropagation(); const n = [...formData.additional_photos]; n.splice(i,1); setFormData({...formData, additional_photos: n}); }} className="absolute top-1 right-1 bg-black/50 p-1 rounded-full text-white"><X className="w-3 h-3" /></button></>) : (<Plus className="w-6 h-6 text-gray-300" />)}
+                {formData.additional_photos[i] ? (
+                  <>
+                    <Image key={`${formData.additional_photos[i]}-${i}`} src={formData.additional_photos[i]} alt={`P${i}`} fill className="object-cover" sizes="25vw" />
+                    <button onClick={(e) => { e.stopPropagation(); const n = [...formData.additional_photos]; n.splice(i,1); setFormData({...formData, additional_photos: n}); }} className="absolute top-1 right-1 bg-black/50 p-1 rounded-full text-white"><X className="w-3 h-3" /></button>
+                  </>
+                ) : (<Plus className="w-6 h-6 text-gray-300" />)}
               </div>
             ))}
           </div>
@@ -224,7 +234,7 @@ export default function EditProfilePage() {
           <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Looking For</Label><Select onValueChange={(val) => setFormData({...formData, looking_for: val})} value={formData.looking_for}><SelectTrigger className="rounded-2xl h-14 bg-gray-50"><SelectValue /></SelectTrigger><SelectContent className="rounded-2xl">{LOOKING_FOR_OPTIONS.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent></Select></div>
         </div>
       </main>
-      <input type="file" min-h-svh ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
+      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
       <Dialog open={cropOpen} onOpenChange={setCropOpen}>
         <DialogContent className="max-w-md h-[500px] p-0 overflow-hidden rounded-[2.5rem]">
           <DialogHeader className="p-4 border-b"><DialogTitle className="text-center font-black uppercase text-[10px] tracking-widest">Adjust Photo</DialogTitle></DialogHeader>

@@ -57,7 +57,6 @@ export default function HomePage() {
       setProfile(data as any);
       setStatusChecked(true);
 
-      // Listen for profile changes (specifically photo_url for instant updates)
       const channel = supabase.channel(`home-profile-sync:${currentUser.id}`)
         .on('postgres_changes', { event: 'UPDATE', table: 'users', filter: `uid=eq.${currentUser.id}` }, (payload) => {
           setProfile(payload.new as any)
@@ -69,7 +68,6 @@ export default function HomePage() {
     setupProfile();
   }, [isInitialized, currentUser, authLoading, router])
 
-  // 2. Fetch Discovery Users
   const fetchUsers = useCallback(async (isManual = false) => {
     if (!profile?.gender) return;
     if (isManual) setIsRefreshing(true);
@@ -103,12 +101,15 @@ export default function HomePage() {
 
   if (!statusChecked) return <div className="fixed inset-0 bg-white" />
 
+  // CACHE BUSTER
+  const avatarKey = profile?.photo_url ? `${profile.photo_url}?t=${Date.now()}` : "";
+
   return (
     <div className="flex-1 pb-24 bg-white min-h-screen relative select-none animate-in fade-in duration-300">
       <header className="bg-[#00A2FF] h-[70px] relative overflow-hidden flex items-center px-6 justify-between">
         <h1 className="text-3xl font-logo text-white drop-shadow-md">QIVO</h1>
         <Avatar className="w-9 h-9 border-2 border-white/20 shadow-lg cursor-pointer" onClick={() => router.push('/profile')}>
-          <AvatarImage src={profile?.photo_url} className="object-cover" />
+          <AvatarImage key={avatarKey} src={avatarKey} className="object-cover" />
           <AvatarFallback className="bg-white/10 text-white"><User className="w-4 h-4" /></AvatarFallback>
         </Avatar>
         <h1 className="absolute -bottom-4 left-4 text-7xl font-black text-white opacity-5 -rotate-12 pointer-events-none select-none">DISCOVER</h1>

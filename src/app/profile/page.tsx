@@ -186,7 +186,7 @@ export default function MePage() {
     }
     fetchProfile()
 
-    // 2. Real-time Profile Listener (Ensures photos update instantly everywhere)
+    // 2. Real-time Profile Listener
     const profileChannel = supabase.channel(`profile-sync:${user.id}`)
       .on('postgres_changes', { event: '*', table: 'users', filter: `uid=eq.${user.id}` }, (payload) => {
         setProfile(payload.new as any)
@@ -200,7 +200,6 @@ export default function MePage() {
       })
       .subscribe()
       
-    // Initial balances
     supabase.from('balances').select('*').eq('user_id', user.id).single().then(({ data }) => {
       if (data) setBalances({ coins: data.coins || 0, diamonds: Number(data.diamonds) || 0 })
     })
@@ -224,8 +223,8 @@ export default function MePage() {
     return <div className="flex-1 bg-[#F8F9FA] min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
   }
 
-  // Generate fresh photo URL with cache buster
-  const freshPhotoUrl = profile?.photo_url ? `${profile.photo_url}${profile.photo_url.includes('?') ? '&' : '?'}t=${Date.now()}` : null;
+  // FORCE REFRESH LOGIC
+  const freshPhotoUrl = profile?.photo_url ? `${profile.photo_url}?t=${Date.now()}` : null;
   
   return (
     <div className="flex-1 pb-24 bg-[#F8F9FA] min-h-screen relative select-none animate-in fade-in duration-300">
@@ -244,7 +243,15 @@ export default function MePage() {
           <div className="relative mb-4">
             <div className="relative w-28 h-28 rounded-full shadow-2xl overflow-hidden bg-muted border-4 border-white/20">
               {freshPhotoUrl ? (
-                <Image key={freshPhotoUrl} src={freshPhotoUrl} alt={profile?.name || "User"} fill className="object-cover" priority sizes="112px" />
+                <Image 
+                  key={freshPhotoUrl} 
+                  src={freshPhotoUrl} 
+                  alt={profile?.name || "User"} 
+                  fill 
+                  className="object-cover" 
+                  priority 
+                  sizes="112px" 
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-gray-100">
                   <User className="w-12 h-12 text-gray-300" />

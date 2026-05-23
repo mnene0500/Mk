@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 /**
  * @fileOverview Central Supabase Client for the browser and server.
- * Standardized to use a single 'photos' bucket for all production assets.
+ * Standardized to use the 'photos' bucket with timestamped paths.
  */
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
@@ -42,19 +42,17 @@ export function base64ToBlob(base64: string): { blob: Blob, contentType: string 
 }
 
 /**
- * Uploads a profile photo to the 'photos' bucket using a timestamped path.
- * Pattern: [userId]/avatar-[timestamp].jpg
+ * Uploads a profile photo to the 'photos' bucket.
+ * Exact path: [userId]/[timestamp].jpg
  */
-export async function uploadProfilePhoto(blob: Blob, userId: string) {
-  // Use exact approach requested: userId/timestamp.jpg
-  const filePath = `${userId}/avatar-${Date.now()}.jpg`;
+export async function uploadProfilePhoto(file: File | Blob, userId: string) {
+  const filePath = `${userId}/${Date.now()}.jpg`;
 
   const { error } = await supabase.storage
     .from('photos')
-    .upload(filePath, blob, {
+    .upload(filePath, file, {
       cacheControl: '3600',
       upsert: true,
-      contentType: 'image/jpeg'
     });
 
   if (error) {
@@ -66,27 +64,25 @@ export async function uploadProfilePhoto(blob: Blob, userId: string) {
     .from('photos')
     .getPublicUrl(filePath);
 
-  // Return fresh URL with cache buster
-  return `${data.publicUrl}?t=${Date.now()}`;
+  return data.publicUrl;
 }
 
 /**
  * Uploads gallery or proof photos to the 'photos' bucket.
- * Pattern: [userId]/post-[uuid].jpg
+ * Exact path: [userId]/[uuid].jpg
  */
-export async function uploadPostPhoto(blob: Blob, userId: string, subfolder: string = '') {
-  const uniqueId = crypto.randomUUID();
-  const folder = subfolder ? `${userId}/${subfolder}` : `${userId}`;
-  const filePath = `${folder}/post-${uniqueId}.jpg`;
+export async function uploadPostPhoto(file: File | Blob, userId: string) {
+  const filePath = `${userId}/${crypto.randomUUID()}.jpg`;
 
   const { error } = await supabase.storage
     .from('photos')
-    .upload(filePath, blob, {
-      contentType: 'image/jpeg'
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: false
     });
 
   if (error) {
-    console.error("[Post Upload Error]", error);
+    console.error("[Gallery Upload Error]", error);
     throw error;
   }
 
