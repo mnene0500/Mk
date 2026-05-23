@@ -5,6 +5,10 @@ import { Providers } from '@/components/providers';
 import { AppShell } from '@/components/layout/AppShell';
 import Script from 'next/script';
 
+// DISABLE ALL NEXT.JS CACHING
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
@@ -49,6 +53,12 @@ export default function RootLayout({
       className={`${inter.variable} ${pacifico.variable}`}
       data-scroll-behavior="smooth"
     >
+      <head>
+        {/* BROWSER CACHE HEADERS */}
+        <meta httpEquiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+        <meta httpEquiv="Pragma" content="no-cache" />
+        <meta httpEquiv="Expires" content="0" />
+      </head>
       <body className="font-body antialiased bg-background min-h-screen flex flex-col">
         <Providers>
           <AppShell>

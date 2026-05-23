@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react"
@@ -10,6 +9,10 @@ import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+
+// FORCE RE-FETCH EVERY TIME
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 interface UserProfile {
   uid: string
@@ -52,6 +55,7 @@ export default function HomePage() {
     if (!currentUser) { router.replace("/welcome"); return; }
 
     const setupProfile = async () => {
+      // Force fresh fetch from Supabase
       const { data } = await supabase.from('users').select('*').eq('uid', currentUser.id).maybeSingle();
       if (!data || !data.onboarding_complete) { router.replace("/fastonboard"); return; }
       setProfile(data as any);
@@ -137,7 +141,7 @@ export default function HomePage() {
           <div className="grid grid-cols-2 gap-2.5 pb-10">
             {filteredUsers.map((u) => (
               <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.25] rounded-[1.2rem] shadow-sm bg-gray-50 group active:scale-95 transition-all cursor-pointer" onClick={() => router.push(`/users/${u.uid}`)}>
-                <Image src={u.photo_url} alt={u.name} fill className="object-cover" sizes="(max-width: 768px) 50vw, 300px" />
+                <Image src={`${u.photo_url}?t=${Date.now()}`} alt={u.name} fill className="object-cover" sizes="(max-width: 768px) 50vw, 300px" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-90" />
                 <div onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }} className="absolute top-2.5 right-2.5 px-3.5 h-7 bg-[#00A2FF] rounded-full flex items-center justify-center text-white shadow-lg active:scale-90 transition-all z-20"><span className="text-[8px] font-black uppercase tracking-widest">CHAT</span></div>
                 <div className="absolute inset-x-0 bottom-0 p-3 text-white">

@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
@@ -17,6 +16,9 @@ import Cropper from "react-easy-crop"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import Image from "next/image"
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const AFRICAN_COUNTRIES = [
   "Kenya", "Tanzania", "Uganda", "Rwanda", "Burundi", "South Sudan", "Ethiopia", "Somalia", "Eritrea", "Djibouti", "South Africa", "Nigeria", "Ghana", "Egypt"
 ]
@@ -29,10 +31,6 @@ const EDUCATION_OPTIONS = [
   "High School", "Associate Degree", "Bachelor's Degree", "Master's Degree", "PhD", "Prefer not to say"
 ]
 
-/**
- * @fileOverview Hardened Edit Profile screen.
- * Sequential upload and explicit cache-busting ensures changes are permanent and visible.
- */
 export default function EditProfilePage() {
   const router = useRouter()
   const { user } = useUser()
@@ -64,6 +62,7 @@ export default function EditProfilePage() {
   useEffect(() => {
     if (!user?.id) return
     const fetchProfile = async () => {
+      // Force fresh fetch
       const { data } = await supabase.from('users').select('*').eq('uid', user.id).maybeSingle()
       if (data) {
         setFormData({
@@ -143,13 +142,11 @@ export default function EditProfilePage() {
     try {
       let finalPhotoUrl = formData.photo_url;
       
-      // 1. Upload Avatar if it's base64 (newly cropped)
       if (formData.photo_url.startsWith('data:image')) {
         const { blob } = base64ToBlob(formData.photo_url);
         finalPhotoUrl = await uploadProfilePhoto(blob, user.id);
       }
 
-      // 2. Upload Gallery Photos if they are base64
       const finalGalleryUrls: string[] = [];
       for (const p of formData.additional_photos) {
         if (p && p.startsWith('data:image')) {
@@ -161,7 +158,6 @@ export default function EditProfilePage() {
         }
       }
 
-      // 3. PERSIST ALL DETAILS USING UPSERT FOR RESILIENCE
       const updateData = {
         uid: user.id,
         name: formData.name,
@@ -175,7 +171,6 @@ export default function EditProfilePage() {
         updated_at: new Date().toISOString()
       };
 
-      // Atomic Upsert ensures that if row exists it updates, if not it creates
       const { error: dbError } = await supabase
         .from('users')
         .upsert(updateData, { onConflict: 'uid' });
@@ -184,9 +179,9 @@ export default function EditProfilePage() {
 
       toast({ title: "Profile Saved", description: "Your details have been updated." })
       
-      // Force refresh across the app
+      // PURGE CACHE AND NAVIGATE
       router.refresh();
-      setTimeout(() => router.push('/profile'), 800);
+      window.location.href = '/profile';
     } catch (error: any) {
       console.error("[Profile Save Crash]", error);
       toast({ variant: "destructive", title: "Save Failed", description: error.message })
@@ -228,7 +223,7 @@ export default function EditProfilePage() {
               <div key={i} className="relative aspect-square rounded-2xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden cursor-pointer active:scale-95 transition-transform" onClick={() => { setTargetPhotoIndex(i); fileInputRef.current?.click(); }}>
                 {formData.additional_photos[i] ? (
                   <>
-                    <Image key={`${formData.additional_photos[i]}-${i}`} src={formData.additional_photos[i]} alt={`P${i}`} fill className="object-cover" sizes="20vw" />
+                    <Image key={`${formData.additional_photos[i]}-${i}`} src={`${formData.additional_photos[i]}?t=${Date.now()}`} alt={`P${i}`} fill className="object-cover" sizes="20vw" />
                     <button onClick={(e) => { e.stopPropagation(); const n = [...formData.additional_photos]; n.splice(i,1); setFormData({...formData, additional_photos: n}); }} className="absolute top-1 right-1 bg-black/50 p-1.5 rounded-full text-white backdrop-blur-sm"><X className="w-3.5 h-3.5" /></button>
                   </>
                 ) : (<Plus className="w-6 h-6 text-gray-300" />)}

@@ -1,4 +1,3 @@
-
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -10,6 +9,8 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   images: {
+    // DISABLE IMAGE CACHING
+    minimumCacheTTL: 0,
     remotePatterns: [
       {
         protocol: 'https',

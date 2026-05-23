@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState } from "react"
@@ -39,6 +38,9 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { createAgencyAction, joinAgencyAction } from "@/app/actions/matchflow-actions"
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 interface UserProfile {
   uid: string
@@ -95,7 +97,7 @@ function JoinAgencyDialog({ userUid }: { userUid: string }) {
             className="rounded-2xl h-16 text-center text-2xl font-bold tracking-[0.5em]" 
           />
         </div>
-        <Button onClick={handleJoin} disabled={loading || code.length !== 5} className="w-full h-14 bg-pink-500 rounded-full font-bold uppercase shadow-lg">
+        <Button onClick={handleJoin} disabled={loading} className="w-full h-14 bg-pink-500 rounded-full font-bold uppercase shadow-lg">
           Apply Now
         </Button>
       </DialogContent>
@@ -176,7 +178,7 @@ export default function MePage() {
     if (!user && isInitialized && !authLoading) router.replace("/welcome")
     if (!user?.id) return
 
-    // 1. Initial Fetch
+    // 1. Initial Fetch (Always Fresh)
     const fetchProfile = async () => {
       const { data } = await supabase.from('users').select('*').eq('uid', user.id).maybeSingle()
       if (data) {
