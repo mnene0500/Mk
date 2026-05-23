@@ -137,13 +137,13 @@ export default function EditProfilePage() {
     try {
       const finalFormData = { ...formData };
       
-      // 1. Handle Profile Photo (BUCKET: profile-photos, OVERWRITE: true)
+      // 1. Handle Profile Photo (BUCKET: profile-photos)
       if (formData.photo_url.startsWith('data:image')) {
         const { blob } = base64ToBlob(formData.photo_url);
         finalFormData.photo_url = await uploadProfilePhoto(blob, user.id);
       }
 
-      // 2. Handle Gallery Photos (BUCKET: post-photos, UNIQUE FILENAMES)
+      // 2. Handle Gallery Photos (BUCKET: post-photos)
       const uploadedPhotos = [];
       for (let i = 0; i < formData.additional_photos.length; i++) {
         const p = formData.additional_photos[i];
@@ -158,10 +158,18 @@ export default function EditProfilePage() {
       finalFormData.additional_photos = uploadedPhotos;
 
       // 3. Update Database
-      const { error } = await supabase.from('users').update(finalFormData).eq('uid', user.id)
+      const { error } = await supabase.from('users').update({
+        ...finalFormData,
+        updated_at: new Date().toISOString()
+      }).eq('uid', user.id)
+      
       if (error) throw error;
 
-      toast({ title: "Profile Saved", description: "Your updates are now live." })
+      toast({ title: "Profile Saved", description: "Changes applied globally." })
+      
+      // Clear legacy caches to ensure Home/Profile screens re-fetch if they aren't using the realtime listener
+      sessionStorage.removeItem('user-profile-cache');
+      
       router.replace('/profile')
     } catch (error: any) {
       console.error("[Profile Save Error]", error.message);
@@ -183,10 +191,13 @@ export default function EditProfilePage() {
       <main className="flex-1 p-6 space-y-8 overflow-y-auto no-scrollbar">
         <div className="flex flex-col items-center">
           <div className="relative group cursor-pointer" onClick={() => { setTargetPhotoIndex('profile'); fileInputRef.current?.click(); }}>
-            <Avatar className="w-28 h-28 border-4 border-gray-50 shadow-xl"><AvatarImage src={formData.photo_url} className="object-cover" /><AvatarFallback className="bg-gray-100"><Camera className="w-8 h-8 text-gray-300" /></AvatarFallback></Avatar>
+            <Avatar className="w-28 h-28 border-4 border-gray-50 shadow-xl overflow-hidden">
+              <AvatarImage src={formData.photo_url} className="object-cover" />
+              <AvatarFallback className="bg-gray-100"><Camera className="w-8 h-8 text-gray-300" /></AvatarFallback>
+            </Avatar>
             <div className="absolute bottom-0 right-0 bg-[#00A2FF] p-2 rounded-full text-white shadow-lg"><Camera className="w-4 h-4" /></div>
           </div>
-          <p className="mt-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Profile Photo</p>
+          <p className="mt-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Tap to change avatar</p>
         </div>
         <div className="space-y-4">
           <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Gallery (Max 4)</Label>

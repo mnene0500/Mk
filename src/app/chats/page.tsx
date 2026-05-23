@@ -1,6 +1,7 @@
+
 "use client"
 
-import { useEffect, useState, Suspense } from "react"
+import { useEffect, useState, Suspense, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -73,8 +74,6 @@ const GIFTS = [
   { id: 'universe', name: 'Universe', price: 30000, icon: '🌌' },
 ]
 
-let globalChatSummaries: ChatSummary[] = [];
-
 function ChatsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -85,8 +84,8 @@ function ChatsContent() {
   const [chatId, setChatId] = useState<string | null>(null)
   const [newMessage, setNewMessage] = useState("")
   const [messages, setMessages] = useState<Message[]>([])
-  const [chatSummaries, setChatSummaries] = useState<ChatSummary[]>(globalChatSummaries)
-  const [loading, setLoading] = useState(globalChatSummaries.length === 0)
+  const [chatSummaries, setChatSummaries] = useState<ChatSummary[]>([])
+  const [loading, setLoading] = useState(true)
   const [partnerProfile, setPartnerProfile] = useState<any>(null)
   const [userProfile, setUserProfile] = useState<any>(null)
   const [userBalance, setUserBalance] = useState<number>(0)
@@ -94,8 +93,6 @@ function ChatsContent() {
   const [activeChatClearedAt, setActiveChatClearedAt] = useState<number>(0)
   
   const [chatToDelete, setChatToDelete] = useState<ChatSummary | null>(null)
-  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null)
-  const [isLongPressing, setIsLongPressing] = useState(false)
   const [showGiftSelector, setShowGiftSelector] = useState(false)
 
   // Auth Guard
@@ -105,110 +102,157 @@ function ChatsContent() {
     }
   }, [currentUser, isInitialized, authLoading, router])
 
+  // Mark as seen logic
   const markAsSeen = async (id: string, customTime?: number) => {
     if (!currentUser?.id) return
-    const { data } = await supabase.from('chats').select('last_seen_at').eq('id', id).single()
+    const { data } = await supabase.from('chats').select('last_seen_at').eq('id', id).maybeSingle()
     const newSeenAt = { ...(data?.last_seen_at || {}), [currentUser.id]: customTime || Date.now() }
     await supabase.from('chats').update({ last_seen_at: newSeenAt }).eq('id', id)
   }
 
+  // Reactive My Info
   useEffect(() => {
     if (!currentUser?.id) return
-    const fetchMyInfo = async () => {
-      const { data: p } = await supabase.from('users').select('*').eq('uid', currentUser.id).single()
-      const { data: b } = await supabase.from('balances').select('coins').eq('user_id', currentUser.id).single()
-      if (p) setUserProfile(p)
-      if (b) setUserBalance(Number(b.coins) || 0)
-    }
-    fetchMyInfo()
     
-    const balChan = supabase.channel(`my-bal-${currentUser.id}`)
-      .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${currentUser.id}` }, (payload) => {
+    // Listen for my own profile changes (photos, roles)
+    const myProfileChannel = supabase.channel(`my-profile-chat:${currentUser.id}`)
+      .on('postgres_changes', { event: '*', table: 'users', filter: `uid=eq.${currentUser.id}` }, (payload) => {
+        setUserProfile(payload.new)
+      })
+      .subscribe()
+
+    supabase.from('users').select('*').eq('uid', currentUser.id).maybeSingle().then(({ data }) => {
+      if (data) setUserProfile(data)
+    })
+
+    // Listen for my balances
+    const balChan = supabase.channel(`my-bal-chat-${currentUser.id}`)
+      .on('postgres_changes', { event: '*', table: 'balances', filter: `user_id=eq.${currentUser.id}` }, (payload) => {
         setUserBalance(Number(payload.new.coins) || 0)
       }).subscribe()
+
+    supabase.from('balances').select('coins').eq('user_id', currentUser.id).maybeSingle().then(({ data }) => {
+      if (data) setUserBalance(Number(data.coins) || 0)
+    })
     
-    return () => { supabase.removeChannel(balChan) }
+    return () => { 
+      supabase.removeChannel(myProfileChannel)
+      supabase.removeChannel(balChan)
+    }
   }, [currentUser?.id])
 
-  useEffect(() => {
-    if (!currentUser?.id || startWithId || !userProfile) return
+  // Summaries logic
+  const fetchSummaries = useCallback(async () => {
+    if (!currentUser?.id || !userProfile) return
     
-    const fetchSummaries = async () => {
-      const { data: chatsData } = await supabase
-        .from('chats')
-        .select('*')
-        .contains('participant_ids', [currentUser.id])
-        .order('last_message_at', { ascending: false })
+    const { data: chatsData } = await supabase
+      .from('chats')
+      .select('*')
+      .contains('participant_ids', [currentUser.id])
+      .order('last_message_at', { ascending: false })
 
-      if (chatsData) {
-        const blockedUids = new Set([...(userProfile.blocking || []), ...(userProfile.blocked_by || [])]);
-        
-        const enhanced = await Promise.all(chatsData.map(async (c) => {
-          const pId = c.participant_ids.find((id: string) => id !== currentUser.id)
-          if (!pId || blockedUids.has(pId)) return null;
+    if (chatsData) {
+      const blockedUids = new Set([...(userProfile.blocking || []), ...(userProfile.blocked_by || [])]);
+      
+      const enhanced = await Promise.all(chatsData.map(async (c) => {
+        const pId = c.participant_ids.find((id: string) => id !== currentUser.id)
+        if (!pId || blockedUids.has(pId)) return null;
 
-          const userClearedAt = c.cleared_at?.[currentUser.id] || 0
-          if (c.last_message_at <= userClearedAt) return null
+        const userClearedAt = c.cleared_at?.[currentUser.id] || 0
+        if (c.last_message_at <= userClearedAt) return null
 
-          const userSeenAt = c.last_seen_at?.[currentUser.id] || 0
-          const isUnread = c.last_message_at > userSeenAt && c.participant_ids[0] !== currentUser.id
+        const userSeenAt = c.last_seen_at?.[currentUser.id] || 0
+        const isUnread = c.last_message_at > userSeenAt && c.participant_ids[0] !== currentUser.id
 
-          const { data: p } = await supabase.from('users').select('name, photo_url').eq('uid', pId).single()
-          return {
-            id: c.id,
-            partner_id: pId,
-            partner_name: p?.name || `User ${pId?.slice(0, 4)}`,
-            partner_photo: p?.photo_url || "",
-            last_message: c.last_message || "",
-            last_message_at: c.last_message_at || Date.now(),
-            unread_count: isUnread ? 1 : 0,
-            cleared_at: c.cleared_at
-          } as ChatSummary
-        }))
-        const filtered = enhanced.filter(Boolean) as ChatSummary[];
-        setChatSummaries(filtered)
-        globalChatSummaries = filtered;
-      }
-      setLoading(false)
+        const { data: p } = await supabase.from('users').select('name, photo_url').eq('uid', pId).maybeSingle()
+        return {
+          id: c.id,
+          partner_id: pId,
+          partner_name: p?.name || `User`,
+          partner_photo: p?.photo_url || "",
+          last_message: c.last_message || "",
+          last_message_at: c.last_message_at || Date.now(),
+          unread_count: isUnread ? 1 : 0,
+          cleared_at: c.cleared_at
+        } as ChatSummary
+      }))
+      setChatSummaries(enhanced.filter(Boolean) as ChatSummary[])
     }
+    setLoading(false)
+  }, [currentUser?.id, userProfile])
 
-    fetchSummaries()
-    const channel = supabase.channel('chats_realtime').on('postgres_changes', { event: '*', table: 'chats' }, () => fetchSummaries()).subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [currentUser?.id, startWithId, userProfile])
+  useEffect(() => {
+    if (currentUser?.id && userProfile && !startWithId) {
+      fetchSummaries()
+      const channel = supabase.channel('chats_realtime').on('postgres_changes', { event: '*', table: 'chats' }, () => fetchSummaries()).subscribe()
+      return () => { supabase.removeChannel(channel) }
+    }
+  }, [currentUser?.id, userProfile, startWithId, fetchSummaries])
 
+  // Chat Detail Setup
   useEffect(() => {
     if (currentUser?.id && startWithId) {
       const ids = [currentUser.id, startWithId].sort()
       const cId = `direct_${ids[0]}_${ids[1]}`
       setChatId(cId)
       markAsSeen(cId)
-      supabase.from('users').select('*').eq('uid', startWithId).single().then(({ data }) => setPartnerProfile(data))
-      supabase.from('chats').select('cleared_at').eq('id', cId).single().then(({ data }) => {
+      
+      // Reactive Partner Profile
+      const partnerChannel = supabase.channel(`partner-profile:${startWithId}`)
+        .on('postgres_changes', { event: '*', table: 'users', filter: `uid=eq.${startWithId}` }, (payload) => {
+          setPartnerProfile(payload.new)
+        })
+        .subscribe()
+
+      supabase.from('users').select('*').eq('uid', startWithId).maybeSingle().then(({ data }) => setPartnerProfile(data))
+      
+      supabase.from('chats').select('cleared_at').eq('id', cId).maybeSingle().then(({ data }) => {
         if (data) setActiveChatClearedAt(data.cleared_at?.[currentUser.id] || 0)
+        else setActiveChatClearedAt(0)
       })
+
+      return () => { supabase.removeChannel(partnerChannel) }
     } else {
       setChatId(null)
       setPartnerProfile(null)
+      setMessages([])
     }
   }, [currentUser?.id, startWithId])
 
+  // Messages Sync - CRITICAL FIX FOR VISIBILITY
   useEffect(() => {
     if (!chatId) return
+    
     const fetchMessages = async () => {
-      const { data } = await supabase.from('messages').select('*').eq('chat_id', chatId).gt('timestamp', activeChatClearedAt).order('timestamp', { ascending: false }).limit(50)
+      const { data } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('chat_id', chatId)
+        .gt('timestamp', activeChatClearedAt)
+        .order('timestamp', { ascending: false })
+        .limit(50)
       if (data) setMessages(data)
     }
     fetchMessages()
-    const channel = supabase.channel(`messages:${chatId}`).on('postgres_changes', { event: 'INSERT', table: 'messages', filter: `chat_id=eq.${chatId}` }, (payload) => {
-      const newMsg = payload.new as Message
-      if (newMsg.timestamp <= activeChatClearedAt) return
-      setMessages(prev => {
-        if (prev.some(m => m.text === newMsg.text && Math.abs(m.timestamp - newMsg.timestamp) < 5000)) return prev
-        return [newMsg, ...prev]
+
+    const channel = supabase.channel(`messages:${chatId}`)
+      .on('postgres_changes', { event: 'INSERT', table: 'messages', filter: `chat_id=eq.${chatId}` }, (payload) => {
+        const newMsg = payload.new as Message
+        // Only ignore if it's literally older than the "cleared" time
+        if (activeChatClearedAt > 0 && newMsg.timestamp <= activeChatClearedAt) return
+        
+        setMessages(prev => {
+          // Prevent duplicates from optimistic UI vs real server message
+          if (prev.some(m => m.text === newMsg.text && Math.abs(m.timestamp - newMsg.timestamp) < 5000)) {
+            // Replace optimistic with real server message (it has the real ID)
+            return prev.map(m => (m.text === newMsg.text && m.is_optimistic) ? newMsg : m)
+          }
+          return [newMsg, ...prev]
+        })
+        markAsSeen(chatId)
       })
-      markAsSeen(chatId)
-    }).subscribe()
+      .subscribe()
+
     return () => { supabase.removeChannel(channel) }
   }, [chatId, activeChatClearedAt])
 
@@ -220,12 +264,7 @@ function ChatsContent() {
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !chatId || !currentUser?.id || !startWithId || !userProfile || isBlocked) return
     
-    const isPrivileged = 
-      userProfile.is_admin || 
-      userProfile.is_coin_seller || 
-      partnerProfile?.is_admin || 
-      partnerProfile?.is_coin_seller;
-
+    const isPrivileged = userProfile.is_admin || userProfile.is_coin_seller || partnerProfile?.is_admin || partnerProfile?.is_coin_seller;
     const isMan = userProfile.gender === 'male'
     const cost = (isMan && !isPrivileged) ? 15 : 0;
 
@@ -238,26 +277,29 @@ function ChatsContent() {
     const text = newMessage.trim()
     const timestamp = Date.now()
     const optimisticMsg: Message = { id: `temp-${timestamp}`, text, sender_id: currentUser.id, timestamp, is_optimistic: true }
+    
+    // 1. Show optimistic message immediately
     setMessages(prev => [optimisticMsg, ...prev])
     setNewMessage("")
 
     try {
+      // 2. Perform DB updates
       if (cost > 0) {
         await supabase.from('balances').update({ coins: userBalance - cost }).eq('user_id', currentUser.id)
-        await supabase.from('coin_history').insert({ user_id: currentUser.id, amount: -cost, type: 'chat', description: `Chat with ${partnerProfile?.name || 'User'}`, timestamp })
+        await supabase.from('coin_history').insert({ user_id: currentUser.id, amount: -cost, type: 'chat', description: `Message to ${partnerProfile?.name}`, timestamp })
       }
-      
-      await markAsSeen(chatId, timestamp);
       
       await Promise.all([
         supabase.from('chats').upsert({ 
           id: chatId, 
           last_message: text, 
           last_message_at: timestamp, 
-          participant_ids: [currentUser.id, startWithId] 
+          participant_ids: [currentUser.id, startWithId] // First ID is usually most recent sender
         }, { onConflict: 'id' }),
         supabase.from('messages').insert({ chat_id: chatId, text, sender_id: currentUser.id, timestamp })
       ])
+      
+      await markAsSeen(chatId, timestamp);
     } catch (err) {
       setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
       toast({ variant: "destructive", title: "Message Failed" })
@@ -280,9 +322,8 @@ function ChatsContent() {
   const handleCall = async (type: 'voice' | 'video') => {
     if (!currentUser || !startWithId || !partnerProfile || !chatId || isBlocked) return
     const isPrivileged = userProfile?.is_admin || userProfile?.is_coin_seller;
-    
-    // Safety check: verify local balance first for UX
     const cost = type === 'video' ? 150 : 70;
+
     if (!isPrivileged && userProfile?.gender === 'male' && userBalance < cost) {
       toast({ variant: "destructive", title: "Insufficient Balance" })
       router.push("/recharge")
@@ -305,7 +346,7 @@ function ChatsContent() {
     if (!id || !currentUser?.id) return
     const now = Date.now()
     try {
-      const { data: existing } = await supabase.from('chats').select('cleared_at').eq('id', id).single()
+      const { data: existing } = await supabase.from('chats').select('cleared_at').eq('id', id).maybeSingle()
       const newClearedAt = { ...(existing?.cleared_at || {}), [currentUser.id]: now }
       await supabase.from('chats').update({ cleared_at: newClearedAt }).eq('id', id)
       if (!targetId) { router.push('/chats') } else { setChatSummaries(prev => prev.filter(s => s.id !== targetId)) }
@@ -313,28 +354,16 @@ function ChatsContent() {
     } catch (err) { toast({ variant: "destructive", title: "Failed to clear" }) }
   }
 
-  const handleTouchStart = (chat: ChatSummary) => {
-    setIsLongPressing(false)
-    const timer = setTimeout(() => { setIsLongPressing(true); setChatToDelete(chat); }, 600)
-    setLongPressTimer(timer)
-  }
-
-  const handleTouchEnd = (chat: ChatSummary) => {
-    if (longPressTimer) { clearTimeout(longPressTimer); setLongPressTimer(null); }
-    if (!isLongPressing) { router.push(`/chats?startWith=${chat.partner_id}`) }
-  }
-
-  if (authLoading || !isInitialized) {
-    return <div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
-  }
+  if (authLoading || !isInitialized) return <div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
 
   if (!startWithId) return (
     <div className="flex-1 bg-white min-h-screen pb-20 select-none">
       <header className="px-6 h-16 flex items-center border-b sticky top-0 bg-white/80 backdrop-blur-md z-50 justify-between">
         <h1 className="text-3xl font-logo text-[#00A2FF] tracking-tight">Chats</h1>
+        {userProfile?.photo_url && <Avatar className="w-8 h-8"><AvatarImage src={userProfile.photo_url} className="object-cover"/><AvatarFallback><User/></AvatarFallback></Avatar>}
       </header>
       <main className="flex flex-col">
-        {loading && chatSummaries.length === 0 ? (
+        {loading ? (
           <div className="flex flex-col items-center justify-center py-20 opacity-20"><Loader2 className="w-8 h-8 animate-spin text-[#00A2FF]" /></div>
         ) : chatSummaries.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-32 px-12 text-center opacity-40">
@@ -342,7 +371,11 @@ function ChatsContent() {
             <p className="font-bold text-sm text-black uppercase tracking-widest">No conversations yet</p>
           </div>
         ) : chatSummaries.map(s => (
-          <div key={s.id} onMouseDown={() => handleTouchStart(s)} onMouseUp={() => handleTouchEnd(s)} onMouseLeave={() => { if(longPressTimer) clearTimeout(longPressTimer) }} onTouchStart={() => handleTouchStart(s)} onTouchEnd={() => handleTouchEnd(s)} className="p-5 border-b border-gray-50 flex items-center gap-4 active:bg-gray-50 transition-colors cursor-pointer relative">
+          <div 
+            key={s.id} 
+            onClick={() => router.push(`/chats?startWith=${s.partner_id}`)}
+            className="p-5 border-b border-gray-50 flex items-center gap-4 active:bg-gray-50 transition-colors cursor-pointer relative"
+          >
             <div className="relative">
               <Avatar className="w-14 h-14 border border-gray-100"><AvatarImage src={s.partner_photo} className="object-cover" /><AvatarFallback>{s.partner_name?.[0]}</AvatarFallback></Avatar>
               {s.unread_count > 0 && <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-white animate-in zoom-in">NEW</div>}
@@ -374,8 +407,6 @@ function ChatsContent() {
     </div>
   )
 
-  const isPrivileged = userProfile?.is_admin || userProfile?.is_coin_seller || partnerProfile?.is_admin || partnerProfile?.is_coin_seller;
-
   return (
     <div className="flex flex-col h-screen bg-white select-none relative overflow-hidden">
       <header className="h-16 border-b flex items-center px-4 gap-4 sticky top-0 bg-white z-50">
@@ -397,23 +428,20 @@ function ChatsContent() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-6 flex flex-col-reverse gap-4 bg-[#F9FAFB]">
+      <main className="flex-1 overflow-y-auto p-6 flex flex-col-reverse gap-4 bg-[#F9FAFB] no-scrollbar">
         {isBlocked ? (
           <div className="flex-1 flex flex-col items-center justify-center opacity-40 space-y-4">
              <Ban className="w-12 h-12 text-gray-300" />
              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">User Unavailable</p>
           </div>
         ) : messages.map(m => (
-          <div key={m.id} className={cn("max-w-[80%] p-4 rounded-3xl text-sm font-medium shadow-sm", m.sender_id === currentUser?.id ? "bg-[#00A2FF] text-white self-end rounded-br-none" : "bg-white text-black self-start rounded-bl-none border border-black/5", m.is_optimistic && "opacity-60", m.is_gift && "bg-gradient-to-br from-pink-500 to-rose-400 text-white italic")}>
+          <div key={m.id} className={cn("max-w-[80%] p-4 rounded-3xl text-sm font-medium shadow-sm animate-in zoom-in-95", m.sender_id === currentUser?.id ? "bg-[#00A2FF] text-white self-end rounded-br-none" : "bg-white text-black self-start rounded-bl-none border border-black/5", m.is_optimistic && "opacity-60", m.is_gift && "bg-gradient-to-br from-pink-500 to-rose-400 text-white italic")}>
             {m.text}
           </div>
         ))}
       </main>
 
       <footer className="p-4 pb-8 border-t bg-white flex flex-col gap-2 relative">
-        {!isBlocked && isPrivileged && (
-          <div className="text-[9px] font-bold text-blue-500 uppercase tracking-widest px-2 mb-1">VIP: Free Communication Enabled</div>
-        )}
         <div className="flex gap-2 items-center">
           {isBlocked ? (
             <div className="flex-1 h-12 bg-gray-50 rounded-2xl flex items-center justify-center border border-dashed border-gray-200">
@@ -429,7 +457,6 @@ function ChatsContent() {
         </div>
       </footer>
 
-      {/* GIFT SELECTOR OVERLAY */}
       {showGiftSelector && (
         <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 flex flex-col justify-end">
           <div className="bg-white rounded-t-[3rem] p-8 space-y-6 shadow-2xl animate-in slide-in-from-bottom-full duration-500 max-h-[80vh] flex flex-col">
@@ -437,16 +464,10 @@ function ChatsContent() {
               <h3 className="text-sm font-black uppercase tracking-widest">Select a Gift</h3>
               <Button variant="ghost" size="icon" onClick={() => setShowGiftSelector(false)} className="rounded-full"><X className="w-5 h-5" /></Button>
             </div>
-            
             <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
               <div className="grid grid-cols-2 gap-4">
                 {GIFTS.map(gift => (
-                  <button 
-                    key={gift.id} 
-                    disabled={isSending}
-                    onClick={() => handleSendGift(gift)}
-                    className="flex flex-col items-center p-6 bg-gray-50 rounded-3xl border border-gray-100 hover:border-pink-200 transition-all active:scale-95 group"
-                  >
+                  <button key={gift.id} disabled={isSending} onClick={() => handleSendGift(gift)} className="flex flex-col items-center p-6 bg-gray-50 rounded-3xl border border-gray-100 hover:border-pink-200 transition-all active:scale-95 group">
                     <span className="text-4xl mb-3 group-hover:scale-110 transition-transform">{gift.icon}</span>
                     <p className="text-[10px] font-black uppercase tracking-tight text-gray-800">{gift.name}</p>
                     <p className="text-[9px] font-bold text-pink-500 mt-1">{gift.price} Coins</p>

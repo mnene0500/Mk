@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -51,13 +52,6 @@ interface UserProfile {
   agency_id?: string
   agency_status?: string
 }
-
-/**
- * GLOBAL PERSISTENCE CACHE
- * Instant tab switching by remembering profile data.
- */
-let globalProfileCache: UserProfile | null = null;
-let globalBalancesCache = { coins: 0, diamonds: 0 };
 
 function JoinAgencyDialog({ userUid }: { userUid: string }) {
   const [code, setCode] = useState("")
@@ -173,45 +167,48 @@ export default function MePage() {
   const { toast } = useToast()
   
   const [copied, setCopied] = useState(false)
-  const [balances, setBalances] = useState(globalBalancesCache)
-  const [profile, setProfile] = useState<UserProfile | null>(globalProfileCache)
-  
-  // Use cache to prevent blink
-  const [isReady, setIsReady] = useState(!!globalProfileCache)
+  const [balances, setBalances] = useState({ coins: 0, diamonds: 0 })
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [isReady, setIsReady] = useState(false)
 
   useEffect(() => {
     if (!user && isInitialized && !authLoading) router.replace("/welcome")
-    if (user) {
-      // 1. Fetch Profile
-      supabase.from('users').select('*').eq('uid', user.id).maybeSingle().then(({ data }) => {
-        if (data) {
-          setProfile(data as any)
-          globalProfileCache = data as any
-          setIsReady(true)
-        }
-      })
-      
-      // 2. Fetch Balances
-      supabase.from('balances').select('coins, diamonds').eq('user_id', user.id).maybeSingle().then(({ data }) => {
-        if (data) {
-          const newBal = { coins: data.coins || 0, diamonds: Number(data.diamonds) || 0 }
-          setBalances(newBal)
-          globalBalancesCache = newBal
-        }
-      })
-      
-      // 3. Real-time balance updates
-      const channel = supabase.channel(`balance:${user.id}`)
-        .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
-          const updatedBal = { coins: payload.new.coins, diamonds: Number(payload.new.diamonds) }
-          setBalances(updatedBal)
-          globalBalancesCache = updatedBal
-        })
-        .subscribe()
-        
-      return () => { supabase.removeChannel(channel) }
+    if (!user?.id) return
+
+    // 1. Initial Fetch
+    const fetchProfile = async () => {
+      const { data } = await supabase.from('users').select('*').eq('uid', user.id).maybeSingle()
+      if (data) {
+        setProfile(data as any)
+        setIsReady(true)
+      }
     }
-  }, [user, isInitialized, authLoading, router])
+    fetchProfile()
+
+    // 2. Real-time Profile Listener (Ensures photos update instantly everywhere)
+    const profileChannel = supabase.channel(`profile-sync:${user.id}`)
+      .on('postgres_changes', { event: '*', table: 'users', filter: `uid=eq.${user.id}` }, (payload) => {
+        setProfile(payload.new as any)
+      })
+      .subscribe()
+
+    // 3. Real-time Balance Listener
+    const balanceChannel = supabase.channel(`balance-sync:${user.id}`)
+      .on('postgres_changes', { event: '*', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
+        setBalances({ coins: payload.new.coins || 0, diamonds: Number(payload.new.diamonds) || 0 })
+      })
+      .subscribe()
+      
+    // Initial balances
+    supabase.from('balances').select('*').eq('user_id', user.id).single().then(({ data }) => {
+      if (data) setBalances({ coins: data.coins || 0, diamonds: Number(data.diamonds) || 0 })
+    })
+
+    return () => { 
+      supabase.removeChannel(profileChannel)
+      supabase.removeChannel(balanceChannel)
+    }
+  }, [user?.id, isInitialized, authLoading, router])
 
   const handleCopyId = () => {
     if (profile?.match_flow_id) { 
@@ -222,7 +219,7 @@ export default function MePage() {
     }
   }
 
-  if (!isReady && isInitialized && !authLoading && !profile) {
+  if (!isReady && (authLoading || !profile)) {
     return <div className="flex-1 bg-[#F8F9FA] min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
   }
   
@@ -241,7 +238,7 @@ export default function MePage() {
           </div>
 
           <div className="relative mb-4">
-            <div className="relative w-28 h-28 rounded-full shadow-2xl overflow-hidden bg-muted">
+            <div className="relative w-28 h-28 rounded-full shadow-2xl overflow-hidden bg-muted border-4 border-white/20">
               {profile?.photo_url ? (
                 <Image src={profile.photo_url} alt={profile.name || "User"} fill className="object-cover" priority sizes="112px" />
               ) : (
@@ -270,7 +267,6 @@ export default function MePage() {
         </header>
 
         <main className="px-6 space-y-6">
-          {/* BALANCE CARDS */}
           <div className="grid grid-cols-2 gap-4 relative z-20 -mt-6">
             <Button className="h-20 bg-white rounded-2xl shadow-xl flex flex-col items-center justify-center gap-1 text-[#00A2FF]" onClick={() => router.push("/recharge")}>
               <div className="flex items-center gap-1.5">
@@ -287,7 +283,6 @@ export default function MePage() {
               <span className="text-[8px] font-bold uppercase opacity-60">Income</span>
             </Button>
 
-            {/* SPECIAL STATUS BUTTONS */}
             {!profile?.is_verified && !profile?.is_admin && (
               <Button onClick={() => router.push("/verify-identity")} className="h-20 bg-white rounded-2xl shadow-xl flex flex-col items-center justify-center gap-1 text-indigo-600 col-span-2 mt-2">
                 <div className="flex items-center gap-2">
@@ -330,7 +325,6 @@ export default function MePage() {
             )}
           </div>
 
-          {/* LIST MENU */}
           <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">
             <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
               <Link href="/support">
