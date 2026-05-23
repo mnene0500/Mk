@@ -101,21 +101,15 @@ export default function HomePage() {
 
   if (!statusChecked) return <div className="fixed inset-0 bg-white" />
 
-  // CACHE BUSTER with timestamp to force re-render upon navigation/sync
-  const avatarKey = profile?.photo_url ? `${profile.photo_url}?t=${Date.now()}` : "";
-
   return (
     <div className="flex-1 pb-24 bg-white min-h-screen relative select-none animate-in fade-in duration-300">
-      <header className="bg-[#00A2FF] h-[70px] relative overflow-hidden flex items-center px-6 justify-between">
-        <h1 className="text-3xl font-logo text-white drop-shadow-md">QIVO</h1>
-        <Avatar className="w-9 h-9 border-2 border-white/20 shadow-lg cursor-pointer" onClick={() => router.push('/profile')}>
-          <AvatarImage key={avatarKey} src={avatarKey} className="object-cover" />
-          <AvatarFallback className="bg-white/10 text-white"><User className="w-4 h-4" /></AvatarFallback>
-        </Avatar>
-        <h1 className="absolute -bottom-4 left-4 text-7xl font-black text-white opacity-5 -rotate-12 pointer-events-none select-none">DISCOVER</h1>
+      {/* Streamlined Header */}
+      <header className="bg-[#00A2FF] h-10 relative overflow-hidden flex items-center px-6 justify-between">
+        <h1 className="absolute -bottom-4 left-4 text-7xl font-black text-white opacity-5 -rotate-12 pointer-events-none select-none uppercase">QIVO</h1>
       </header>
 
-      <div className="relative px-4 grid grid-cols-2 gap-3 -mt-4 z-20 mb-4">
+      {/* Reduced spacing for action buttons */}
+      <div className="relative px-4 grid grid-cols-2 gap-3 -mt-2 z-20 mb-4">
         <button 
           onClick={() => router.push('/mystery-note')} 
           className="h-28 bg-gradient-to-br from-[#00A2FF] to-[#0081CC] rounded-[1.5rem] p-4 flex flex-col items-start justify-end gap-1 shadow-xl active:scale-95 transition-all text-white text-left"
@@ -150,7 +144,7 @@ export default function HomePage() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-90" />
                 <div onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }} className="absolute top-2.5 right-2.5 px-3.5 h-7 bg-[#00A2FF] rounded-full flex items-center justify-center text-white shadow-lg active:scale-90 transition-all z-20"><span className="text-[8px] font-black uppercase tracking-widest">CHAT</span></div>
                 <div className="absolute inset-x-0 bottom-0 p-3 text-white">
-                  <div className="flex items-center gap-1 mb-1.5"><h4 className="font-black text-sm truncate tracking-tight">{u.name}</h4>{u.is_verified && <BadgeCheck className="w-3 h-3 text-[#00A2FF] fill-white" />}</div>
+                  <div className="flex items-center gap-1 mb-1.5"><h4 className="font-black text-sm truncate tracking-tight">{u.name}</h4>{u.is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-white" />}</div>
                   <div className="flex items-center gap-1.5"><span className="bg-[#00B200] text-white font-black text-[8px] px-2 py-0.5 rounded-md">{calculateAge(u.dob)}</span><span className="bg-black/30 backdrop-blur-md text-white text-[8px] font-bold px-2 py-0.5 rounded-md truncate border border-white/5">{u.country}</span></div>
                 </div>
               </Card>

@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState } from "react"
@@ -24,7 +23,9 @@ import {
   Shield,
   User,
   Flag,
-  PlusCircle
+  PlusCircle,
+  History,
+  Zap
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -238,7 +239,7 @@ export default function MePage() {
           </div>
 
           <div className="relative mb-4">
-            <div className="relative w-28 h-28 rounded-full shadow-2xl overflow-hidden bg-muted border-4 border-white/20">
+            <div className="relative w-28 h-28 rounded-full shadow-2xl overflow-hidden bg-muted border-none">
               {freshPhotoUrl ? (
                 <Image 
                   key={freshPhotoUrl} 
@@ -343,6 +344,15 @@ export default function MePage() {
           </div>
 
           <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">
+            <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
+              <Link href="/coin-history">
+                <div className="flex items-center gap-4">
+                  <div className="bg-amber-50 p-2.5 rounded-xl"><History className="w-5 h-5 text-amber-600" /></div>
+                  <span className="font-semibold text-xs text-black">Coin History</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-300" />
+              </Link>
+            </Button>
             <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
               <Link href="/support">
                 <div className="flex items-center gap-4">
