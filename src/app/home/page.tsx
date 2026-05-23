@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react"
@@ -51,12 +52,12 @@ export default function HomePage() {
     if (!currentUser) { router.replace("/welcome"); return; }
 
     const setupProfile = async () => {
-      // Force fresh fetch from Supabase
       const { data } = await supabase.from('users').select('*').eq('uid', currentUser.id).maybeSingle();
       if (!data || !data.onboarding_complete) { router.replace("/fastonboard"); return; }
       setProfile(data as any);
       setStatusChecked(true);
 
+      // REALTIME: Listen for profile changes (verified status, roles)
       const channel = supabase.channel(`home-profile-sync:${currentUser.id}`)
         .on('postgres_changes', { event: 'UPDATE', table: 'users', filter: `uid=eq.${currentUser.id}` }, (payload) => {
           setProfile(payload.new as any)
@@ -103,12 +104,10 @@ export default function HomePage() {
 
   return (
     <div className="flex-1 pb-24 bg-white min-h-screen relative select-none animate-in fade-in duration-300">
-      {/* Streamlined Header */}
       <header className="bg-[#00A2FF] h-10 relative overflow-hidden flex items-center px-6 justify-between">
         <h1 className="absolute -bottom-4 left-4 text-7xl font-black text-white opacity-5 -rotate-12 pointer-events-none select-none uppercase">QIVO</h1>
       </header>
 
-      {/* Reduced spacing for action buttons */}
       <div className="relative px-4 grid grid-cols-2 gap-3 -mt-2 z-20 mb-4">
         <button 
           onClick={() => router.push('/mystery-note')} 

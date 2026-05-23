@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -12,7 +13,6 @@ import {
   BadgeCheck, 
   Headphones, 
   Pencil,
-  CircleDollarSign,
   Gem,
   Loader2,
   Trophy,
@@ -178,30 +178,31 @@ export default function MePage() {
     if (!user && isInitialized && !authLoading) router.replace("/welcome")
     if (!user?.id) return
 
-    const fetchProfile = async () => {
-      const { data } = await supabase.from('users').select('*').eq('uid', user.id).maybeSingle()
-      if (data) {
-        setProfile(data as any)
-        setIsReady(true)
-      }
+    const fetchInitialData = async () => {
+      const [prof, bal] = await Promise.all([
+        supabase.from('users').select('*').eq('uid', user.id).maybeSingle(),
+        supabase.from('balances').select('*').eq('user_id', user.id).maybeSingle()
+      ]);
+      
+      if (prof.data) setProfile(prof.data as any)
+      if (bal.data) setBalances({ coins: bal.data.coins || 0, diamonds: Number(bal.data.diamonds) || 0 })
+      setIsReady(true)
     }
-    fetchProfile()
+    fetchInitialData()
 
+    // REALTIME: Sync Profile Changes
     const profileChannel = supabase.channel(`profile-sync:${user.id}`)
       .on('postgres_changes', { event: '*', table: 'users', filter: `uid=eq.${user.id}` }, (payload) => {
         setProfile(payload.new as any)
       })
       .subscribe()
 
+    // REALTIME: Sync Balance Changes (Coins/Diamonds)
     const balanceChannel = supabase.channel(`balance-sync:${user.id}`)
       .on('postgres_changes', { event: '*', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
         setBalances({ coins: payload.new.coins || 0, diamonds: Number(payload.new.diamonds) || 0 })
       })
       .subscribe()
-      
-    supabase.from('balances').select('*').eq('user_id', user.id).single().then(({ data }) => {
-      if (data) setBalances({ coins: data.coins || 0, diamonds: Number(data.diamonds) || 0 })
-    })
 
     return () => { 
       supabase.removeChannel(profileChannel)

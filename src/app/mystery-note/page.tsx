@@ -34,6 +34,7 @@ export default function MysteryNotePage() {
 
     fetchBalance()
 
+    // REALTIME: Keep local balance synced during blast operations
     const channel = supabase.channel(`mystery-note-bal-live:${user.id}`)
       .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
         setUserCoins(Number(payload.new.coins) || 0)
@@ -48,7 +49,6 @@ export default function MysteryNotePage() {
   const handleSend = async () => {
     if (!user?.id || !message.trim()) return
     
-    // Ensure we have a valid numeric comparison
     const currentCoins = Number(userCoins ?? 0);
     const requiredCoins = Number(totalCost);
 
