@@ -3,10 +3,9 @@
 
 import { useEffect, useState, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
 import { Button } from "@/components/ui/button"
-import { Loader2, ShieldCheck, CheckCircle2, AlertCircle } from "lucide-react"
+import { Loader2, ShieldCheck, CheckCircle2 } from "lucide-react"
 import { verifyPaymentAction } from "@/app/actions/payment-actions"
 import { cn } from "@/lib/utils"
 
@@ -34,14 +33,16 @@ function PaymentSuccessContent() {
       } catch (err) {}
     }
 
+    // Initial check
     verify()
+    // Poll every 4 seconds
     pollTimerRef.current = setInterval(verify, 4000)
 
+    // UI Countdown to restore button
     const timer = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
           clearInterval(timer)
-          if (status === 'verifying') setStatus('pending')
           return 0
         }
         return prev - 1

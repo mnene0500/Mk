@@ -24,7 +24,7 @@ async function getPesapalToken() {
     }),
   })
   const data = await res.json()
-  if (!data.token) throw new Error("PesaPal Auth Token generation failed.");
+  if (!data.token) throw new Error("PesaPal Auth Token generation failed. Check your Secrets.");
   return data.token
 }
 
@@ -37,24 +37,26 @@ serve(async (req) => {
 
     if (action === "initiate") {
       const { amount, user } = body
+      if (!user?.uid) throw new Error("Missing User UID");
+      
       const token = await getPesapalToken()
       const orderId = crypto.randomUUID()
 
-      // ISSUE 4 FIX: Save pending payment before redirect
+      // ISSUE 4: Save pending payment before redirect
       const { error: pendingError } = await supabase.from("pending_payments").insert({
         order_id: orderId,
         user_id: user.uid,
         amount: Number(amount),
         status: "pending"
       })
-      if (pendingError) throw new Error(`Pending Log Error: ${pendingError.message}`);
+      if (pendingError) throw new Error(`Database Error (Pending Log): ${pendingError.message}`);
       
       const order = {
         id: orderId,
         currency: "KES",
         amount: Number(amount),
         description: "QIVO Coins Recharge",
-        // ISSUE 3 FIX: Dedicated success page
+        // ISSUE 3: Dedicated success page
         callback_url: "https://qivo-gamma.vercel.app/payment-success",
         notification_id: Deno.env.get("PESAPAL_IPN_ID"),
         billing_address: { email_address: user.email || "user@qivo.app" },
@@ -67,6 +69,8 @@ serve(async (req) => {
       })
       const data = await res.json()
       
+      if (!data.redirect_url) throw new Error(data.error?.message || "PesaPal failed to generate redirect URL.");
+
       return new Response(JSON.stringify({ success: true, redirect_url: data.redirect_url }), { 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
       })
@@ -74,7 +78,7 @@ serve(async (req) => {
 
     if (action === "fulfill") {
       const { orderTrackingId, user_id } = body
-      if (!orderTrackingId) throw new Error("Missing Tracking ID");
+      if (!orderTrackingId || !user_id) throw new Error("Missing Tracking ID or User ID");
       
       const token = await getPesapalToken()
       const verifyRes = await fetch(`${PESA_ENV}/api/Transactions/GetTransactionStatus?orderTrackingId=${orderTrackingId}`, {
@@ -100,7 +104,7 @@ serve(async (req) => {
         const { data: existing } = await supabase.from('processed_payments').select('order_tracking_id').eq('order_tracking_id', orderTrackingId).maybeSingle()
         if (existing) return new Response(JSON.stringify({ success: true, message: "Already fulfilled" }), { headers: corsHeaders })
 
-        // ISSUE 2 & PARAM FIX: Atomic update with error checking
+        // ISSUE 2: Atomic update with error checking
         const { error: rpcError } = await supabase.rpc("increment_coins", { user_id, amount: coins })
         if (rpcError) throw new Error(`Balance RPC Error: ${rpcError.message}`);
 
@@ -122,7 +126,7 @@ serve(async (req) => {
     
     return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400, headers: corsHeaders })
   } catch (e) {
-    // ISSUE 1 FIX: Return 500 on internal failures
+    // ISSUE 1: Return 500 on internal failures
     return new Response(JSON.stringify({ success: false, error: e.message }), { 
       status: 500, 
       headers: { ...corsHeaders, "Content-Type": "application/json" } 

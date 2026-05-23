@@ -14,12 +14,15 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
     });
 
     if (error) {
-      console.error("[Payment Error] Edge Function Invocation:", error);
-      return { success: false, error: `Gateway connection failed: ${error.message}` };
+      // Supabase invoke error (e.g., function paused or secret missing)
+      console.error("[Payment Error] Edge Function Crash:", error);
+      return { success: false, error: error.message || "Gateway unreachable." };
     }
 
+    // data is the body returned by the function (either success or the catch block's 500)
     return data;
   } catch (err: any) { 
+    console.error("[Payment Error] Action Exception:", err);
     return { success: false, error: "Critical payment system failure." }; 
   }
 }
