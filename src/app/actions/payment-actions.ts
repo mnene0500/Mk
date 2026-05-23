@@ -2,7 +2,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase';
 
-const PESAPAL_BASE_URL = "https://pay.pesapal.com/v3"; // Change to cybqa.pesapal.com/v3 for sandbox
+const PESAPAL_BASE_URL = "https://pay.pesapal.com/v3";
 
 async function getAuthToken() {
   const res = await fetch(`${PESAPAL_BASE_URL}/api/Auth/RequestToken`, {
@@ -39,7 +39,11 @@ export async function initiatePesaPalPayment(uid: string, amount: number, coins:
       description: `Purchase of ${coins} QIVO Coins`,
       callback_url: `https://qivo-gamma.vercel.app/payment-success`,
       notification_id: process.env.PESAPAL_IPN_ID,
-      billing_address: { email_address: "user@qivo.app" }
+      billing_address: { 
+        email_address: "billing@qivo.app",
+        first_name: "QIVO",
+        last_name: "User"
+      }
     };
 
     const res = await fetch(`${PESAPAL_BASE_URL}/api/Transactions/SubmitOrderRequest`, {
@@ -70,7 +74,7 @@ export async function verifyPaymentAction(orderTrackingId: string, merchantRefer
     
     const data = await res.json();
     
-    // 1. Check if status is COMPLETED
+    // Check if status is COMPLETED
     if (data.status_code === 1 || data.payment_status_description === "Completed") {
       const supabase = getSupabaseAdmin();
       
@@ -87,9 +91,7 @@ export async function verifyPaymentAction(orderTrackingId: string, merchantRefer
       if (pending.amount === 1) coins = 10;
       else if (pending.amount === 50) coins = 500;
       else if (pending.amount === 200) coins = 2000;
-      else if (pending.amount === 500) coins = 5500;
-      else if (pending.amount === 1000) coins = 12000;
-      else coins = Math.floor(pending.amount * 5); // Fallback multiplier
+      else coins = Math.floor(pending.amount * 10); // Standard rate
 
       // ATOMIC UPDATE
       const { error: rpcErr } = await supabase.rpc("increment_coins", { user_id: pending.user_id, amount: coins });
@@ -101,7 +103,8 @@ export async function verifyPaymentAction(orderTrackingId: string, merchantRefer
           order_tracking_id: orderTrackingId,
           user_id: pending.user_id,
           amount: pending.amount,
-          coins: coins
+          coins: coins,
+          payment_method: data.payment_method || 'PesaPal'
         }),
         supabase.from('coin_history').insert({
           user_id: pending.user_id,
