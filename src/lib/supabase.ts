@@ -3,18 +3,12 @@ import { createClient } from '@supabase/supabase-js';
 
 /**
  * @fileOverview Hardened Supabase Client for Production.
- * 
- * To prevent the "supabaseUrl is required" crash, we prioritize server-side 
- * variables and use placeholders for the browser if keys are missing.
- * 
- * IMPORTANT: For Auth and Real-time chat, NEXT_PUBLIC_SUPABASE_URL and 
- * NEXT_PUBLIC_SUPABASE_ANON_KEY are REQUIRED in the Vercel Dashboard.
+ * Optimized for Vercel Native actions.
  */
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://placeholder-project.supabase.co';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://placeholder.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder';
 
-// Create the client with a safety check
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
@@ -23,9 +17,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
-/**
- * Utility to convert base64 data into a Blob/File that Supabase Storage can process.
- */
 export function base64ToBlob(base64: string): { blob: Blob, contentType: string } {
   const matches = base64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/);
   if (!matches || matches.length !== 3) {

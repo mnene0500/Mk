@@ -5,8 +5,7 @@ import { supabase } from '@/lib/supabase';
 
 /**
  * @fileOverview Agora Token Generation and Calling Economy.
- * Replaces ZegoCloud logic with secure Agora S2S Tokenization.
- * All secrets remain strictly on Vercel's server.
+ * Runs purely on Vercel to protect Agora certificates.
  */
 
 export async function generateAgoraTokenAction(channelName: string, uid: string) {
@@ -17,9 +16,8 @@ export async function generateAgoraTokenAction(channelName: string, uid: string)
     throw new Error("Agora Credentials missing in Vercel Settings.");
   }
 
-  // In a real production environment, you would use 'agora-token' npm package here.
-  // For the prototype, we return the App ID and a simulated token placeholder.
-  // Switch your Agora project to 'Testing Mode' to bypass certificate check until package is added.
+  // Prototype: Use Testing Mode tokens or return App ID for client-side join
+  // Real implementation requires 'agora-token' npm package
   return {
     appId,
     token: "PROTOTYPE_TOKEN_EXPECTED", 
@@ -58,7 +56,6 @@ export async function deductCallCoinsAction(uid: string, type: 'video' | 'voice'
     const { error: deductError } = await supabase.rpc("increment_coins", { user_id: uid, amount: -cost });
     if (deductError) throw deductError;
 
-    // 2. Log History
     await supabase.from("coin_history").insert({
       user_id: uid,
       amount: -cost,
@@ -67,7 +64,7 @@ export async function deductCallCoinsAction(uid: string, type: 'video' | 'voice'
       timestamp: ts
     });
 
-    // 3. Reward Recipient
+    // 2. Reward Recipient
     const { data: recipient } = await supabase.from('users').select('gender').eq('uid', partnerId).single();
     if (user?.gender === 'male' && recipient?.gender === 'female') {
       const reward = 50; 

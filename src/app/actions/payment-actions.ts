@@ -7,8 +7,8 @@ const PESA_ENV = "https://pay.pesapal.com/v3";
 
 /**
  * @fileOverview Native PesaPal Integration for Vercel.
- * Uses PRIVATE environment variables (no NEXT_PUBLIC_ prefix).
- * Immunized against phishing via direct S2S fulfillment.
+ * Uses PRIVATE environment variables.
+ * Immunized against phishing via direct S2S fulfillment and transaction logging.
  */
 
 async function getPesapalToken() {
@@ -41,7 +41,7 @@ export async function initiatePesaPalPayment(amount: number, user: { uid: string
     const token = await getPesapalToken();
     const orderId = crypto.randomUUID();
 
-    // 1. Record pending payment for security
+    // 1. Record pending payment
     const { error: pendingError } = await supabase.from("pending_payments").insert({
       order_id: orderId,
       user_id: user.uid,
@@ -104,6 +104,7 @@ export async function verifyPaymentAction(orderTrackingId: string, user_id: stri
       else if (paidAmount === 1800) coins = 20000;
       else coins = Math.floor(paidAmount * 6.25);
 
+      // Check for duplicate fulfillment
       const { data: existing } = await supabase
         .from('processed_payments')
         .select('order_tracking_id')
@@ -112,7 +113,7 @@ export async function verifyPaymentAction(orderTrackingId: string, user_id: stri
       
       if (existing) return { success: true, message: "Already fulfilled", coins_added: 0 };
 
-      // Atomic fulfillment via Server Action
+      // Atomic fulfillment
       const { error: rpcError } = await supabase.rpc("increment_coins", { user_id, amount: coins });
       if (rpcError) throw new Error(`Balance Update Failed: ${rpcError.message}`);
 

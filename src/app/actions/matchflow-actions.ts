@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 
 /**
  * @fileOverview Native Economy Actions on Vercel.
- * Hardened to prevent double-claiming and ensure atomic transactions.
+ * Migrated from Edge Functions to provide zero-latency atomic transactions.
  */
 
 export async function dailyCheckInAction(uid: string) {
@@ -14,9 +14,8 @@ export async function dailyCheckInAction(uid: string) {
     if (userErr || !user) throw new Error("Profile not found.");
 
     const now = new Date();
-    const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    const today = now.toISOString().split('T')[0];
     
-    // 1. Strict Day Locking
     if (user.last_check_in_date && user.last_check_in_date.split('T')[0] === today) {
       return { success: false, error: "Already collected for today." };
     }
@@ -36,7 +35,6 @@ export async function dailyCheckInAction(uid: string) {
     const amount = rewards[(streak - 1) % 7];
     const ts = Date.now();
 
-    // 2. Atomic Update
     const { error: updateErr } = await supabase.from('users').update({
       last_check_in_date: now.toISOString(),
       check_in_streak: streak
@@ -57,8 +55,7 @@ export async function dailyCheckInAction(uid: string) {
 
     return { success: true, amount, day: streak };
   } catch (err: any) {
-    console.error("[Daily Check-in Action Error]:", err.message);
-    return { success: false, error: "Network sync failed. Please try again." };
+    return { success: false, error: err.message };
   }
 }
 
@@ -68,9 +65,9 @@ export async function sendGiftAction(senderUid: string, recipientUid: string, co
     const ids = [senderUid, recipientUid].sort();
     const chatId = `direct_${ids[0]}_${ids[1]}`;
 
-    // 1. Deduct Sender (Atomic)
+    // 1. Deduct Sender
     const { error: deductErr } = await supabase.rpc("increment_coins", { user_id: senderUid, amount: -coinAmount });
-    if (deductErr) throw new Error("Insufficient coins or transaction failed.");
+    if (deductErr) throw new Error("Insufficient coins.");
 
     await supabase.from("coin_history").insert({
       user_id: senderUid,
@@ -107,42 +104,23 @@ export async function sendGiftAction(senderUid: string, recipientUid: string, co
   }
 }
 
-export async function sendMysteryNoteAction(senderUid: string, message: string, recipientCount: number) {
+export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: string, amount: number) {
   try {
-    const cost = Number(recipientCount) * 10;
+    const { data: target } = await supabase.from('users').select('uid').eq('match_flow_id', targetMatchFlowId).single();
+    if (!target) throw new Error("User ID not found.");
     
-    const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', senderUid).single();
-    if ((Number(bal?.coins) || 0) < cost) {
-       throw new Error("Insufficient coins.");
-    }
+    const { error: rpcError } = await supabase.rpc("increment_coins", { user_id: target.uid, amount });
+    if (rpcError) throw rpcError;
 
-    const { error: rpcErr } = await supabase.rpc("increment_coins", { user_id: senderUid, amount: -cost });
-    if (rpcErr) throw rpcErr;
-
-    await supabase.from('coin_history').insert({
-      user_id: senderUid,
-      amount: -cost,
-      type: 'mystery_note',
-      description: `Blast to ${recipientCount} people`,
-      timestamp: Date.now()
+    await supabase.from("coin_history").insert({ 
+      user_id: target.uid, 
+      amount, 
+      type: "merchant_award", 
+      description: "Merchant Load", 
+      timestamp: Date.now() 
     });
-
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
-export async function convertDiamondsToCoinsAction(uid: string, diamonds: number, coins: number) {
-  try {
-    const ts = Date.now();
-    await supabase.rpc("increment_diamonds", { user_id: uid, amount: -diamonds });
-    await supabase.rpc("increment_coins", { user_id: uid, amount: coins });
     
-    await supabase.from("diamond_history").insert({ user_id: uid, amount: -diamonds, type: "conversion", timestamp: ts });
-    await supabase.from("coin_history").insert({ user_id: uid, amount: coins, type: "conversion", description: "Diamond Exchange", timestamp: ts });
-
-    return { success: true };
+    return { success: true, message: `Awarded ${amount} coins.` };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -151,9 +129,19 @@ export async function convertDiamondsToCoinsAction(uid: string, diamonds: number
 export async function requestWithdrawalAction(userUid: string, diamonds: number, amount_kes: number, agencyId: string) {
   try {
     const ts = Date.now();
-    await supabase.rpc("increment_diamonds", { user_id: userUid, amount: -diamonds });
-    const { error } = await supabase.from('withdrawals').insert({ user_id: userUid, agency_id: agencyId, diamonds, amount_kes, status: 'pending', timestamp: ts });
+    const { error: rpcError } = await supabase.rpc("increment_diamonds", { user_id: userUid, amount: -diamonds });
+    if (rpcError) throw rpcError;
+
+    const { error } = await supabase.from('withdrawals').insert({ 
+      user_id: userUid, 
+      agency_id: agencyId, 
+      diamonds, 
+      amount_kes, 
+      status: 'pending', 
+      timestamp: ts 
+    });
     if (error) throw error;
+    
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -204,18 +192,6 @@ export async function toggleUserRoleAction(callerUid: string, targetMatchFlowId:
     if (!admin?.is_admin) throw new Error("Unauthorized.");
     await supabase.from('users').update({ [role]: value }).eq('match_flow_id', targetMatchFlowId);
     return { success: true, message: "Role updated." };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
-export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: string, amount: number) {
-  try {
-    const { data: target } = await supabase.from('users').select('uid').eq('match_flow_id', targetMatchFlowId).single();
-    if (!target) throw new Error("User ID not found.");
-    await supabase.rpc("increment_coins", { user_id: target.uid, amount });
-    await supabase.from("coin_history").insert({ user_id: target.uid, amount, type: "merchant_award", description: "Merchant Load", timestamp: Date.now() });
-    return { success: true, message: `Awarded ${amount} coins.` };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
