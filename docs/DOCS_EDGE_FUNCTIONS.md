@@ -1,9 +1,6 @@
+# QIVO Edge Function Production Code
 
-
-
-# QIVO Production Edge Function
-
-Only the `payment-ops` function is required as an Edge Function for PesaPal. Update your Supabase function with this hardened logic.
+Update your Supabase Edge Function with this hardened logic.
 
 ## 1. Function Name: `payment-ops`
 ```typescript
@@ -41,13 +38,24 @@ serve(async (req) => {
     if (action === "initiate") {
       const { amount, user } = body
       const token = await getPesapalToken()
+      const orderId = crypto.randomUUID()
+
+      // ISSUE 4 FIX: Save pending payment before redirect
+      const { error: pendingError } = await supabase.from("pending_payments").insert({
+        order_id: orderId,
+        user_id: user.uid,
+        amount: Number(amount),
+        status: "pending"
+      })
+      if (pendingError) throw new Error(`Pending Log Error: ${pendingError.message}`);
       
       const order = {
-        id: crypto.randomUUID(),
+        id: orderId,
         currency: "KES",
         amount: Number(amount),
         description: "QIVO Coins Recharge",
-        callback_url: "https://qivo-gamma.vercel.app/recharge",
+        // ISSUE 3 FIX: Dedicated success page
+        callback_url: "https://qivo-gamma.vercel.app/payment-success",
         notification_id: Deno.env.get("PESAPAL_IPN_ID"),
         billing_address: { email_address: user.email || "user@qivo.app" },
       }
@@ -58,11 +66,14 @@ serve(async (req) => {
         body: JSON.stringify(order),
       })
       const data = await res.json()
-      return new Response(JSON.stringify({ success: true, redirect_url: data.redirect_url }), { headers: { ...corsHeaders, "Content-Type": "application/json" } })
+      
+      return new Response(JSON.stringify({ success: true, redirect_url: data.redirect_url }), { 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      })
     }
 
     if (action === "fulfill") {
-      const { orderTrackingId, user_uid } = body
+      const { orderTrackingId, user_id } = body
       if (!orderTrackingId) throw new Error("Missing Tracking ID");
       
       const token = await getPesapalToken()
@@ -74,9 +85,9 @@ serve(async (req) => {
 
       if (statusData.payment_status_description === "Completed") {
         const paidAmount = Math.round(Number(statusData.amount));
-        let coins = 0;
+        let coins = Math.floor(paidAmount * 6.25);
         
-        // Robust mapping based on standard package prices
+        // Accurate package mapping
         if (paidAmount <= 1) coins = 200;
         else if (paidAmount === 80) coins = 500;
         else if (paidAmount === 120) coins = 1000;
@@ -84,20 +95,20 @@ serve(async (req) => {
         else if (paidAmount === 550) coins = 5000;
         else if (paidAmount === 1000) coins = 10000;
         else if (paidAmount === 1800) coins = 20000;
-        else coins = Math.floor(paidAmount * 6.25);
-
-        if (coins <= 0) throw new Error("Coin calculation yielded zero or negative value.");
 
         // Check for duplicate fulfillment
         const { data: existing } = await supabase.from('processed_payments').select('order_tracking_id').eq('order_tracking_id', orderTrackingId).maybeSingle()
         if (existing) return new Response(JSON.stringify({ success: true, message: "Already fulfilled" }), { headers: corsHeaders })
 
-        // Atomic update and log
-        await supabase.rpc("increment_coins", { user_uid, amount: coins })
-        await supabase.from('processed_payments').insert({ order_tracking_id: orderTrackingId, user_id: user_uid, amount: paidAmount, coins })
+        // ISSUE 2 & PARAM FIX: Atomic update with error checking
+        const { error: rpcError } = await supabase.rpc("increment_coins", { user_id, amount: coins })
+        if (rpcError) throw new Error(`Balance RPC Error: ${rpcError.message}`);
+
+        const { error: logError } = await supabase.from('processed_payments').insert({ order_tracking_id: orderTrackingId, user_id, amount: paidAmount, coins })
+        if (logError) throw new Error(`Log Error: ${logError.message}`);
         
         await supabase.from("coin_history").insert({
-          user_id: user_uid,
+          user_id,
           amount: coins,
           type: "recharge",
           description: "PesaPal Recharge",
@@ -106,14 +117,16 @@ serve(async (req) => {
 
         return new Response(JSON.stringify({ success: true, coins_added: coins }), { headers: corsHeaders })
       }
-      return new Response(JSON.stringify({ success: false, message: "Payment not completed yet" }), { headers: corsHeaders })
+      return new Response(JSON.stringify({ success: false, message: "Payment pending at PesaPal" }), { headers: corsHeaders })
     }
     
     return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400, headers: corsHeaders })
   } catch (e) {
-    console.error("[Edge Function Error]:", e.message);
-    return new Response(JSON.stringify({ error: e.message }), { status: 200, headers: corsHeaders })
+    // ISSUE 1 FIX: Return 500 on internal failures
+    return new Response(JSON.stringify({ success: false, error: e.message }), { 
+      status: 500, 
+      headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    })
   }
 })
 ```
-

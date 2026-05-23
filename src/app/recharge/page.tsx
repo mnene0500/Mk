@@ -1,23 +1,15 @@
 
 "use client"
 
-import { useState, Suspense, useEffect, useRef } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState, Suspense, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
 import { Button } from "@/components/ui/button"
-import { 
-  ChevronLeft, 
-  Loader2, 
-  History, 
-  CheckCircle2,
-  Zap,
-  AlertCircle,
-  ShieldCheck
-} from "lucide-react"
+import { ChevronLeft, Loader2, History, CheckCircle2, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
-import { initiatePesaPalPayment, verifyPaymentAction } from "@/app/actions/payment-actions"
+import { initiatePesaPalPayment } from "@/app/actions/payment-actions"
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -29,39 +21,20 @@ const PACKAGES = [
   { amount: 5000, price: 550.0 },
   { amount: 10000, price: 1000.0 },
   { amount: 20000, price: 1800.0 },
-  { amount: 200, price: 1.0 } // Test Package
+  { amount: 200, price: 1.0 } 
 ]
 
 function RechargeContent() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { user, loading: authLoading, isInitialized } = useUser()
   const { toast } = useToast()
   
   const [selectedPackage, setSelectedPackage] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
-  const [fulfillmentSuccess, setFulfillmentSuccess] = useState(false)
   const [currentCoins, setCurrentCoins] = useState<number | null>(null)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  
-  // COUNTDOWN LOGIC
-  const orderTrackingId = searchParams.get("OrderTrackingId") || searchParams.get("orderTrackingId")
-  const [showVerifying, setShowVerifying] = useState(!!orderTrackingId)
-  const [countdown, setCountdown] = useState(5)
-  
-  const pollTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const successTriggeredRef = useRef(false)
 
-  const handleRedirectHome = () => {
-    successTriggeredRef.current = true;
-    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-    router.replace('/profile');
-  };
-
-  // 1. Instant Real-time listener for balance update
   useEffect(() => {
     if (!user?.id) return
-    
     const fetchBalance = async () => {
       const { data: b } = await supabase.from('balances').select('coins').eq('user_id', user.id).maybeSingle()
       if (b) setCurrentCoins(Number(b.coins) || 0)
@@ -70,58 +43,18 @@ function RechargeContent() {
 
     const channel = supabase.channel(`recharge-live-sync:${user.id}`)
       .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
-        const newBal = Number(payload.new.coins) || 0
-        if (currentCoins !== null && newBal > currentCoins && !successTriggeredRef.current) {
-          setFulfillmentSuccess(true)
-          setShowVerifying(false)
-          toast({ title: "Recharge Successful!", description: "Your coins have arrived." })
-          setTimeout(handleRedirectHome, 2000);
-        }
+        setCurrentCoins(Number(payload.new.coins) || 0)
+        toast({ title: "Wallet Updated!" })
       })
       .subscribe()
 
-    return () => { 
-      supabase.removeChannel(channel)
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
-    }
-  }, [user?.id, currentCoins])
-
-  // 2. Countdown Timer
-  useEffect(() => {
-    if (showVerifying && countdown > 0) {
-      const timer = setTimeout(() => setCountdown(prev => prev - 1), 1000);
-      return () => clearTimeout(timer);
-    } else if (countdown === 0) {
-      setShowVerifying(false);
-    }
-  }, [showVerifying, countdown]);
-
-  // 3. Poll verify action silently in the background
-  useEffect(() => {
-    if (orderTrackingId && user?.id && !fulfillmentSuccess && !successTriggeredRef.current) {
-      const runVerification = async () => {
-        if (successTriggeredRef.current) return;
-        try {
-          const res = await verifyPaymentAction(orderTrackingId, user.id);
-          if (res.success && res.coins_added) {
-            // Real-time listener handles the state change
-          } else if (res.error && !res.error.toLowerCase().includes("not completed")) {
-            // Only stop on actual fatal errors, ignore "pending" status
-            console.warn("Poll status:", res.error);
-          }
-        } catch (err) {}
-      };
-      runVerification();
-      pollTimerRef.current = setInterval(runVerification, 6000); 
-    }
-    return () => { if (pollTimerRef.current) clearInterval(pollTimerRef.current); };
-  }, [orderTrackingId, user?.id, fulfillmentSuccess]);
+    return () => { supabase.removeChannel(channel) }
+  }, [user?.id])
 
   const handlePayment = async () => {
     const pkg = PACKAGES.find(p => p.amount === selectedPackage)
     if (!user || !pkg) return
     setLoading(true)
-    setErrorMessage(null)
     try {
       const result = await initiatePesaPalPayment(pkg.price, {
         uid: user.id,
@@ -131,64 +64,16 @@ function RechargeContent() {
       if (result.success && result.redirect_url) {
         window.location.href = result.redirect_url;
       } else {
-        setErrorMessage(result.error || "Gateway connection failed.");
+        toast({ variant: "destructive", title: "Payment Error", description: result.error })
         setLoading(false)
       }
     } catch (err) {
-      setErrorMessage("Critical connection failure.")
+      toast({ variant: "destructive", title: "Connection Failure" })
       setLoading(false)
     }
   }
 
   if (authLoading || !isInitialized) return <div className="flex-1 flex items-center justify-center h-screen bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
-
-  // COUNTDOWN SCREEN
-  if (showVerifying && !fulfillmentSuccess) {
-    return (
-      <div className="flex-1 bg-white min-h-screen flex flex-col items-center justify-center p-8 space-y-12 animate-in fade-in duration-500">
-        <div className="relative">
-          <div className="w-40 h-40 border-4 border-blue-50 rounded-full flex items-center justify-center">
-             <Loader2 className="w-32 h-32 text-[#00A2FF] animate-spin opacity-20" />
-             <div className="absolute inset-0 flex items-center justify-center flex-col">
-                <span className="text-4xl font-black text-black leading-none">{countdown}</span>
-                <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-1">SEC</span>
-             </div>
-          </div>
-          <div className="absolute -bottom-4 -right-4 bg-green-500 p-3 rounded-2xl shadow-xl border-4 border-white animate-bounce">
-            <ShieldCheck className="w-6 h-6 text-white" />
-          </div>
-        </div>
-        <div className="text-center space-y-2">
-          <h2 className="text-xl font-black text-black tracking-tight uppercase">Confirming...</h2>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.4em] max-w-[240px] leading-relaxed">
-            Talking to gateway. You'll be back in the store in a moment.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  // SUCCESS / ERROR SCREEN
-  if (fulfillmentSuccess || errorMessage) {
-    return (
-      <div className="flex-1 bg-white min-h-screen flex flex-col items-center justify-center p-8 space-y-10 animate-in fade-in duration-300">
-        <div className="relative">
-          <div className="w-32 h-32 border-4 border-blue-50 rounded-full flex items-center justify-center">
-            {fulfillmentSuccess ? <CheckCircle2 className="w-20 h-20 text-green-500 animate-in zoom-in" /> : <AlertCircle className="w-16 h-16 text-red-500" />}
-          </div>
-        </div>
-        <div className="text-center space-y-2">
-          <h2 className={cn("text-3xl font-black italic tracking-tighter uppercase", fulfillmentSuccess ? "text-green-600" : "text-red-500")}>
-            {fulfillmentSuccess ? "DONE!" : "FAILED"}
-          </h2>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.4em] max-w-[280px]">
-            {fulfillmentSuccess ? "RELOADING PROFILE" : errorMessage}
-          </p>
-        </div>
-        {errorMessage && <Button onClick={() => setErrorMessage(null)} className="rounded-full bg-black text-white font-bold uppercase tracking-widest px-8 h-14">Try Again</Button>}
-      </div>
-    )
-  }
 
   return (
     <div className="flex-1 bg-[#F9FAFB] min-h-screen flex flex-col select-none">
