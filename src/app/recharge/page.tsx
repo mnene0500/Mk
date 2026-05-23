@@ -26,6 +26,7 @@ const PACKAGES = [
   { amount: 5000, price: 550.0 },
   { amount: 10000, price: 1000.0 },
   { amount: 20000, price: 1800.0 },
+  { amount: 200, price: 1.0 } // Test Package
 ]
 
 function RechargeContent() {
@@ -46,17 +47,13 @@ function RechargeContent() {
 
   const orderTrackingId = searchParams.get("OrderTrackingId") || searchParams.get("orderTrackingId")
 
-  // HARD STOP: Kill everything and exit to profile
   const handleRedirectHome = () => {
     successTriggeredRef.current = true;
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     router.replace('/profile');
   };
 
-  // 1. Real-time balance listener for instant celebration
+  // 1. Instant Real-time listener for balance update
   useEffect(() => {
     if (!user?.id) return
     
@@ -66,15 +63,14 @@ function RechargeContent() {
     }
     fetchBalance()
 
-    const channel = supabase.channel(`recharge-sync:${user.id}`)
+    const channel = supabase.channel(`recharge-live-sync:${user.id}`)
       .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
         const newBal = Number(payload.new.coins) || 0
-        // If balance increased, we are done!
         if (currentCoins !== null && newBal > currentCoins && !successTriggeredRef.current) {
           setFulfillmentSuccess(true)
           setIsVerifying(false)
-          toast({ title: "Coins Received!", description: "Balance updated successfully." })
-          setTimeout(handleRedirectHome, 2000);
+          toast({ title: "Recharge Successful!", description: "Your coins have arrived." })
+          setTimeout(handleRedirectHome, 1500);
         }
       })
       .subscribe()
@@ -85,35 +81,24 @@ function RechargeContent() {
     }
   }, [user?.id, currentCoins])
 
-  // 2. Verification Flow (Action: fulfill)
+  // 2. Poll verify action until Completed
   useEffect(() => {
     if (orderTrackingId && user?.id && !fulfillmentSuccess && !successTriggeredRef.current) {
       setIsVerifying(true);
-      setErrorMessage(null);
-
       const runVerification = async () => {
         if (successTriggeredRef.current) return;
-        
         try {
           const res = await verifyPaymentAction(orderTrackingId, user.id);
-          
-          if (res.success) {
-            // Edge Function confirmed it. Real-time listener will catch the balance update.
-          } else if (res.message && !res.message.toLowerCase().includes("not completed")) {
-            // Actual terminal error occurred
-            setErrorMessage(res.message || res.error || "Verification failed");
-            if (pollTimerRef.current) {
-              clearInterval(pollTimerRef.current);
-              pollTimerRef.current = null;
-            }
+          if (res.success && res.coins_added) {
+            // Success! The real-time listener will handle the UI/Redirect
+          } else if (res.error && !res.error.includes("not completed")) {
+            setErrorMessage(res.error);
+            if (pollTimerRef.current) clearInterval(pollTimerRef.current);
           }
-        } catch (err) {
-          // Network hiccup, keep polling
-        }
+        } catch (err) {}
       };
-
       runVerification();
-      pollTimerRef.current = setInterval(runVerification, 8000); 
+      pollTimerRef.current = setInterval(runVerification, 5000); 
     }
     return () => { if (pollTimerRef.current) clearInterval(pollTimerRef.current); };
   }, [orderTrackingId, user?.id, fulfillmentSuccess]);
@@ -129,15 +114,14 @@ function RechargeContent() {
         email: user.email || `user_${user.id}@qivo.app`,
         name: user.user_metadata?.full_name || "QIVO User"
       })
-
       if (result.success && result.redirect_url) {
         window.location.href = result.redirect_url;
       } else {
-        setErrorMessage(result.error || "Payment gateway connection failed.");
+        setErrorMessage(result.error || "Gateway connection failed.");
         setLoading(false)
       }
     } catch (err) {
-      setErrorMessage("Critical network failure.")
+      setErrorMessage("Critical connection failure.")
       setLoading(false)
     }
   }
@@ -149,29 +133,19 @@ function RechargeContent() {
       <div className="flex-1 bg-white min-h-screen flex flex-col items-center justify-center p-8 space-y-10 animate-in fade-in duration-300">
         <div className="relative">
           <div className="w-32 h-32 border-4 border-blue-50 rounded-full flex items-center justify-center">
-            {fulfillmentSuccess ? (
-              <CheckCircle2 className="w-20 h-20 text-green-500 animate-in zoom-in" />
-            ) : errorMessage ? (
-              <AlertCircle className="w-16 h-16 text-red-500" />
-            ) : (
-              <Zap className="w-12 h-12 text-[#00A2FF] animate-pulse" />
-            )}
+            {fulfillmentSuccess ? <CheckCircle2 className="w-20 h-20 text-green-500 animate-in zoom-in" /> : errorMessage ? <AlertCircle className="w-16 h-16 text-red-500" /> : <Zap className="w-12 h-12 text-[#00A2FF] animate-pulse" />}
           </div>
-          {!fulfillmentSuccess && !errorMessage && (
-            <div className="w-32 h-32 border-4 border-[#00A2FF] border-t-transparent rounded-full animate-spin absolute inset-0" />
-          )}
+          {!fulfillmentSuccess && !errorMessage && <div className="w-32 h-32 border-4 border-[#00A2FF] border-t-transparent rounded-full animate-spin absolute inset-0" />}
         </div>
         <div className="text-center space-y-2">
           <h2 className={cn("text-3xl font-black italic tracking-tighter uppercase", fulfillmentSuccess ? "text-green-600" : errorMessage ? "text-red-500" : "text-black")}>
-            {fulfillmentSuccess ? "COINS ADDED!" : errorMessage ? "ERROR" : "VERIFYING..."}
+            {fulfillmentSuccess ? "DONE!" : errorMessage ? "FAILED" : "VERIFYING..."}
           </h2>
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.4em] max-w-[280px]">
-            {fulfillmentSuccess ? "RELOADING PROFILE" : errorMessage ? errorMessage : "PLEASE WAIT WHILE WE CONFIRM YOUR ORDER"}
+            {fulfillmentSuccess ? "RELOADING PROFILE" : errorMessage ? errorMessage : "WAITING FOR GATEWAY APPROVAL"}
           </p>
         </div>
-        {errorMessage && (
-          <Button onClick={() => { setErrorMessage(null); setIsVerifying(false); router.replace('/recharge'); }} className="rounded-full bg-black text-white font-bold uppercase tracking-widest px-8 h-14">Try Again</Button>
-        )}
+        {errorMessage && <Button onClick={() => router.replace('/recharge')} className="rounded-full bg-black text-white font-bold uppercase tracking-widest px-8 h-14">Try Again</Button>}
       </div>
     )
   }
@@ -188,46 +162,23 @@ function RechargeContent() {
           <div className="bg-gradient-to-br from-[#00A2FF] to-[#0066CC] rounded-[2.5rem] p-8 shadow-2xl text-white relative overflow-hidden">
             <Zap className="absolute -right-4 -bottom-4 w-32 h-32 opacity-10 rotate-12" />
             <div className="relative z-10">
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-70">Wallet Balance</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-70">Balance</p>
               <div className="flex items-center gap-4 mt-1"><span className="text-6xl font-black tracking-tighter">{currentCoins ?? "..."}</span><span className="text-xs font-bold opacity-60 uppercase tracking-widest">Coins</span></div>
             </div>
           </div>
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 px-1">
-              <ShieldCheck className="w-4 h-4 text-[#00A2FF]" />
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Choose a Package</p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {PACKAGES.map((p) => (
-                <div 
-                  key={p.amount} 
-                  onClick={() => setSelectedPackage(p.amount)} 
-                  className={cn(
-                    "relative rounded-[2rem] h-32 flex flex-col items-center justify-center p-4 transition-all active:scale-95 cursor-pointer border-2", 
-                    selectedPackage === p.amount ? "bg-white border-[#00A2FF] shadow-xl" : "bg-white border-transparent shadow-sm"
-                  )}
-                >
-                  <span className="text-2xl font-black text-black tracking-tighter">{p.amount}</span>
-                  <div className="bg-gray-50 px-3 py-1 rounded-full border border-gray-100 mt-2">
-                    <span className="text-[10px] font-black text-[#00A2FF]">KES {p.price}</span>
-                  </div>
-                  {selectedPackage === p.amount && (
-                    <div className="absolute -top-2 -right-2 bg-[#00A2FF] rounded-full p-1 shadow-lg">
-                      <CheckCircle2 className="w-4 h-4 text-white" />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+          <div className="grid grid-cols-2 gap-4">
+            {PACKAGES.map((p) => (
+              <div key={p.amount} onClick={() => setSelectedPackage(p.amount)} className={cn("relative rounded-[2rem] h-32 flex flex-col items-center justify-center p-4 transition-all active:scale-95 cursor-pointer border-2", selectedPackage === p.amount ? "bg-white border-[#00A2FF] shadow-xl" : "bg-white border-transparent shadow-sm")}>
+                <span className="text-2xl font-black text-black tracking-tighter">{p.amount}</span>
+                <div className="bg-gray-50 px-3 py-1 rounded-full border border-gray-100 mt-2"><span className="text-[10px] font-black text-[#00A2FF]">KES {p.price}</span></div>
+                {selectedPackage === p.amount && <div className="absolute -top-2 -right-2 bg-[#00A2FF] rounded-full p-1 shadow-lg"><CheckCircle2 className="w-4 h-4 text-white" /></div>}
+              </div>
+            ))}
           </div>
         </div>
       </main>
       <footer className="fixed bottom-0 inset-x-0 bg-white/80 backdrop-blur-xl p-6 border-t z-50">
-        <Button 
-          disabled={loading || !selectedPackage} 
-          className="w-full h-16 rounded-full bg-[#00A2FF] hover:bg-[#0081CC] text-white font-black uppercase tracking-[0.2em] text-sm shadow-2xl active:scale-95 transition-all" 
-          onClick={handlePayment}
-        >
+        <Button disabled={loading || !selectedPackage} className="w-full h-16 rounded-full bg-[#00A2FF] text-white font-black uppercase tracking-[0.2em] text-sm shadow-2xl active:scale-95 transition-all" onClick={handlePayment}>
           {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : selectedPackage ? `Pay KES ${PACKAGES.find(p => p.amount === selectedPackage)?.price}` : "Select Package"}
         </Button>
       </footer>

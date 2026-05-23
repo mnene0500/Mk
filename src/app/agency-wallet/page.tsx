@@ -1,6 +1,7 @@
+
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
@@ -10,7 +11,6 @@ import { Label } from "@/components/ui/label"
 import { ChevronLeft, Gem, Banknote, History, Wallet, ArrowRightLeft, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { requestWithdrawalAction } from "@/app/actions/matchflow-actions"
-import { cn } from "@/lib/utils"
 
 export default function AgencyMemberPage() {
   const router = useRouter()
@@ -42,29 +42,41 @@ export default function AgencyMemberPage() {
 
   const handleWithdraw = async () => {
     const amount = Number(diamondsToUse)
-    if (isNaN(amount) || amount < minDiamondsForCash) {
-      toast({ variant: "destructive", title: "Invalid Amount", description: `Min: ${minDiamondsForCash} diamonds.` })
+    if (isNaN(amount) || amount < minDiamondsForCash || amount > diamondBalance) {
+      toast({ variant: "destructive", title: "Invalid Amount" })
       return
     }
     if (!profile?.agency_id || profile.agency_status !== 'approved') {
-      toast({ variant: "destructive", title: "Agency Required", description: "You must be an approved agency member." })
-      return
-    }
-    if (amount > diamondBalance) {
-      toast({ variant: "destructive", title: "Insufficient Balance" })
+      toast({ variant: "destructive", title: "Agency Required" })
       return
     }
 
     setIsProcessing(true)
-    const res = await requestWithdrawalAction(user!.id, amount, Number(expectedKes), profile.agency_id)
-    if (res.success) {
-      setBalances({ ...balances, diamonds: balances.diamonds - amount })
-      toast({ title: "Request Sent", description: "Your agent will review your payment." })
-      setDiamondsToUse("")
-    } else {
-      toast({ variant: "destructive", title: "Error", description: res.error })
+    try {
+      const ts = Date.now()
+      const res = await requestWithdrawalAction(user!.id, amount, Number(expectedKes), profile.agency_id)
+      
+      if (res.success) {
+        // Track deduction in diamond history
+        await supabase.from('diamond_history').insert({
+          user_id: user!.id,
+          amount: -amount,
+          type: 'withdrawal',
+          description: `Payout Request KES ${expectedKes}`,
+          timestamp: ts
+        })
+        
+        setBalances({ ...balances, diamonds: balances.diamonds - amount })
+        toast({ title: "Request Sent", description: "Ledger updated." })
+        setDiamondsToUse("")
+      } else {
+        toast({ variant: "destructive", title: "Error", description: res.error })
+      }
+    } catch (e) {
+      toast({ variant: "destructive", title: "System Error" })
+    } finally {
+      setIsProcessing(false)
     }
-    setIsProcessing(false)
   }
 
   if (loading) return <div className="flex-1 flex items-center justify-center min-h-screen bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
@@ -79,9 +91,8 @@ export default function AgencyMemberPage() {
 
       <main className="flex-1 p-6 space-y-8">
         <div className="bg-gradient-to-br from-purple-600 to-purple-400 p-8 rounded-[2.5rem] shadow-xl text-white relative overflow-hidden">
-          <Wallet className="absolute -right-4 -bottom-4 w-32 h-32 opacity-10" />
           <div className="relative z-10">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-80 mb-2">Available Diamonds</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-80 mb-2">Withdrawable Diamonds</p>
             <div className="flex items-center gap-3 mb-6">
               <Gem className="w-8 h-8 fill-purple-200" />
               <h2 className="text-4xl font-bold tracking-tight">{diamondBalance.toFixed(0)}</h2>
@@ -95,7 +106,7 @@ export default function AgencyMemberPage() {
 
         <div className="space-y-6">
           <div className="space-y-2">
-            <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">Amount of Diamonds</Label>
+            <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">Diamonds to Cash</Label>
             <div className="relative">
               <Input type="number" placeholder={`Min ${minDiamondsForCash}`} value={diamondsToUse} onChange={(e) => setDiamondsToUse(e.target.value)} className="rounded-2xl h-16 pl-12 border-gray-100 bg-gray-50 text-lg font-bold" />
               <Gem className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-green-500" />
@@ -104,12 +115,12 @@ export default function AgencyMemberPage() {
 
           {Number(diamondsToUse) > 0 && (
             <div className="p-5 rounded-2xl border flex items-center justify-between bg-green-50 border-green-100">
-              <div className="flex items-center gap-3"><Banknote className="w-5 h-5 text-green-600" /><span className="text-[10px] font-bold text-black uppercase tracking-widest">Estimated Payout</span></div>
+              <div className="flex items-center gap-3"><Banknote className="w-5 h-5 text-green-600" /><span className="text-[10px] font-bold text-black uppercase tracking-widest">You'll Receive</span></div>
               <span className="text-xl font-bold text-green-600">Ksh {expectedKes}</span>
             </div>
           )}
 
-          <Button className="w-full h-16 rounded-full bg-green-600 text-white font-bold uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all" onClick={handleWithdraw} disabled={isProcessing || !diamondsToUse}>
+          <Button className="w-full h-16 rounded-full bg-green-600 text-white font-bold uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all" onClick={handleWithdraw} disabled={isProcessing || !diamondsToUse || Number(diamondsToUse) < minDiamondsForCash}>
             {isProcessing ? <Loader2 className="animate-spin" /> : <div className="flex items-center gap-2"><ArrowRightLeft className="w-5 h-5" />Request Payout</div>}
           </Button>
         </div>

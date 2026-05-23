@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -24,18 +25,14 @@ export default function IncomePage() {
     if (!user?.id) return
     const fetchBalances = async () => {
       const { data } = await supabase.from('balances').select('*').eq('user_id', user.id).single()
-      if (data) {
-        setBalances({ coins: data.coins || 0, diamonds: data.diamonds || 0 })
-      }
+      if (data) setBalances({ coins: data.coins || 0, diamonds: Number(data.diamonds) || 0 })
       setBalanceLoading(false)
     }
     fetchBalances()
 
-    const channel = supabase.channel(`income:${user.id}`)
-      .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
-        setBalances({ coins: payload.new.coins, diamonds: payload.new.diamonds })
-      })
-      .subscribe()
+    const channel = supabase.channel(`income-sync:${user.id}`).on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
+      setBalances({ coins: payload.new.coins, diamonds: Number(payload.new.diamonds) })
+    }).subscribe()
       
     return () => { supabase.removeChannel(channel) }
   }, [user?.id])
@@ -47,43 +44,36 @@ export default function IncomePage() {
 
   const handleConvert = async () => {
     const amount = Number(diamondsToConvert)
-    if (isNaN(amount) || amount < minDiamonds) {
-      toast({ variant: "destructive", title: "Invalid Amount", description: `Min: ${minDiamonds} diamonds.` })
-      return
-    }
-    if (amount > diamondBalance) {
-      toast({ variant: "destructive", title: "Insufficient Balance" })
+    if (isNaN(amount) || amount < minDiamonds || amount > diamondBalance) {
+      toast({ variant: "destructive", title: "Invalid Amount" })
       return
     }
 
     setIsProcessing(true)
     try {
-      const timestamp = Date.now()
-      
-      const newDiamonds = balances.diamonds - amount
+      const ts = Date.now()
+      const newDiamonds = diamondBalance - amount
       const newCoins = balances.coins + expectedCoins
 
-      await supabase.from('balances').update({ diamonds: newDiamonds, coins: newCoins }).eq('user_id', user?.id)
-      
-      await supabase.from('diamond_history').insert({ 
-        user_id: user?.id,
-        amount: -amount, 
-        type: 'conversion', 
-        description: `Converted to ${expectedCoins} coins`, 
-        timestamp 
-      })
+      // 1. Update Balance
+      const { error } = await supabase.from('balances').update({ diamonds: newDiamonds, coins: newCoins }).eq('user_id', user?.id)
+      if (error) throw error
+
+      // 2. Track History
+      await supabase.from('diamond_history').insert({ user_id: user?.id, amount: -amount, type: 'conversion', description: `Converted to ${expectedCoins} coins`, timestamp: ts })
+      await supabase.from('coin_history').insert({ user_id: user?.id, amount: expectedCoins, type: 'conversion', description: `Income Conversion`, timestamp: ts })
       
       toast({ title: "Success!", description: `Added ${expectedCoins} coins.` })
       setDiamondsToConvert("")
     } catch (err) {
-      toast({ variant: "destructive", title: "Error" })
+      toast({ variant: "destructive", title: "Error", description: "Failed to update ledger." })
     } finally {
       setIsProcessing(false)
     }
   }
 
   return (
-    <div className="flex-1 bg-white min-h-screen flex flex-col relative overflow-hidden">
+    <div className="flex-1 bg-white min-h-screen flex flex-col select-none">
       <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-50">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
         <h1 className="text-sm font-bold text-black uppercase tracking-widest">My Income</h1>
@@ -94,34 +84,28 @@ export default function IncomePage() {
         <div className="bg-gradient-to-br from-[#00A2FF] to-[#0081CC] p-8 rounded-[2.5rem] shadow-xl text-white relative overflow-hidden">
           <div className="relative z-10">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-80 mb-2">Total Diamonds</p>
-            <div className="flex items-center gap-3">
-              <Gem className="w-8 h-8 fill-blue-200" />
-              <h2 className="text-4xl font-bold tracking-tight">{balanceLoading && balances.diamonds === 0 ? "..." : diamondBalance.toFixed(0)}</h2>
-            </div>
+            <div className="flex items-center gap-3"><Gem className="w-8 h-8 fill-blue-200" /><h2 className="text-4xl font-bold tracking-tight">{diamondBalance.toFixed(0)}</h2></div>
           </div>
         </div>
 
         <div className="space-y-6">
           <div className="space-y-2">
-            <div className="flex justify-between items-center ml-1">
-              <Label className="text-[10px] font-bold uppercase text-gray-400">Convert to Coins</Label>
-              <span className="text-[9px] font-bold text-[#00A2FF] uppercase">Min: {minDiamonds}</span>
-            </div>
+            <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">Convert to Coins (Min {minDiamonds})</Label>
             <div className="relative">
-              <Input type="number" placeholder="0" value={diamondsToConvert} onChange={(e) => setDiamondsToConvert(e.target.value)} className="rounded-2xl h-16 pl-12 border-gray-100 bg-gray-50 text-lg font-bold" />
+              <Input type="number" value={diamondsToConvert} onChange={(e) => setDiamondsToConvert(e.target.value)} className="rounded-2xl h-16 pl-12 border-gray-100 bg-gray-50 text-lg font-bold" />
               <Gem className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400" />
             </div>
           </div>
 
-          {Number(diamondsToConvert) > 0 && (
-            <div className="p-5 rounded-2xl border bg-blue-50 border-blue-100 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-center gap-3"><Coins className="w-5 h-5 text-yellow-500" /><span className="text-[10px] font-bold text-black uppercase tracking-widest">You'll Receive</span></div>
+          {Number(diamondsToConvert) >= minDiamonds && (
+            <div className="p-5 rounded-2xl border bg-blue-50 border-blue-100 flex items-center justify-between">
+              <div className="flex items-center gap-3"><Coins className="w-5 h-5 text-yellow-500" /><span className="text-[10px] font-bold text-black uppercase tracking-widest">Receiving</span></div>
               <span className="text-xl font-bold text-blue-600">+{expectedCoins} Coins</span>
             </div>
           )}
 
-          <Button className="w-full h-16 rounded-full bg-[#00A2FF] hover:bg-[#0081CC] text-white font-bold uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all" onClick={handleConvert} disabled={isProcessing || !diamondsToConvert || Number(diamondsToConvert) < minDiamonds}>
-            {isProcessing ? <Loader2 className="animate-spin" /> : <div className="flex items-center gap-2"><ArrowRightLeft className="w-5 h-5" />Convert to Coins</div>}
+          <Button className="w-full h-16 rounded-full bg-[#00A2FF] text-white font-bold uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all" onClick={handleConvert} disabled={isProcessing || !diamondsToConvert || Number(diamondsToConvert) < minDiamonds}>
+            {isProcessing ? <Loader2 className="animate-spin" /> : <div className="flex items-center gap-2"><ArrowRightLeft className="w-5 h-5" />Confirm Conversion</div>}
           </Button>
         </div>
       </main>
