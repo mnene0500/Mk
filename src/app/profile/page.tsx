@@ -223,6 +223,9 @@ export default function MePage() {
   if (!isReady && (authLoading || !profile)) {
     return <div className="flex-1 bg-[#F8F9FA] min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
   }
+
+  // Generate fresh photo URL with cache buster
+  const freshPhotoUrl = profile?.photo_url ? `${profile.photo_url}${profile.photo_url.includes('?') ? '&' : '?'}t=${Date.now()}` : null;
   
   return (
     <div className="flex-1 pb-24 bg-[#F8F9FA] min-h-screen relative select-none animate-in fade-in duration-300">
@@ -240,8 +243,8 @@ export default function MePage() {
 
           <div className="relative mb-4">
             <div className="relative w-28 h-28 rounded-full shadow-2xl overflow-hidden bg-muted border-4 border-white/20">
-              {profile?.photo_url ? (
-                <Image src={profile.photo_url} alt={profile.name || "User"} fill className="object-cover" priority sizes="112px" />
+              {freshPhotoUrl ? (
+                <Image key={freshPhotoUrl} src={freshPhotoUrl} alt={profile?.name || "User"} fill className="object-cover" priority sizes="112px" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-gray-100">
                   <User className="w-12 h-12 text-gray-300" />

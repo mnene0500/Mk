@@ -13,7 +13,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 /**
  * Utility to convert base64 data into a Blob/File that Supabase Storage can process.
- * Robust handling for different MIME types.
  */
 export function base64ToBlob(base64: string): { blob: Blob, contentType: string } {
   const matches = base64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/);
@@ -43,16 +42,17 @@ export function base64ToBlob(base64: string): { blob: Blob, contentType: string 
 }
 
 /**
- * Uploads a profile photo to the 'photos' bucket.
- * Pattern: avatars/[userId].jpg (Overwrites on change)
+ * Uploads a profile photo to the 'photos' bucket using a timestamped path.
+ * Pattern: [userId]/avatar-[timestamp].jpg
  */
 export async function uploadProfilePhoto(blob: Blob, userId: string) {
-  const filePath = `avatars/${userId}.jpg`;
+  // Use exact approach requested: userId/timestamp.jpg
+  const filePath = `${userId}/avatar-${Date.now()}.jpg`;
 
   const { error } = await supabase.storage
     .from('photos')
     .upload(filePath, blob, {
-      cacheControl: '0',
+      cacheControl: '3600',
       upsert: true,
       contentType: 'image/jpeg'
     });
@@ -66,18 +66,18 @@ export async function uploadProfilePhoto(blob: Blob, userId: string) {
     .from('photos')
     .getPublicUrl(filePath);
 
-  // Append timestamp to bust browser cache for instant updates
+  // Return fresh URL with cache buster
   return `${data.publicUrl}?t=${Date.now()}`;
 }
 
 /**
  * Uploads gallery or proof photos to the 'photos' bucket.
- * Pattern: posts/[userId]/[unique-id].jpg
+ * Pattern: [userId]/post-[uuid].jpg
  */
 export async function uploadPostPhoto(blob: Blob, userId: string, subfolder: string = '') {
-  const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
-  const folder = subfolder ? `posts/${userId}/${subfolder}` : `posts/${userId}`;
-  const filePath = `${folder}/${fileName}`;
+  const uniqueId = crypto.randomUUID();
+  const folder = subfolder ? `${userId}/${subfolder}` : `${userId}`;
+  const filePath = `${folder}/post-${uniqueId}.jpg`;
 
   const { error } = await supabase.storage
     .from('photos')
