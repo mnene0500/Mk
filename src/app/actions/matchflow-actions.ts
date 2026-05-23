@@ -120,23 +120,35 @@ export async function sendGiftAction(senderUid: string, recipientUid: string, co
     const ts = Date.now();
     const ids = [senderUid, recipientUid].sort();
     const chatId = `direct_${ids[0]}_${ids[1]}`;
-    const { error: deductErr } = await supabase.rpc("increment_coins", { user_id: senderUid, amount: -coinAmount });
-    if (deductErr) throw new Error("Insufficient coins.");
+    
+    // 1. Double check balance
+    const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', senderUid).single();
+    if ((Number(bal?.coins) || 0) < coinAmount) throw new Error("Insufficient coins.");
 
+    // 2. Deduct Sender
+    const { error: deductErr } = await supabase.rpc("increment_coins", { user_id: senderUid, amount: -coinAmount });
+    if (deductErr) throw deductErr;
+
+    // 3. Reward Recipient
     const { data: rec } = await supabase.from('users').select('gender, name').eq('uid', recipientUid).single();
     const { data: sender } = await supabase.from('users').select('name').eq('uid', senderUid).single();
+    
     const rate = rec?.gender === 'female' ? 0.5 : 0.4;
     const reward = Math.floor(coinAmount * rate);
 
     await supabase.rpc("increment_diamonds", { user_id: recipientUid, amount: reward });
+    
+    // 4. Record everything
     await Promise.all([
       supabase.from("coin_history").insert({ user_id: senderUid, amount: -coinAmount, type: "gift_sent", description: `Sent ${giftName}`, timestamp: ts }),
       supabase.from("diamond_history").insert({ user_id: recipientUid, amount: reward, type: "gift_received", description: `Gift from ${sender?.name || 'User'}`, timestamp: ts }),
       supabase.from('messages').insert({ chat_id: chatId, sender_id: senderUid, text: `[Gift: ${giftName}]`, is_gift: true, timestamp: ts }),
       supabase.from('chats').upsert({ id: chatId, last_message: `[Gift: ${giftName}]`, last_message_at: ts, participant_ids: [senderUid, recipientUid] })
     ]);
+    
     return { success: true };
   } catch (err: any) {
+    console.error("[Gift Error]:", err.message);
     return { success: false, error: err.message };
   }
 }
