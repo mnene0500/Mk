@@ -12,8 +12,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholde
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 /**
- * Utility to convert base64 data (from cropping/selfies) into a Blob/File 
- * that Supabase Storage can process.
+ * Utility to convert base64 data into a Blob/File that Supabase Storage can process.
  */
 export function base64ToBlob(base64: string): { blob: Blob, contentType: string } {
   const matches = base64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/);
@@ -43,19 +42,18 @@ export function base64ToBlob(base64: string): { blob: Blob, contentType: string 
 }
 
 /**
- * Uploads a profile photo with 'upsert: true' to replace the existing one.
+ * Uploads a profile photo to the 'profile-photos' bucket.
+ * Uses overwrite logic via predictable naming.
  */
-export async function uploadProfilePhoto(file: File | Blob, userId: string) {
-  const fileExt = (file as File).name?.split('.').pop() || 'jpg';
-  // Use a predictable path with upsert to keep storage clean
-  const filePath = `${userId}/avatar.${fileExt}`;
+export async function uploadProfilePhoto(blob: Blob, userId: string) {
+  const filePath = `${userId}/avatar.jpg`;
 
   const { error } = await supabase.storage
     .from('profile-photos')
-    .upload(filePath, file, {
+    .upload(filePath, blob, {
       cacheControl: '3600',
       upsert: true,
-      contentType: (file as Blob).type || 'image/jpeg'
+      contentType: 'image/jpeg'
     });
 
   if (error) {
@@ -71,16 +69,17 @@ export async function uploadProfilePhoto(file: File | Blob, userId: string) {
 }
 
 /**
- * Uploads gallery/post photos with unique filenames.
+ * Uploads gallery or proof photos to the 'post-photos' bucket.
+ * Uses unique filenames.
  */
-export async function uploadPostPhoto(file: File | Blob, userId: string) {
-  const fileExt = (file as File).name?.split('.').pop() || 'jpg';
-  const filePath = `${userId}/${crypto.randomUUID()}.${fileExt}`;
+export async function uploadPostPhoto(blob: Blob, userId: string, subfolder: string = '') {
+  const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
+  const filePath = subfolder ? `${userId}/${subfolder}/${fileName}` : `${userId}/${fileName}`;
 
   const { error } = await supabase.storage
     .from('post-photos')
-    .upload(filePath, file, {
-      contentType: (file as Blob).type || 'image/jpeg'
+    .upload(filePath, blob, {
+      contentType: 'image/jpeg'
     });
 
   if (error) {

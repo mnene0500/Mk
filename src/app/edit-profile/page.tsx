@@ -145,8 +145,7 @@ export default function EditProfilePage() {
 
       // 2. Handle Gallery Photos (BUCKET: post-photos)
       const uploadedPhotos = [];
-      for (let i = 0; i < formData.additional_photos.length; i++) {
-        const p = formData.additional_photos[i];
+      for (let p of formData.additional_photos) {
         if (p.startsWith('data:image')) {
           const { blob } = base64ToBlob(p);
           const url = await uploadPostPhoto(blob, user.id);
@@ -167,8 +166,9 @@ export default function EditProfilePage() {
 
       toast({ title: "Profile Saved", description: "Changes applied globally." })
       
-      // Clear legacy caches to ensure Home/Profile screens re-fetch if they aren't using the realtime listener
-      sessionStorage.removeItem('user-profile-cache');
+      // Clear legacy caches to ensure Home/Profile screens re-fetch
+      sessionStorage.clear();
+      localStorage.removeItem('user-profile-cache');
       
       router.replace('/profile')
     } catch (error: any) {
