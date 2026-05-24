@@ -1,3 +1,4 @@
+
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -45,7 +46,7 @@ export async function dailyCheckInAction(uid: string) {
 
     if (updateErr) throw updateErr;
 
-    const { error: rpcErr } = await supabase.rpc("increment_coins", { user_id: uid, amount });
+    const { error: rpcErr } = await supabase.rpc("increment_coins", { p_user_id: uid, p_amount: amount });
     if (rpcErr) throw rpcErr;
 
     await supabase.from('coin_history').insert({
@@ -73,12 +74,8 @@ export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: s
       .eq('uid', merchantUid)
       .maybeSingle();
 
-    console.log("merchantUid:", merchantUid);
-    console.log("merchant:", merchant);
-    console.log("authErr:", authErr);
-
     if (authErr) {
-      throw new Error("Authorization lookup failed.");
+      throw new Error(`Authorization lookup failed: ${authErr.message}`);
     }
 
     if (!merchant) {
@@ -110,8 +107,11 @@ export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: s
       if (currentBal < amount) throw new Error(`Insufficient coins. Your balance: ${currentBal}`);
 
       // Deduct Merchant
-      const { error: deductErr } = await supabase.rpc("increment_coins", { user_id: merchantUid, amount: -amount });
-      if (deductErr) throw new Error("Failed to deduct from your wallet.");
+      const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: merchantUid, p_amount: -amount });
+      if (deductErr) {
+        console.error(`[Award Logic Error] Supabase RPC failed to deduct from merchant ${merchantUid}:`, deductErr);
+        throw new Error(`Failed to deduct from your wallet: ${deductErr.message}`);
+      }
 
       await supabase.from("coin_history").insert({
         user_id: merchantUid,
@@ -123,8 +123,11 @@ export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: s
     }
 
     // 4. Atomic Award to Recipient
-    const { error: awardErr } = await supabase.rpc("increment_coins", { user_id: target.uid, amount });
-    if (awardErr) throw new Error("Failed to credit coins to the recipient.");
+    const { error: awardErr } = await supabase.rpc("increment_coins", { p_user_id: target.uid, p_amount: amount });
+    if (awardErr) {
+        console.error(`[Award Logic Error] Supabase RPC failed to credit user ${target.uid}:`, awardErr);
+        throw new Error(`Failed to credit recipient: ${awardErr.message}`);
+    }
 
     await supabase.from("coin_history").insert({
       user_id: target.uid,
@@ -136,7 +139,8 @@ export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: s
 
     return { success: true, message: `Sent ${amount} coins to ${target.name}.` };
   } catch (err: any) {
-    console.error("[Award Logic Error]:", err.message);
+    console.error(`[Award Logic Error]: ${err.message}`);
+    // Return the specific error message to the client
     return { success: false, error: err.message };
   }
 }
@@ -153,14 +157,14 @@ export async function sendMysteryNoteAction(user_id: string, message: string, re
       throw new Error("Insufficient coins for this operation.");
     }
 
-    const { error: deductErr } = await supabase.rpc("increment_coins", { user_id: user_id, amount: -cost });
-    if (deductErr) throw new Error("Payment deduction failed.");
+    const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: user_id, p_amount: -cost });
+    if (deductErr) throw new Error(`Payment deduction failed: ${deductErr.message}`);
 
     await supabase.from('coin_history').insert({ 
       user_id, 
       amount: -cost, 
       type: 'mystery_note', 
-      description: `Mystery Note Blast (${count} people)`, 
+      description: `Mystery Note Blast (${count} people)`,
       timestamp: ts 
     });
     
@@ -189,10 +193,10 @@ export async function sendGiftAction(senderUid: string, recipientUid: string, co
     const reward = Math.floor(coinAmount * rate);
 
     // 3. Atomic Deduct and Reward
-    const { error: deductErr } = await supabase.rpc("increment_coins", { user_id: senderUid, amount: -coinAmount });
+    const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: senderUid, p_amount: -coinAmount });
     if (deductErr) throw deductErr;
 
-    await supabase.rpc("increment_diamonds", { user_id: recipientUid, amount: reward });
+    await supabase.rpc("increment_diamonds", { p_user_id: recipientUid, p_amount: reward });
     
     // 4. Logs and Messaging
     await Promise.all([
@@ -279,11 +283,11 @@ export async function convertDiamondsToCoinsAction(user_id: string, diamonds: nu
   const supabase = getSupabaseAdmin();
   try {
     const ts = Date.now();
-    const { error: deductErr } = await supabase.rpc("increment_diamonds", { user_id, amount: -diamonds });
-    if (deductErr) throw new Error("Insufficient diamonds.");
+    const { error: deductErr } = await supabase.rpc("increment_diamonds", { p_user_id: user_id, p_amount: -diamonds });
+    if (deductErr) throw new Error(`Insufficient diamonds: ${deductErr.message}`);
     
-    const { error: awardErr } = await supabase.rpc("increment_coins", { user_id, amount: coins });
-    if (awardErr) throw new Error("Failed to credit coins.");
+    const { error: awardErr } = await supabase.rpc("increment_coins", { p_user_id: user_id, p_amount: coins });
+    if (awardErr) throw new Error(`Failed to credit coins: ${awardErr.message}`);
 
     await Promise.all([
       supabase.from('diamond_history').insert({ user_id, amount: -diamonds, type: 'conversion', description: `Exchanged for ${coins} coins`, timestamp: ts }),
@@ -299,7 +303,7 @@ export async function requestWithdrawalAction(userUid: string, diamonds: number,
   const supabase = getSupabaseAdmin();
   try {
     const ts = Date.now();
-    const { error: rpcError } = await supabase.rpc("increment_diamonds", { user_id: userUid, amount: -diamonds });
+    const { error: rpcError } = await supabase.rpc("increment_diamonds", { p_user_id: userUid, p_amount: -diamonds });
     if (rpcError) throw rpcError;
     await Promise.all([
       supabase.from('withdrawals').insert({ user_id: userUid, agency_id: agencyId, diamonds, amount_kes, status: 'pending', timestamp: ts }),
