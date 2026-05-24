@@ -57,7 +57,6 @@ export default function HomePage() {
       setProfile(data as any);
       setStatusChecked(true);
 
-      // REALTIME: Listen for profile changes (verified status, roles)
       const channel = supabase.channel(`home-profile-sync:${currentUser.id}`)
         .on('postgres_changes', { event: 'UPDATE', table: 'users', filter: `uid=eq.${currentUser.id}` }, (payload) => {
           setProfile(payload.new as any)
@@ -104,43 +103,55 @@ export default function HomePage() {
 
   return (
     <div className="flex-1 pb-24 bg-white min-h-screen relative select-none animate-in fade-in duration-300">
-      {/* HEADER SPACE: Increased slightly from h-4 to h-8 and added pt-6 to keep buttons from touching top */}
-      <header className="bg-white h-8 pt-6 relative" />
+      {/* BLUE TOP SECTION */}
+      <div className="bg-[#00A2FF] pb-8 pt-6 relative shadow-lg">
+        <div className="relative px-4 grid grid-cols-2 gap-3 z-20 mb-4 pt-4">
+          <button 
+            onClick={() => router.push('/mystery-note')} 
+            className="h-28 bg-white/10 backdrop-blur-xl border border-white/20 rounded-[1.5rem] p-4 flex flex-col items-start justify-end gap-1 shadow-2xl active:scale-95 transition-all text-white text-left"
+          >
+            <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center mb-1">
+              <FileText className="w-4 h-4 text-white" />
+            </div>
+            <p className="text-base font-black leading-none">Mystery Note</p>
+            <p className="text-[8px] font-bold opacity-60 tracking-widest uppercase">SEND A NOTE</p>
+          </button>
+          <button 
+            onClick={() => router.push('/tasks')} 
+            className="h-28 bg-white/10 backdrop-blur-xl border border-white/20 rounded-[1.5rem] p-4 flex flex-col items-start justify-end gap-1 shadow-2xl active:scale-95 transition-all text-white text-left"
+          >
+            <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center mb-1">
+              <Target className="w-4 h-4 text-white" />
+            </div>
+            <p className="text-base font-black leading-none">Task Center</p>
+            <p className="text-[8px] font-bold opacity-60 tracking-widest uppercase">EARN REWARDS</p>
+          </button>
+        </div>
 
-      <div className="relative px-4 grid grid-cols-2 gap-3 z-20 mb-4">
-        <button 
-          onClick={() => router.push('/mystery-note')} 
-          className="h-28 bg-gradient-to-br from-[#00A2FF] to-[#0081CC] rounded-[1.5rem] p-4 flex flex-col items-start justify-end gap-1 shadow-xl active:scale-95 transition-all text-white text-left"
-        >
-          <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center mb-1">
-            <FileText className="w-4 h-4 text-white" />
+        <div className="sticky top-0 z-30">
+          <div className="px-6 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              <button 
+                onClick={() => setActiveTab('Recommend')} 
+                className={cn("text-sm font-black transition-all relative pb-2", activeTab === 'Recommend' ? "text-white" : "text-white/40")}
+              >
+                Recommend
+                {activeTab === 'Recommend' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-white rounded-full animate-in zoom-in" />}
+              </button>
+              <button 
+                onClick={() => setActiveTab('Nearby')} 
+                className={cn("text-sm font-black transition-all relative pb-2", activeTab === 'Nearby' ? "text-white" : "text-white/40")}
+              >
+                Nearby
+                {activeTab === 'Nearby' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-white rounded-full animate-in zoom-in" />}
+              </button>
+            </div>
+            <button onClick={() => fetchUsers(true)} disabled={isRefreshing} className={cn("p-2 text-white/60 active:scale-90 transition-transform", isRefreshing && "animate-spin")}><RotateCw className="w-4 h-4" /></button>
           </div>
-          <p className="text-base font-black leading-none">Mystery Note</p>
-          <p className="text-[8px] font-bold opacity-80 tracking-widest uppercase">SEND A NOTE</p>
-        </button>
-        <button 
-          onClick={() => router.push('/tasks')} 
-          className="h-28 bg-gradient-to-br from-[#7C69FF] to-[#A28EFF] rounded-[1.5rem] p-4 flex flex-col items-start justify-end gap-1 shadow-xl active:scale-95 transition-all text-white text-left"
-        >
-          <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center mb-1">
-            <Target className="w-4 h-4 text-white" />
-          </div>
-          <p className="text-base font-black leading-none">Task Center</p>
-          <p className="text-[8px] font-bold opacity-80 tracking-widest uppercase">EARN REWARDS</p>
-        </button>
-      </div>
-
-      <div className="sticky top-0 z-30 bg-white">
-        <div className="px-6 py-2 flex items-center justify-between border-b border-black/5">
-          <div className="flex items-center gap-6">
-            <button onClick={() => setActiveTab('Recommend')} className={cn("text-sm font-black transition-all relative pb-2", activeTab === 'Recommend' ? "text-[#00A2FF]" : "text-gray-300")}>Recommend</button>
-            <button onClick={() => setActiveTab('Nearby')} className={cn("text-sm font-black transition-all relative pb-2", activeTab === 'Nearby' ? "text-[#00A2FF]" : "text-gray-300")}>Nearby</button>
-          </div>
-          <button onClick={() => fetchUsers(true)} disabled={isRefreshing} className={cn("p-2 text-[#00A2FF] active:scale-90 transition-transform", isRefreshing && "animate-spin")}><RotateCw className="w-4 h-4" /></button>
         </div>
       </div>
 
-      <main className="px-4 pt-3 space-y-4">
+      <main className="px-4 pt-6 space-y-4 bg-white min-h-[50vh]">
         {initialLoading && users.length === 0 ? (
           <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-[#00A2FF] w-8 h-8" /></div>
         ) : (

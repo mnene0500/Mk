@@ -75,7 +75,7 @@ export default function CoinSellersPage() {
                   </div>
                 </div>
                 <Button 
-                  onClick={() => router.push(`/chats?startWith=${seller.uid}`)} 
+                  onClick={() => router.push(`/chats?startWith=${seller.uid}&autoMsg=buy_coins`)} 
                   className="rounded-full bg-[#00A2FF] h-12 w-12 shadow-lg flex items-center justify-center hover:bg-[#0081CC] active:scale-95 transition-all"
                 >
                   <MessageSquare className="w-5 h-5 text-white fill-current" />

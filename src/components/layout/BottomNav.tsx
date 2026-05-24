@@ -1,3 +1,4 @@
+
 "use client"
 
 import Link from "next/link"
@@ -74,7 +75,7 @@ export function BottomNav() {
             )}>
               <item.icon className={cn("w-6 h-6", isActive ? "text-[#00A2FF] fill-current" : "text-gray-400")} />
               {item.badge !== undefined && item.badge > 0 && (
-                <div className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white animate-in zoom-in">
+                <div className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-in zoom-in">
                   {item.badge > 9 ? '9+' : item.badge}
                 </div>
               )}

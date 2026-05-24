@@ -1,6 +1,7 @@
+
 "use client"
 
-import { useEffect, useState, Suspense, useCallback } from "react"
+import { useEffect, useState, Suspense, useCallback, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -54,6 +55,7 @@ function ChatsContent() {
   const { toast } = useToast()
   const { user: currentUser, loading: authLoading, isInitialized } = useUser()
   const startWithId = searchParams.get("startWith")
+  const autoMsg = searchParams.get("autoMsg")
   
   const [chatId, setChatId] = useState<string | null>(null)
   const [newMessage, setNewMessage] = useState("")
@@ -65,6 +67,8 @@ function ChatsContent() {
   const [activeChatClearedAt, setActiveChatClearedAt] = useState<number>(0)
   const [isGifting, setIsGifting] = useState(false)
   const [giftDialogOpen, setGiftDialogOpen] = useState(false)
+
+  const hasSentAutoMsg = useRef(false)
 
   useEffect(() => {
     if (isInitialized && !authLoading && !currentUser) {
@@ -93,6 +97,12 @@ function ChatsContent() {
         const pId = c.participant_ids.find((id: string) => id !== currentUser.id)
         if (!pId || blockedUids.has(pId)) return null;
         const { data: p } = await supabase.from('users').select('name, photo_url').eq('uid', pId).maybeSingle()
+        
+        // Accurate Unread Logic: Compare last_message_at with current user's last_seen_at
+        // AND ensure current user is not the sender (participant_ids[0] stores last sender)
+        const mySeenAt = c.last_seen_at?.[currentUser.id] || 0;
+        const isUnread = c.last_message_at > mySeenAt && c.participant_ids[0] !== currentUser.id;
+
         return {
           id: c.id,
           partner_id: pId,
@@ -100,7 +110,7 @@ function ChatsContent() {
           partner_photo: p?.photo_url || "",
           last_message: c.last_message || "",
           last_message_at: c.last_message_at || Date.now(),
-          unread_count: (c.last_seen_at?.[currentUser.id] || 0) < c.last_message_at && c.participant_ids[0] !== currentUser.id ? 1 : 0
+          unread_count: isUnread ? 1 : 0
         } as ChatSummary
       }))
       setChatSummaries(enhanced.filter(Boolean) as ChatSummary[])
@@ -147,6 +157,18 @@ function ChatsContent() {
     }).subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [chatId, activeChatClearedAt])
+
+  // Handle Auto Message (e.g. from Coin Sellers page)
+  useEffect(() => {
+    if (chatId && autoMsg === 'buy_coins' && !hasSentAutoMsg.current && currentUser?.id && startWithId) {
+      hasSentAutoMsg.current = true;
+      const text = "I want to buy coins. Please guide me on the payment process.";
+      const ts = Date.now();
+      supabase.from('messages').insert({ chat_id: chatId, text, sender_id: currentUser.id, timestamp: ts }).then(() => {
+        supabase.from('chats').upsert({ id: chatId, last_message: text, last_message_at: ts, participant_ids: [currentUser.id, startWithId] })
+      });
+    }
+  }, [chatId, autoMsg, currentUser?.id, startWithId])
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !chatId || !currentUser?.id || !startWithId) return
@@ -218,7 +240,7 @@ function ChatsContent() {
           <div key={s.id} onClick={() => router.push(`/chats?startWith=${s.partner_id}`)} className="p-5 border-b flex items-center gap-4 active:bg-gray-50 cursor-pointer">
             <div className="relative">
               <Avatar className="w-14 h-14 border"><AvatarImage src={`${s.partner_photo}?t=${Date.now()}`} className="object-cover" /><AvatarFallback>{s.partner_name[0]}</AvatarFallback></Avatar>
-              {s.unread_count > 0 && <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-white">NEW</div>}
+              {s.unread_count > 0 && <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-md animate-in zoom-in">{s.unread_count}</div>}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex justify-between mb-1">
