@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState } from "react"
@@ -32,7 +31,6 @@ export default function AwardCoinsPage() {
     }
     fetchData()
 
-    // Realtime balance sync for Merchants
     const channel = supabase.channel(`merchant-bal-sync:${user.id}`)
       .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
         setBalance(Number(payload.new.coins) || 0)
@@ -51,7 +49,6 @@ export default function AwardCoinsPage() {
       return;
     }
 
-    // Only non-admin merchants are restricted by their own balance
     if (!profile?.is_admin && balance < numAmount) {
       toast({ variant: "destructive", title: "Insufficient Balance", description: "You don't have enough coins to transfer." });
       return;
@@ -68,7 +65,7 @@ export default function AwardCoinsPage() {
         toast({ variant: "destructive", title: "Transfer Error", description: result.error })
       }
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Critical Error", description: err.message })
+      toast({ variant: "destructive", title: "Critical Error", description: "Profile resolution failed." })
     } finally {
       setLoading(false)
     }
@@ -92,9 +89,9 @@ export default function AwardCoinsPage() {
             <Coins className="w-10 h-10 text-yellow-500" />
           </div>
           <div className="space-y-1">
-            <h2 className="text-2xl font-black text-black tracking-tight">Transfer QIVO Coins</h2>
+            <h2 className="text-2xl font-black text-black tracking-tight">Transfer Coins</h2>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-              {isAdmin ? "Admin (Unlimited Access)" : "Certified Merchant Portal"}
+              {isAdmin ? "Admin Console" : "Certified Merchant Portal"}
             </p>
           </div>
         </div>
@@ -103,15 +100,15 @@ export default function AwardCoinsPage() {
           <div className="w-full max-w-sm p-6 bg-gray-50 rounded-3xl border border-black/5 flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-3">
               <div className="bg-white p-2 rounded-xl"><Wallet className="w-5 h-5 text-[#00A2FF]" /></div>
-              <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest leading-none">Your Balance</span>
+              <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Your Wallet</span>
             </div>
-            <span className="text-lg font-black text-black">{balance} <span className="text-[10px] text-gray-400">Coins</span></span>
+            <span className="text-lg font-black text-black">{balance} <span className="text-[10px] text-gray-400 font-bold">COINS</span></span>
           </div>
         )}
 
         <div className="w-full max-w-sm space-y-6">
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Recipient Numeric ID</label>
+            <label className="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest">Target Numeric ID</label>
             <Input 
               placeholder="e.g. 1234567" 
               value={targetId} 
@@ -121,18 +118,14 @@ export default function AwardCoinsPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Amount to Transfer</label>
+            <label className="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest">Transfer Amount</label>
             <Input 
               type="number"
-              placeholder="Enter amount" 
+              placeholder="0" 
               value={amount} 
               onChange={(e) => setAmount(e.target.value)} 
               className="rounded-2xl h-16 text-center text-xl font-bold border-gray-100 bg-gray-50 text-black placeholder:text-gray-300"
             />
-            <div className="flex items-center gap-1.5 px-2 text-[9px] font-bold text-amber-600 uppercase">
-              <AlertCircle className="w-3 h-3" />
-              Transfer will take effect immediately.
-            </div>
           </div>
 
           <Button 

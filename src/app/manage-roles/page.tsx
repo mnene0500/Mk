@@ -1,11 +1,10 @@
-
 "use client"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ChevronLeft, Users, Loader2, UserPlus, UserMinus, Search, ShieldAlert, ShieldCheck } from "lucide-react"
+import { ChevronLeft, Users, Loader2, UserPlus, UserMinus, Search, ShieldCheck } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { toggleUserRoleAction } from "@/app/actions/matchflow-actions"
 import { supabase } from "@/lib/supabase"
@@ -74,7 +73,7 @@ export default function ManageRolesPage() {
     <div className="flex-1 bg-white min-h-screen flex flex-col select-none">
       <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-50">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
-        <h1 className="text-sm font-black text-black uppercase tracking-widest">Control Center</h1>
+        <h1 className="text-sm font-black text-black uppercase tracking-widest">Authority Manager</h1>
         <div className="w-10" />
       </header>
 
@@ -83,7 +82,7 @@ export default function ManageRolesPage() {
           <div className="w-20 h-20 bg-indigo-50 rounded-[2.5rem] flex items-center justify-center mx-auto">
             <Users className="w-10 h-10 text-indigo-600" />
           </div>
-          <h2 className="text-2xl font-black text-black tracking-tight uppercase">Authority Manager</h2>
+          <h2 className="text-2xl font-black text-black tracking-tight uppercase">Search by Numeric ID</h2>
         </div>
 
         <div className="w-full max-w-sm space-y-6">
@@ -107,7 +106,6 @@ export default function ManageRolesPage() {
               </div>
               
               <div className="space-y-6">
-                {/* ADMIN ROLE */}
                 <div className="p-4 bg-gray-50 rounded-2xl border flex items-center justify-between">
                    <div className="flex items-center gap-3">
                      <ShieldCheck className="w-5 h-5 text-indigo-600" />

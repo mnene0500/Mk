@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 /**
  * @fileOverview Native Economy Actions on Vercel.
  * Purely server-side atomic transactions using private secrets.
+ * Standardized to use MatchFlow ID for targeting users.
  */
 
 export async function dailyCheckInAction(uid: string) {
@@ -66,55 +67,40 @@ export async function dailyCheckInAction(uid: string) {
 export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: string, amount: number) {
   const supabase = getSupabaseAdmin();
   try {
-    // 1. Verify Caller Authority via HARDENED DIRECT TABLE QUERY
+    // 1. Verify Caller Authority strictly via Table Query
     const { data: merchant, error: authErr } = await supabase
       .from('users')
       .select('uid, email, is_admin, is_coin_seller, name')
       .eq('uid', merchantUid)
       .maybeSingle();
 
-    // SERVER-SIDE DEBUG LOGS (Vercel Console)
-    console.log("--- AwardCoins Auth Debug ---");
-    console.log("merchantUid (Input):", merchantUid);
-    console.log("merchant (DB Result):", merchant);
-    console.log("authErr (DB Error):", authErr);
-
-    if (authErr) {
-      throw new Error(`Authorization lookup failed: ${authErr.message}`);
-    }
-
-    if (!merchant) {
-      throw new Error("Merchant profile not found in database.");
-    }
+    if (authErr) throw new Error(`Authorization lookup failed: ${authErr.message}`);
+    if (!merchant) throw new Error("Merchant profile not found.");
 
     const canTransfer = merchant.is_admin || merchant.is_coin_seller;
+    if (!canTransfer) throw new Error("Unauthorized to award coins.");
 
-    if (!canTransfer) {
-      throw new Error("Unauthorized: You do not have Merchant or Admin status.");
-    }
-
-    // 2. Find Target User strictly by match_flow_id
+    // 2. Resolve Target User by Numeric ID (MatchFlow ID)
     const cleanedId = targetMatchFlowId.trim();
     const { data: target, error: targetErr } = await supabase
       .from('users')
       .select('uid, name')
       .eq('match_flow_id', cleanedId)
-      .single();
+      .maybeSingle();
     
-    if (targetErr || !target) throw new Error(`Recipient ID (${cleanedId}) not found.`);
+    if (targetErr || !target) throw new Error(`Recipient Numeric ID (${cleanedId}) not found.`);
 
     const ts = Date.now();
 
-    // 3. Logic for Merchant (Deduction Required) vs Admin (Unlimited)
-    // Only non-admin merchants are deducted from their own balance
+    // 3. Admin (Unlimited) vs Merchant (Deduction) logic
     if (!merchant.is_admin && merchant.is_coin_seller) {
       const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', merchantUid).single();
       const currentBal = Number(bal?.coins) || 0;
       if (currentBal < amount) throw new Error(`Insufficient coins. Your balance: ${currentBal}`);
 
-      // Deduct from Merchant
+      // Deduct Merchant
       const { error: deductErr } = await supabase.rpc("increment_coins", { user_id: merchantUid, amount: -amount });
-      if (deductErr) throw new Error("Could not deduct coins from your wallet.");
+      if (deductErr) throw new Error("Failed to deduct from your wallet.");
 
       await supabase.from("coin_history").insert({
         user_id: merchantUid,
@@ -125,7 +111,7 @@ export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: s
       });
     }
 
-    // 4. Award Recipient
+    // 4. Atomic Award to Recipient
     const { error: awardErr } = await supabase.rpc("increment_coins", { user_id: target.uid, amount });
     if (awardErr) throw new Error("Failed to credit coins to the recipient.");
 
@@ -137,7 +123,7 @@ export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: s
       timestamp: ts
     });
 
-    return { success: true, message: `Successfully transferred ${amount} coins to ${target.name}.` };
+    return { success: true, message: `Successfully sent ${amount} coins to ${target.name}.` };
   } catch (err: any) {
     console.error("[Award Logic Error]:", err.message);
     return { success: false, error: err.message };
@@ -159,26 +145,27 @@ export async function clearChatAction(uid: string, chatId: string) {
 export async function toggleUserRoleAction(callerUid: string, targetMatchFlowId: string, role: string, value: boolean) {
   const supabase = getSupabaseAdmin();
   try {
-    // 1. Verify Caller is a master admin via DIRECT TABLE QUERY
+    // 1. Verify Caller Authority
     const { data: admin, error: authErr } = await supabase
       .from('users')
       .select('is_admin')
       .eq('uid', callerUid)
-      .single();
+      .maybeSingle();
 
-    if (authErr || !admin?.is_admin) {
-      throw new Error("Unauthorized: Admin access required.");
-    }
+    if (authErr || !admin?.is_admin) throw new Error("Unauthorized: Admin access required.");
     
-    // 2. Validate role
     const validRoles = ['is_coin_seller', 'is_agent', 'is_verified', 'is_admin'];
     if (!validRoles.includes(role)) throw new Error("Invalid authority role.");
 
-    // 3. Update the target user
-    const { error } = await supabase.from('users').update({ [role]: value }).eq('match_flow_id', targetMatchFlowId.trim());
+    // 2. Perform Update by MatchFlow ID
+    const { error } = await supabase
+      .from('users')
+      .update({ [role]: value })
+      .eq('match_flow_id', targetMatchFlowId.trim());
+    
     if (error) throw error;
     
-    return { success: true, message: "Authority updated successfully." };
+    return { success: true, message: "User authority updated." };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -197,7 +184,6 @@ export async function submitReportAction(reporterUid: string, reportedUid: strin
 export async function resolveReportAction(adminUid: string, reportId: string, reporterUid: string) {
   const supabase = getSupabaseAdmin();
   try {
-    // Verify admin status directly from table
     const { data: admin, error: authErr } = await supabase
       .from('users')
       .select('is_admin')
