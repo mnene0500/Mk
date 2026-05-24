@@ -24,7 +24,7 @@ export const BalanceProvider = ({ children }: { children: React.ReactNode }) => 
     let balanceChannel: any;
 
     const fetchAndSubscribe = async () => {
-      // 1. Fetch current balance from source of truth
+      // 1. Initial Fetch
       const { data, error } = await supabase
         .from('balances')
         .select('coins, diamonds')
@@ -40,7 +40,7 @@ export const BalanceProvider = ({ children }: { children: React.ReactNode }) => 
         });
       }
 
-      // 2. Subscribe to Realtime changes for this specific user
+      // 2. Realtime Listener
       balanceChannel = supabase
         .channel(`balance-realtime:${user.id}`)
         .on(

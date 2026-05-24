@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState } from "react"
@@ -30,7 +29,7 @@ import {
 import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { useUser } from "@/lib/providers/UserProvider"
+import { useUser } from "@/firebase/auth/use-user"
 import {
   Dialog,
   DialogContent,
@@ -180,22 +179,19 @@ export default function MePage() {
     if (!user?.id) return
 
     const fetchInitialData = async () => {
-      const { data, error } = await supabase.from('users').select('*').eq('uid', user.id).maybeSingle();
+      const { data } = await supabase.from('users').select('*').eq('uid', user.id).maybeSingle();
       if (data) setProfile(data as any)
       setIsReady(true)
     }
     fetchInitialData()
 
-    // REALTIME: Sync Profile Changes
     const profileChannel = supabase.channel(`profile-sync:${user.id}`)
       .on('postgres_changes', { event: '*', table: 'users', filter: `uid=eq.${user.id}` }, (payload) => {
         setProfile(payload.new as any)
       })
       .subscribe()
 
-    return () => { 
-      supabase.removeChannel(profileChannel)
-    }
+    return () => { supabase.removeChannel(profileChannel) }
   }, [user?.id, isInitialized, authLoading, router])
 
   const handleCopyId = () => {
@@ -317,7 +313,6 @@ export default function MePage() {
               </>
             )}
 
-            {/* AGENCY CONTROLS: Strictly Female Only or Admins */}
             {(profile?.gender === 'female' || profile?.is_admin) && (
               <>
                 {profile?.is_agent && profile && <AgencyDashboardDialog user={profile} />}
