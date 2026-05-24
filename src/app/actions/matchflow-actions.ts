@@ -66,15 +66,31 @@ export async function dailyCheckInAction(uid: string) {
 export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: string, amount: number) {
   const supabase = getSupabaseAdmin();
   try {
-    // 1. Verify Caller Authority via DIRECT TABLE QUERY (Requested Pattern)
+    // 1. Verify Caller Authority via HARDENED DIRECT TABLE QUERY
     const { data: merchant, error: authErr } = await supabase
       .from('users')
-      .select('uid, is_admin, is_coin_seller, name')
+      .select('uid, email, is_admin, is_coin_seller, name')
       .eq('uid', merchantUid)
-      .single();
+      .maybeSingle();
 
-    if (authErr || (!merchant?.is_admin && !merchant?.is_coin_seller)) {
-      throw new Error("Unauthorized to award coins.");
+    // SERVER-SIDE DEBUG LOGS (Vercel Console)
+    console.log("--- AwardCoins Auth Debug ---");
+    console.log("merchantUid (Input):", merchantUid);
+    console.log("merchant (DB Result):", merchant);
+    console.log("authErr (DB Error):", authErr);
+
+    if (authErr) {
+      throw new Error(`Authorization lookup failed: ${authErr.message}`);
+    }
+
+    if (!merchant) {
+      throw new Error("Merchant profile not found in database.");
+    }
+
+    const canTransfer = merchant.is_admin || merchant.is_coin_seller;
+
+    if (!canTransfer) {
+      throw new Error("Unauthorized: You do not have Merchant or Admin status.");
     }
 
     // 2. Find Target User strictly by match_flow_id
@@ -90,6 +106,7 @@ export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: s
     const ts = Date.now();
 
     // 3. Logic for Merchant (Deduction Required) vs Admin (Unlimited)
+    // Only non-admin merchants are deducted from their own balance
     if (!merchant.is_admin && merchant.is_coin_seller) {
       const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', merchantUid).single();
       const currentBal = Number(bal?.coins) || 0;
