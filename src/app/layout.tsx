@@ -4,6 +4,7 @@ import { Inter, Pacifico } from 'next/font/google';
 import { Providers } from '@/components/providers';
 import { AppShell } from '@/components/layout/AppShell';
 import Script from 'next/script';
+import { BalanceProvider } from '@/lib/providers/BalanceProvider';
 
 // DISABLE ALL NEXT.JS CACHING
 export const dynamic = 'force-dynamic';
@@ -61,9 +62,11 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased bg-background min-h-screen flex flex-col">
         <Providers>
-          <AppShell>
-            {children}
-          </AppShell>
+          <BalanceProvider>
+            <AppShell>
+              {children}
+            </AppShell>
+          </BalanceProvider>
         </Providers>
         <Script id="register-sw" strategy="afterInteractive">
           {`

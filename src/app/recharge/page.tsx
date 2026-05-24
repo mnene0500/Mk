@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState } from "react"
@@ -9,6 +8,7 @@ import { useUser } from "@/firebase/auth/use-user"
 import { useToast } from "@/hooks/use-toast"
 import { initiatePesaPalPayment } from "@/app/actions/payment-actions"
 import { cn } from "@/lib/utils"
+import { useBalance } from "@/lib/providers/BalanceProvider"
 
 const PACKAGES = [
   { id: "p1", label: "10", coins: 10, price: 1 },
@@ -23,6 +23,7 @@ export default function RechargePage() {
   const router = useRouter()
   const { user } = useUser()
   const { toast } = useToast()
+  const { coins } = useBalance()
   
   const [selectedId, setSelectedId] = useState<string>("p3")
   const [isProcessing, setIsProcessing] = useState(false)
@@ -57,7 +58,10 @@ export default function RechargePage() {
           <ChevronLeft className="w-6 h-6" />
         </Button>
         <h1 className="text-base font-black text-black uppercase tracking-widest">Recharge</h1>
-        <div className="w-10" />
+        <div className="flex items-center gap-1 font-bold text-lg">
+            <Coins className='w-5 h-5 text-yellow-500'/>
+            {coins}
+        </div>
       </header>
 
       <main className="flex-1 p-5 space-y-8 pb-32">

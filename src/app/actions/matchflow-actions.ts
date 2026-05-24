@@ -45,7 +45,7 @@ export async function dailyCheckInAction(uid: string) {
 
     if (updateErr) throw updateErr;
 
-    const { error: rpcErr } = await supabase.rpc("increment_coins", { p_match_flow_id: user.match_flow_id, p_amount: amount });
+    const { error: rpcErr } = await supabase.rpc("increment_coins", { p_user_id: uid, p_amount: amount });
     if (rpcErr) throw rpcErr;
 
     await supabase.from('coin_history').insert({
@@ -69,7 +69,7 @@ export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: s
     // 1. HARDENED AUTHORIZATION LOOKUP
     const { data: merchant, error: authErr } = await supabase
       .from('users')
-      .select('uid, email, is_admin, is_coin_seller, name, match_flow_id')
+      .select('uid, email, is_admin, is_coin_seller, name')
       .eq('uid', merchantUid)
       .maybeSingle();
 
@@ -106,14 +106,14 @@ export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: s
       if (currentBal < amount) throw new Error(`Insufficient coins. Your balance: ${currentBal}`);
 
       // Deduct Merchant
-      const { error: deductErr } = await supabase.rpc("increment_coins", { p_match_flow_id: merchant.match_flow_id, p_amount: -amount });
+      const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: merchant.uid, p_amount: -amount });
       if (deductErr) {
-        console.error(`[Award Logic Error] Supabase RPC failed to deduct from merchant ${merchantUid}:`, deductErr);
+        console.error(`[Award Logic Error] Supabase RPC failed to deduct from merchant ${merchant.uid}:`, deductErr);
         throw new Error(`Failed to deduct from your wallet: ${deductErr.message}`);
       }
 
       await supabase.from("coin_history").insert({
-        user_id: merchantUid,
+        user_id: merchant.uid,
         amount: -amount,
         type: "merchant_sale",
         description: `Transferred to ${target.name}`,
@@ -121,8 +121,8 @@ export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: s
       });
     }
 
-    // 4. Atomic Award to Recipient
-    const { error: awardErr } = await supabase.rpc("increment_coins", { p_match_flow_id: targetMatchFlowId, p_amount: amount });
+    // 4. Atomic Award to Recipient using the resolved UUID
+    const { error: awardErr } = await supabase.rpc("increment_coins", { p_user_id: target.uid, p_amount: amount });
     if (awardErr) {
         console.error(`[Award Logic Error] Supabase RPC failed to credit user ${target.uid}:`, awardErr);
         throw new Error(`Failed to credit recipient: ${awardErr.message}`);
@@ -139,7 +139,6 @@ export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: s
     return { success: true, message: `Sent ${amount} coins to ${target.name}.` };
   } catch (err: any) {
     console.error(`[Award Logic Error]: ${err.message}`);
-    // Return the specific error message to the client
     return { success: false, error: err.message };
   }
 }
@@ -150,16 +149,13 @@ export async function sendMysteryNoteAction(user_id: string, message: string, re
     const count = Number(recipientCount);
     const cost = count * 10;
     const ts = Date.now();
-
-    const {data: user, error: userErr} = await supabase.from('users').select('match_flow_id').eq('uid', user_id).single();
-    if(userErr || !user) throw new Error("User not found");
     
     const { data: balance } = await supabase.from('balances').select('coins').eq('user_id', user_id).single();
     if ((Number(balance?.coins) || 0) < cost) {
       throw new Error("Insufficient coins for this operation.");
     }
 
-    const { error: deductErr } = await supabase.rpc("increment_coins", { p_match_flow_id: user.match_flow_id, p_amount: -cost });
+    const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: user_id, p_amount: -cost });
     if (deductErr) throw new Error(`Payment deduction failed: ${deductErr.message}`);
 
     await supabase.from('coin_history').insert({ 
@@ -188,18 +184,18 @@ export async function sendGiftAction(senderUid: string, recipientUid: string, co
     if ((Number(bal?.coins) || 0) < coinAmount) throw new Error("Insufficient coins.");
 
     // 2. Lookup Recipients for Reward Calculation
-    const { data: rec } = await supabase.from('users').select('gender, name, match_flow_id').eq('uid', recipientUid).single();
-    const { data: sender } = await supabase.from('users').select('name, match_flow_id').eq('uid', senderUid).single();
+    const { data: rec } = await supabase.from('users').select('gender, name, uid').eq('uid', recipientUid).single();
+    const { data: sender } = await supabase.from('users').select('name, uid').eq('uid', senderUid).single();
     if(!rec || !sender) throw new Error("User not found");
 
     const rate = rec?.gender === 'female' ? 0.5 : 0.4;
     const reward = Math.floor(coinAmount * rate);
 
     // 3. Atomic Deduct and Reward
-    const { error: deductErr } = await supabase.rpc("increment_coins", { p_match_flow_id: sender.match_flow_id, p_amount: -coinAmount });
+    const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: sender.uid, p_amount: -coinAmount });
     if (deductErr) throw deductErr;
 
-    await supabase.rpc("increment_diamonds", { p_match_flow_id: rec.match_flow_id, p_amount: reward });
+    await supabase.rpc("increment_diamonds", { p_user_id: rec.uid, p_amount: reward });
     
     // 4. Logs and Messaging
     await Promise.all([
@@ -285,14 +281,11 @@ export async function resolveReportAction(adminUid: string, reportId: string, re
 export async function convertDiamondsToCoinsAction(user_id: string, diamonds: number, coins: number) {
   const supabase = getSupabaseAdmin();
   try {
-    const {data: user, error: userErr} = await supabase.from('users').select('match_flow_id').eq('uid', user_id).single();
-    if(userErr || !user) throw new Error("User not found");
-
     const ts = Date.now();
-    const { error: deductErr } = await supabase.rpc("increment_diamonds", { p_match_flow_id: user.match_flow_id, p_amount: -diamonds });
+    const { error: deductErr } = await supabase.rpc("increment_diamonds", { p_user_id: user_id, p_amount: -diamonds });
     if (deductErr) throw new Error(`Insufficient diamonds: ${deductErr.message}`);
     
-    const { error: awardErr } = await supabase.rpc("increment_coins", { p_match_flow_id: user.match_flow_id, p_amount: coins });
+    const { error: awardErr } = await supabase.rpc("increment_coins", { p_user_id: user_id, p_amount: coins });
     if (awardErr) throw new Error(`Failed to credit coins: ${awardErr.message}`);
 
     await Promise.all([
@@ -308,11 +301,8 @@ export async function convertDiamondsToCoinsAction(user_id: string, diamonds: nu
 export async function requestWithdrawalAction(userUid: string, diamonds: number, amount_kes: number, agencyId: string) {
   const supabase = getSupabaseAdmin();
   try {
-    const {data: user, error: userErr} = await supabase.from('users').select('match_flow_id').eq('uid', userUid).single();
-    if(userErr || !user) throw new Error("User not found");
-
     const ts = Date.now();
-    const { error: rpcError } = await supabase.rpc("increment_diamonds", { p_match_flow_id: user.match_flow_id, p_amount: -diamonds });
+    const { error: rpcError } = await supabase.rpc("increment_diamonds", { p_user_id: userUid, p_amount: -diamonds });
     if (rpcError) throw rpcError;
     await Promise.all([
       supabase.from('withdrawals').insert({ user_id: userUid, agency_id: agencyId, diamonds, amount_kes, status: 'pending', timestamp: ts }),

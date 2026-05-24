@@ -30,7 +30,7 @@ import {
 import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { useUser } from "@/firebase/auth/use-user"
+import { useUser } from "@/lib/providers/UserProvider"
 import {
   Dialog,
   DialogContent,
@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { createAgencyAction, joinAgencyAction } from "@/app/actions/matchflow-actions"
+import { useBalance } from "@/lib/providers/BalanceProvider"
 
 interface UserProfile {
   uid: string
@@ -168,9 +169,9 @@ export default function MePage() {
   const router = useRouter()
   const { user, loading: authLoading, isInitialized } = useUser()
   const { toast } = useToast()
+  const { coins, diamonds } = useBalance();
   
   const [copied, setCopied] = useState(false)
-  const [balances, setBalances] = useState({ coins: 0, diamonds: 0 })
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [isReady, setIsReady] = useState(false)
 
@@ -179,13 +180,8 @@ export default function MePage() {
     if (!user?.id) return
 
     const fetchInitialData = async () => {
-      const [prof, bal] = await Promise.all([
-        supabase.from('users').select('*').eq('uid', user.id).maybeSingle(),
-        supabase.from('balances').select('*').eq('user_id', user.id).maybeSingle()
-      ]);
-      
-      if (prof.data) setProfile(prof.data as any)
-      if (bal.data) setBalances({ coins: bal.data.coins || 0, diamonds: Number(bal.data.diamonds) || 0 })
+      const { data, error } = await supabase.from('users').select('*').eq('uid', user.id).maybeSingle();
+      if (data) setProfile(data as any)
       setIsReady(true)
     }
     fetchInitialData()
@@ -197,16 +193,8 @@ export default function MePage() {
       })
       .subscribe()
 
-    // REALTIME: Sync Balance Changes (Coins/Diamonds)
-    const balanceChannel = supabase.channel(`balance-sync:${user.id}`)
-      .on('postgres_changes', { event: '*', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
-        setBalances({ coins: payload.new.coins || 0, diamonds: Number(payload.new.diamonds) || 0 })
-      })
-      .subscribe()
-
     return () => { 
       supabase.removeChannel(profileChannel)
-      supabase.removeChannel(balanceChannel)
     }
   }, [user?.id, isInitialized, authLoading, router])
 
@@ -281,7 +269,7 @@ export default function MePage() {
             <Button className="h-24 bg-white rounded-[2rem] shadow-xl flex flex-col items-center justify-center gap-1 text-[#00A2FF] relative overflow-hidden group" onClick={() => router.push('/recharge')}>
               <div className="flex items-center gap-2">
                 <div className="bg-blue-50 p-2 rounded-xl group-hover:scale-110 transition-transform"><PlusCircle className="w-5 h-5" /></div>
-                <span className="text-lg font-black">{balances.coins}</span>
+                <span className="text-lg font-black">{coins}</span>
               </div>
               <span className="text-[8px] font-black uppercase tracking-widest opacity-60">Recharge Coins</span>
               <div className="absolute top-0 right-0 p-1.5"><Zap className="w-3 h-3 text-yellow-400 fill-current" /></div>
@@ -289,7 +277,7 @@ export default function MePage() {
             <Button className="h-24 bg-white rounded-[2rem] shadow-xl flex flex-col items-center justify-center gap-1 text-black" onClick={() => router.push("/income")}>
               <div className="flex items-center gap-2">
                 <div className="bg-purple-50 p-2 rounded-xl"><Gem className="w-5 h-5 text-[#4285F4]" /></div>
-                <span className="text-lg font-black">{balances.diamonds.toFixed(0)}</span>
+                <span className="text-lg font-black">{diamonds.toFixed(0)}</span>
               </div>
               <span className="text-[8px] font-black uppercase tracking-widest opacity-60">Diamond Income</span>
             </Button>

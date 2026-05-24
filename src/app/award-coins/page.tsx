@@ -9,31 +9,30 @@ import { useUser } from "@/firebase/auth/use-user"
 import { useToast } from "@/hooks/use-toast"
 import { awardCoinsAction } from "@/app/actions/matchflow-actions"
 import { supabase } from "@/lib/supabase"
+import { useBalance } from "@/lib/providers/BalanceProvider"
 
 export default function AwardCoinsPage() {
   const router = useRouter()
   const { user } = useUser()
   const { toast } = useToast()
+  const { coins } = useBalance();
   
   const [targetId, setTargetId] = useState("")
   const [amount, setAmount] = useState("")
   const [loading, setLoading] = useState(false)
   const [profile, setProfile] = useState<any>(null)
-  const [balance, setBalance] = useState<number>(0)
 
   useEffect(() => {
     if (!user?.id) return
     const fetchData = async () => {
       const { data: p } = await supabase.from('users').select('*').eq('uid', user.id).single()
-      const { data: b } = await supabase.from('balances').select('coins').eq('user_id', user.id).maybeSingle()
       if (p) setProfile(p)
-      if (b) setBalance(Number(b.coins) || 0)
     }
     fetchData()
 
-    const channel = supabase.channel(`merchant-bal-sync:${user.id}`)
-      .on('postgres_changes', { event: 'UPDATE', table: 'balances', filter: `user_id=eq.${user.id}` }, (payload) => {
-        setBalance(Number(payload.new.coins) || 0)
+    const channel = supabase.channel(`merchant-profile-sync:${user.id}`)
+      .on('postgres_changes', { event: '*', table: 'users', filter: `uid=eq.${user.id}` }, (payload) => {
+        setProfile(payload.new)
       })
       .subscribe()
     
@@ -49,7 +48,7 @@ export default function AwardCoinsPage() {
       return;
     }
 
-    if (!profile?.is_admin && balance < numAmount) {
+    if (!profile?.is_admin && coins < numAmount) {
       toast({ variant: "destructive", title: "Insufficient Balance" });
       return;
     }
@@ -102,7 +101,7 @@ export default function AwardCoinsPage() {
               <div className="bg-white p-2 rounded-xl"><Wallet className="w-5 h-5 text-[#00A2FF]" /></div>
               <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Available Wallet</span>
             </div>
-            <span className="text-lg font-black text-black">{balance} <span className="text-[10px] text-gray-400 font-bold uppercase">Coins</span></span>
+            <span className="text-lg font-black text-black">{coins} <span className="text-[10px] text-gray-400 font-bold uppercase">Coins</span></span>
           </div>
         )}
 
