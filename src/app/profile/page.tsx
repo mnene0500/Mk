@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Settings, ChevronRight, Copy, Check, BadgeCheck, Headphones, Pencil, Gem, Loader2, Trophy, Users, Briefcase, UserPlus, Wallet, Shield, User, Flag, PlusCircle, History, Zap } from "lucide-react"
+import { Settings, ChevronRight, Copy, Check, BadgeCheck, Headphones, Pencil, Gem, Loader2, Trophy, Users, Briefcase, UserPlus, Wallet, Shield, User, Flag, PlusCircle, History, Zap, Award } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
@@ -24,6 +24,9 @@ export default function MePage() {
   const [copied, setCopied] = useState(false)
   const [profile, setProfile] = useState<any>(null)
   const [isReady, setIsReady] = useState(false)
+  const [agencyCode, setAgencyCode] = useState("")
+  const [agencyName, setAgencyName] = useState("")
+  const [isProcessing, setIsProcessing] = useState(false)
 
   const fetchProfile = useCallback(async () => {
     if (!user?.id) return
@@ -41,7 +44,37 @@ export default function MePage() {
     if (user?.id) fetchProfile()
   }, [user, isInitialized, authLoading, fetchProfile, router])
 
+  const handleJoinAgency = async () => {
+    if (!user || !agencyCode) return
+    setIsProcessing(true)
+    const res = await joinAgencyAction(user.id, agencyCode)
+    if (res.success) {
+      toast({ title: "Request Sent", description: "Waiting for agent approval." })
+      fetchProfile()
+    } else {
+      toast({ variant: "destructive", title: "Error", description: res.error })
+    }
+    setIsProcessing(false)
+  }
+
+  const handleCreateAgency = async () => {
+    if (!user || !agencyName) return
+    setIsProcessing(true)
+    const res = await createAgencyAction(user.id, agencyName)
+    if (res.success) {
+      toast({ title: "Agency Created!", description: `Code: ${res.code}` })
+      fetchProfile()
+    } else {
+      toast({ variant: "destructive", title: "Error", description: res.error })
+    }
+    setIsProcessing(false)
+  }
+
   if (!isReady && (authLoading || !profile)) return <div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
+
+  const isAdmin = profile?.is_admin
+  const isMerchant = profile?.is_coin_seller || isAdmin
+  const isAgent = profile?.is_agent || isAdmin
 
   return (
     <div className="flex-1 pb-24 bg-[#F8F9FA] min-h-screen relative animate-in fade-in duration-300">
@@ -59,6 +92,7 @@ export default function MePage() {
         </header>
 
         <main className="px-6 space-y-6">
+          {/* BALANCE CARDS */}
           <div className="grid grid-cols-2 gap-4 -mt-6">
             <Button className="h-24 bg-white rounded-[2rem] shadow-xl flex flex-col items-center justify-center text-[#00A2FF]" onClick={() => router.push('/recharge')}>
               <div className="flex items-center gap-2"><PlusCircle className="w-5 h-5" /><span className="text-lg font-black">{coins}</span></div>
@@ -70,17 +104,125 @@ export default function MePage() {
             </Button>
           </div>
 
-          <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">
-            <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
-              <Link href="/coin-history"><div className="flex items-center gap-4"><div className="bg-amber-50 p-2.5 rounded-xl"><History className="w-5 h-5 text-amber-600" /></div><span className="font-semibold text-xs text-black">Coin History</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link>
-            </Button>
-            <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
-              <Link href="/support"><div className="flex items-center gap-4"><div className="bg-blue-50 p-2.5 rounded-xl"><Headphones className="w-5 h-5 text-blue-600" /></div><span className="font-semibold text-xs text-black">Support Center</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link>
-            </Button>
-            <Button variant="ghost" className="h-16 justify-between px-5 rounded-none" asChild>
-              <Link href="/settings"><div className="flex items-center gap-4"><div className="bg-gray-50 p-2.5 rounded-xl"><Settings className="w-5 h-5 text-gray-600" /></div><span className="font-semibold text-xs text-black">Settings</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link>
-            </Button>
-          </div>
+          {/* MERCHANT CONSOLE */}
+          {isMerchant && (
+            <section className="space-y-3">
+              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Merchant Console</h3>
+              <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">
+                <Button variant="ghost" className="h-16 justify-between px-5 rounded-none" onClick={() => router.push('/award-coins')}>
+                  <div className="flex items-center gap-4">
+                    <div className="bg-yellow-50 p-2.5 rounded-xl"><Award className="w-5 h-5 text-yellow-600" /></div>
+                    <span className="font-semibold text-xs text-black">Coin Center (Award)</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-gray-300" />
+                </Button>
+              </div>
+            </section>
+          )}
+
+          {/* AGENT / AGENCY CONSOLE */}
+          <section className="space-y-3">
+            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Agency Console</h3>
+            <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">
+              {isAgent && (
+                <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" onClick={() => router.push('/agency-manage')}>
+                  <div className="flex items-center gap-4">
+                    <div className="bg-purple-50 p-2.5 rounded-xl"><Briefcase className="w-5 h-5 text-purple-600" /></div>
+                    <span className="font-semibold text-xs text-black">Agency Center</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-gray-300" />
+                </Button>
+              )}
+              
+              <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" onClick={() => router.push('/agency-wallet')}>
+                <div className="flex items-center gap-4">
+                  <div className="bg-emerald-50 p-2.5 rounded-xl"><Wallet className="w-5 h-5 text-emerald-600" /></div>
+                  <span className="font-semibold text-xs text-black">Agency Wallet</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-300" />
+              </Button>
+
+              {!profile?.agency_id ? (
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" className="h-16 justify-between px-5 rounded-none">
+                      <div className="flex items-center gap-4">
+                        <div className="bg-blue-50 p-2.5 rounded-xl"><UserPlus className="w-5 h-5 text-blue-600" /></div>
+                        <span className="font-semibold text-xs text-black">Join Agency Program</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-300" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="rounded-[2rem] p-8">
+                    <DialogHeader><DialogTitle className="text-xl font-bold">Join Agency</DialogTitle><DialogDescription className="text-xs">Enter a code or apply to be an agent.</DialogDescription></DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Join via Code</label><Input placeholder="5-digit code" value={agencyCode} onChange={(e) => setAgencyCode(e.target.value)} className="rounded-2xl h-12" /></div>
+                      <Button onClick={handleJoinAgency} disabled={isProcessing || !agencyCode} className="w-full h-12 rounded-full bg-[#00A2FF]">Join Now</Button>
+                      <div className="relative py-2"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-[8px] font-bold uppercase"><span className="bg-white px-2 text-gray-400">OR</span></div></div>
+                      <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Apply to be Agent</label><Input placeholder="Agency Name" value={agencyName} onChange={(e) => setAgencyName(e.target.value)} className="rounded-2xl h-12" /></div>
+                      <Button onClick={handleCreateAgency} disabled={isProcessing || !agencyName} variant="outline" className="w-full h-12 rounded-full">Apply for Agent Role</Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              ) : (
+                <div className="h-16 flex items-center justify-between px-5">
+                   <div className="flex items-center gap-4">
+                     <div className="bg-blue-50 p-2.5 rounded-xl"><Briefcase className="w-5 h-5 text-blue-600" /></div>
+                     <div className="flex flex-col">
+                        <span className="font-semibold text-xs text-black">Member Status</span>
+                        <span className="text-[9px] font-bold text-[#00A2FF] uppercase">{profile.agency_status}</span>
+                     </div>
+                   </div>
+                   <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-50 rounded-full border">
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">ID: {profile.agency_id}</span>
+                   </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ADMIN CONSOLE */}
+          {isAdmin && (
+            <section className="space-y-3">
+              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Admin Console</h3>
+              <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">
+                <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
+                  <Link href="/manage-roles">
+                    <div className="flex items-center gap-4">
+                      <div className="bg-indigo-50 p-2.5 rounded-xl"><Shield className="w-5 h-5 text-indigo-600" /></div>
+                      <span className="font-semibold text-xs text-black">Authority Manager</span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-300" />
+                  </Link>
+                </Button>
+                <Button variant="ghost" className="h-16 justify-between px-5 rounded-none" asChild>
+                  <Link href="/manage-reports">
+                    <div className="flex items-center gap-4">
+                      <div className="bg-red-50 p-2.5 rounded-xl"><Flag className="w-5 h-5 text-red-600" /></div>
+                      <span className="font-semibold text-xs text-black">Report Queue</span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-300" />
+                  </Link>
+                </Button>
+              </div>
+            </section>
+          )}
+
+          {/* SETTINGS GROUP */}
+          <section className="space-y-3">
+            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Account & Support</h3>
+            <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">
+              <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
+                <Link href="/coin-history"><div className="flex items-center gap-4"><div className="bg-amber-50 p-2.5 rounded-xl"><History className="w-5 h-5 text-amber-600" /></div><span className="font-semibold text-xs text-black">Coin History</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link>
+              </Button>
+              <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
+                <Link href="/support"><div className="flex items-center gap-4"><div className="bg-blue-50 p-2.5 rounded-xl"><Headphones className="w-5 h-5 text-blue-600" /></div><span className="font-semibold text-xs text-black">Support Center</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link>
+              </Button>
+              <Button variant="ghost" className="h-16 justify-between px-5 rounded-none" asChild>
+                <Link href="/settings"><div className="flex items-center gap-4"><div className="bg-gray-50 p-2.5 rounded-xl"><Settings className="w-5 h-5 text-gray-600" /></div><span className="font-semibold text-xs text-black">Settings</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link>
+              </Button>
+            </div>
+          </section>
         </main>
       </div>
     </div>
