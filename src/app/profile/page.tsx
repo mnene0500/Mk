@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
@@ -92,7 +93,6 @@ export default function MePage() {
         </header>
 
         <main className="px-6 space-y-6">
-          {/* BALANCE CARDS */}
           <div className="grid grid-cols-2 gap-4 -mt-6">
             <Button className="h-24 bg-white rounded-[2rem] shadow-xl flex flex-col items-center justify-center text-[#00A2FF]" onClick={() => router.push('/recharge')}>
               <div className="flex items-center gap-2"><PlusCircle className="w-5 h-5" /><span className="text-lg font-black">{coins}</span></div>
@@ -104,7 +104,6 @@ export default function MePage() {
             </Button>
           </div>
 
-          {/* MERCHANT CONSOLE */}
           {isMerchant && (
             <section className="space-y-3">
               <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Merchant Console</h3>
@@ -120,7 +119,6 @@ export default function MePage() {
             </section>
           )}
 
-          {/* AGENT / AGENCY CONSOLE - Restricted to Female accounts per policy */}
           {isFemale && (
             <section className="space-y-3">
               <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Agency Console</h3>
@@ -154,7 +152,7 @@ export default function MePage() {
                         <ChevronRight className="w-4 h-4 text-gray-300" />
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="rounded-[2rem] p-8">
+                    <DialogContent className="rounded-[2.5rem] p-8">
                       <DialogHeader>
                         <DialogTitle className="text-xl font-bold">Agency Access</DialogTitle>
                         <DialogDescription className="text-xs">Join an agency to unlock diamond withdrawals.</DialogDescription>
@@ -166,7 +164,6 @@ export default function MePage() {
                         </div>
                         <Button onClick={handleJoinAgency} disabled={isProcessing || !agencyCode} className="w-full h-12 rounded-full bg-[#00A2FF]">Join Now</Button>
                         
-                        {/* Only show "Create Agency" if Admin has appointed this user as an Agent */}
                         {isAgent && (
                           <div className="pt-4 border-t mt-4 space-y-4">
                             <div className="text-center">
@@ -200,7 +197,6 @@ export default function MePage() {
             </section>
           )}
 
-          {/* ADMIN CONSOLE */}
           {isAdmin && (
             <section className="space-y-3">
               <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Admin Console</h3>
@@ -227,7 +223,6 @@ export default function MePage() {
             </section>
           )}
 
-          {/* SETTINGS GROUP */}
           <section className="space-y-3">
             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Account & Support</h3>
             <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">

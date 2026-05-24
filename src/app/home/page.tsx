@@ -108,13 +108,14 @@ export default function HomePage() {
       const from = pageNum * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
+      // Online Priority: Sorting by updated_at DESC effectively puts online/recently active users first
       const query = supabase
         .from('users')
         .select('uid, name, photo_url, country, dob, is_verified, updated_at')
         .eq('onboarding_complete', true)
         .eq('gender', oppositeGender)
         .is('is_deleted', false)
-        .order('updated_at', { ascending: false }) // Proxy for "Online First"
+        .order('updated_at', { ascending: false })
         .range(from, to);
 
       if (activeTab === 'Nearby') {
@@ -147,10 +148,11 @@ export default function HomePage() {
   }, [currentUser?.id, profile, activeTab]);
 
   useEffect(() => {
-    if (statusChecked && profile) {
+    // Initial fetch only occurs once per session or on tab change
+    if (statusChecked && profile && users.length === 0) {
       fetchUsers(0);
     }
-  }, [statusChecked, profile, activeTab, fetchUsers]);
+  }, [statusChecked, profile, activeTab, fetchUsers, users.length]);
 
   const loadMore = () => {
     if (isLoadingMore || !hasMore) return;
@@ -159,11 +161,15 @@ export default function HomePage() {
     fetchUsers(nextPage);
   };
 
+  const handleManualRefresh = () => {
+    setPage(0);
+    fetchUsers(0, true);
+  };
+
   if (!statusChecked) return <div className="fixed inset-0 bg-white flex items-center justify-center"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
 
   return (
     <div className="flex-1 pb-24 bg-white min-h-screen relative select-none animate-in fade-in duration-300">
-      {/* HEADER SECTION */}
       <div className="bg-[#00A2FF] pt-6 pb-4 relative shadow-lg">
         <div className="px-4 grid grid-cols-2 gap-3 mb-6">
           <button 
@@ -182,13 +188,12 @@ export default function HomePage() {
           </button>
         </div>
 
-        {/* STICKY TABS CONTAINER */}
         <div className="sticky top-0 z-50 bg-[#00A2FF] px-6 py-4 flex items-center justify-between border-t border-white/10">
           <div className="flex items-center gap-8">
             {(['Recommend', 'Nearby'] as const).map((tab) => (
               <button 
                 key={tab}
-                onClick={() => { setActiveTab(tab); setPage(0); }} 
+                onClick={() => { setActiveTab(tab); setPage(0); setUsers([]); }} 
                 className={cn("text-sm font-black transition-all relative pb-2", activeTab === tab ? "text-white" : "text-white/40")}
               >
                 {tab}
@@ -196,7 +201,7 @@ export default function HomePage() {
               </button>
             ))}
           </div>
-          <button onClick={() => fetchUsers(0, true)} disabled={isRefreshing} className={cn("p-2 text-white active:scale-90 transition-transform", isRefreshing && "animate-spin")}>
+          <button onClick={handleManualRefresh} disabled={isRefreshing} className={cn("p-2 text-white active:scale-90 transition-transform", isRefreshing && "animate-spin")}>
             <RotateCw className="w-4 h-4" />
           </button>
         </div>
@@ -218,8 +223,14 @@ export default function HomePage() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-90" />
                   <div onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }} className="absolute top-2.5 right-2.5 px-3.5 h-7 bg-[#00A2FF] rounded-full flex items-center justify-center text-white shadow-lg active:scale-90 transition-all z-20"><span className="text-[8px] font-black uppercase tracking-widest">CHAT</span></div>
                   <div className="absolute inset-x-0 bottom-0 p-3 text-white">
-                    <div className="flex items-center gap-1 mb-1.5"><h4 className="font-black text-sm truncate tracking-tight">{u.name}</h4>{u.is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-white" />}</div>
-                    <div className="flex items-center gap-1.5"><span className="bg-[#00B200] text-white font-black text-[8px] px-2 py-0.5 rounded-md">{calculateAge(u.dob)}</span><span className="bg-black/30 backdrop-blur-md text-white text-[8px] font-bold px-2 py-0.5 rounded-md truncate border border-white/5">{u.country}</span></div>
+                    <div className="flex items-center gap-1 mb-1.5">
+                      <h4 className="font-black text-sm truncate tracking-tight">{u.name}</h4>
+                      {u.is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-white" />}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="bg-[#00B200] text-white font-black text-[8px] px-2 py-0.5 rounded-md">{calculateAge(u.dob)}</span>
+                      <span className="bg-black/30 backdrop-blur-md text-white text-[8px] font-bold px-2 py-0.5 rounded-md truncate border border-white/5">{u.country}</span>
+                    </div>
                   </div>
                 </Card>
               ))}
@@ -229,10 +240,6 @@ export default function HomePage() {
               <div className="py-10 flex justify-center">
                 {isLoadingMore ? <Loader2 className="animate-spin text-[#00A2FF]" /> : <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Scroll for more</p>}
               </div>
-            )}
-            
-            {!hasMore && users.length > 0 && (
-              <p className="py-10 text-center text-[10px] font-black text-gray-300 uppercase tracking-widest">No more users in this area</p>
             )}
           </>
         )}

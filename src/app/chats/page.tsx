@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, Suspense, useCallback, useRef } from "react"
@@ -6,7 +7,7 @@ import { supabase } from "@/lib/supabase"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Send, ChevronLeft, Loader2, User, Lock, Gem, Gift, Video, Phone, Trash2, MoreVertical } from "lucide-react"
+import { Send, ChevronLeft, Loader2, User, Lock, Gem, Gift, Video, Phone, Trash2, MoreVertical, BadgeCheck } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
@@ -31,6 +32,7 @@ interface ChatSummary {
   partner_id: string
   partner_name: string
   partner_photo: string
+  partner_is_verified?: boolean
   last_message: string
   last_message_at: number
   unread_count: number
@@ -73,7 +75,6 @@ function ChatsContent() {
   const [giftDialogOpen, setGiftDialogOpen] = useState(false)
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null)
 
-  // OPTIMIZED SUMMARIES FETCH
   const fetchSummaries = useCallback(async () => {
     if (!currentUser?.id) return
     const { data: chatsData } = await supabase
@@ -94,7 +95,7 @@ function ChatsContent() {
         const myClearedAt = (c.cleared_at as Record<string, number>)?.[currentUser.id] || 0;
         if (c.last_message_at <= myClearedAt) return null;
 
-        const { data: p } = await supabase.from('users').select('name, photo_url').eq('uid', pId).maybeSingle()
+        const { data: p } = await supabase.from('users').select('name, photo_url, is_verified').eq('uid', pId).maybeSingle()
         if (!p) return null; 
         
         const mySeenAt = (c.last_seen_at as Record<string, number>)?.[currentUser.id] || 0;
@@ -105,6 +106,7 @@ function ChatsContent() {
           partner_id: pId,
           partner_name: p.name || `User`,
           partner_photo: p.photo_url || "",
+          partner_is_verified: p.is_verified,
           last_message: c.last_message || "",
           last_message_at: c.last_message_at || Date.now(),
           unread_count: isUnread ? 1 : 0
@@ -118,7 +120,6 @@ function ChatsContent() {
   useEffect(() => {
     if (currentUser?.id && !startWithId) {
       fetchSummaries()
-      // Realtime ONLY for new messages affecting summaries
       const channel = supabase.channel('chats_realtime_summaries')
         .on('postgres_changes', { event: 'UPDATE', table: 'chats', schema: 'public' }, () => fetchSummaries())
         .subscribe()
@@ -132,7 +133,7 @@ function ChatsContent() {
       const cId = `direct_${ids[0]}_${ids[1]}`
       setChatId(cId)
       setMessages([])
-      supabase.from('users').select('uid, name, photo_url, blocking, blocked_by').eq('uid', startWithId).maybeSingle().then(({ data }) => setPartnerProfile(data))
+      supabase.from('users').select('uid, name, photo_url, is_verified, blocking, blocked_by').eq('uid', startWithId).maybeSingle().then(({ data }) => setPartnerProfile(data))
       supabase.from('chats').select('cleared_at').eq('id', cId).maybeSingle().then(({ data }) => {
         const cleared = (data?.cleared_at as Record<string, number>)?.[currentUser.id] || 0
         setActiveChatClearedAt(cleared)
@@ -201,7 +202,6 @@ function ChatsContent() {
     if (res.success) { router.push(`/call/${chatId}?type=${type}&partnerId=${startWithId}&callId=${res.callId}`); }
   }
 
-  // Bidirectional Block Check: Hide call buttons if either side has blocked the other
   const isBidirectionalBlocked = partnerProfile && (
     (partnerProfile.blocking || []).includes(currentUser?.id) || 
     (partnerProfile.blocked_by || []).includes(currentUser?.id)
@@ -233,8 +233,11 @@ function ChatsContent() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex justify-between mb-1">
-                <p className="text-sm font-black truncate">{s.partner_name}</p>
-                <span className="text-[9px] font-bold text-gray-300 uppercase">{format(s.last_message_at, "HH:mm")}</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className="text-sm font-black truncate">{s.partner_name}</p>
+                  {s.partner_is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-blue-50 shrink-0" />}
+                </div>
+                <span className="text-[9px] font-bold text-gray-300 uppercase shrink-0">{format(s.last_message_at, "HH:mm")}</span>
               </div>
               <p className={cn("text-xs truncate", s.unread_count > 0 ? "font-bold text-black" : "text-gray-400")}>{s.last_message}</p>
             </div>
@@ -258,11 +261,14 @@ function ChatsContent() {
       <header className="h-16 border-b flex items-center px-4 gap-4 bg-white z-50">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
         <div 
-          className="flex items-center gap-3 flex-1 cursor-pointer active:opacity-70 transition-opacity" 
+          className="flex items-center gap-3 flex-1 cursor-pointer active:opacity-70 transition-opacity min-w-0" 
           onClick={() => router.push(`/users/${startWithId}`)}
         >
-          <Avatar className="w-10 h-10 border"><AvatarImage src={partnerProfile?.photo_url} className="object-cover" /><AvatarFallback>{partnerProfile?.name?.[0]}</AvatarFallback></Avatar>
-          <div><p className="font-black text-sm leading-none">{partnerProfile?.name || '...'}</p></div>
+          <Avatar className="w-10 h-10 border shrink-0"><AvatarImage src={partnerProfile?.photo_url} className="object-cover" /><AvatarFallback>{partnerProfile?.name?.[0]}</AvatarFallback></Avatar>
+          <div className="min-w-0 flex items-center gap-1.5">
+            <p className="font-black text-sm leading-none truncate">{partnerProfile?.name || '...'}</p>
+            {partnerProfile?.is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-blue-50 shrink-0" />}
+          </div>
         </div>
         <div className="flex items-center gap-1">
           {!isBidirectionalBlocked && (
