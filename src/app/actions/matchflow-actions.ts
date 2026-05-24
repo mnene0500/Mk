@@ -9,6 +9,96 @@ import { headers } from 'next/headers';
  * Hardened for strict bidirectional blocking and correct targeting.
  */
 
+const OFFENSIVE_WORDS = [
+  // English
+  'fuck', 'shit', 'bitch', 'asshole', 'dick', 'pussy', 'nigger', 'bastard',
+  // Kiswahili
+  'kuma', 'mboro', 'malaya', 'mjinga', 'msenge', 'shenzi', 'kundu', 'fala'
+];
+
+function moderateText(text: string): boolean {
+  const lowerText = text.toLowerCase();
+  return OFFENSIVE_WORDS.some(word => lowerText.includes(word));
+}
+
+export async function sendMessageAction(payload: {
+  chatId: string;
+  senderId: string;
+  recipientId: string;
+  text: string;
+}) {
+  const supabase = getSupabaseAdmin();
+  const timestamp = Date.now();
+
+  try {
+    // 1. Moderation Check
+    if (moderateText(payload.text)) {
+      return { success: false, error: "offensive_content" };
+    }
+
+    // 2. Fetch Sender Profile for Billing
+    const { data: sender } = await supabase
+      .from('users')
+      .select('gender, is_admin, is_coin_seller, name')
+      .eq('uid', payload.senderId)
+      .single();
+
+    if (!sender) throw new Error("Sender not found.");
+
+    // 3. Billing Logic
+    const isSpecialRole = sender.is_admin || sender.is_coin_seller;
+    const isMale = sender.gender === 'male';
+    const cost = 15; // Cost per message
+
+    if (isMale && !isSpecialRole) {
+      const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', payload.senderId).single();
+      const currentCoins = Number(bal?.coins) || 0;
+
+      if (currentCoins < cost) {
+        return { success: false, error: "insufficient_funds" };
+      }
+
+      // Deduct coins atomically
+      const { error: deductErr } = await supabase.rpc("increment_coins", { 
+        p_user_id: payload.senderId, 
+        p_amount: -cost 
+      });
+      if (deductErr) throw deductErr;
+
+      // Log to history
+      await supabase.from("coin_history").insert({
+        user_id: payload.senderId,
+        amount: -cost,
+        type: "chat_cost",
+        description: `Message to ${payload.recipientId.slice(0, 5)}...`,
+        timestamp
+      });
+    }
+
+    // 4. Upsert Chat & Insert Message
+    await supabase.from('chats').upsert({ 
+      id: payload.chatId, 
+      last_message: payload.text, 
+      last_message_at: timestamp, 
+      participant_ids: [payload.senderId, payload.recipientId] 
+    });
+
+    const { error: msgError } = await supabase.from('messages').insert({ 
+      chat_id: payload.chatId, 
+      text: payload.text, 
+      sender_id: payload.senderId, 
+      timestamp 
+    });
+
+    if (msgError) throw msgError;
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("[Send Message Error]:", err.message);
+    return { success: false, error: "system_error" };
+  }
+}
+
 export async function completeOnboardingAction(payload: {
   uid: string;
   email: string;
@@ -36,13 +126,11 @@ export async function completeOnboardingAction(payload: {
     }
 
     // 2. Determine Welcome Bonus
-    // Male: 1st & 2nd = 500, 3rd = 0
     let initialCoins = 0;
     if (payload.gender === 'male') {
       initialCoins = (count !== null && count < 2) ? 500 : 0;
     }
     
-    // Female gets standard 150 (as per previous logic) or adjust as needed
     const initialDiamonds = payload.gender === 'female' ? 150 : 0;
     const qId = Math.floor(1000000 + Math.random() * 900000000).toString();
     const timestamp = Date.now();
@@ -89,22 +177,14 @@ export async function completeOnboardingAction(payload: {
   }
 }
 
-/**
- * NUCLEAR DELETION
- * Scrubs Auth, DB, and Chats completely.
- */
 export async function deleteUserCompletelyAction(uid: string) {
   const supabase = getSupabaseAdmin();
   try {
-    // 1. Manually scrub chats where the user was a participant 
-    // (Postgres Array columns don't support standard FK cascade)
     await supabase
       .from('chats')
       .delete()
       .contains('participant_ids', [uid]);
 
-    // 2. Delete the Auth User
-    // This triggers the database CASCADE for public.users, balances, history, etc.
     const { error } = await supabase.auth.admin.deleteUser(uid);
     
     if (error) throw error;

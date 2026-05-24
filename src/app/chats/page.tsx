@@ -11,7 +11,7 @@ import { Send, ChevronLeft, Loader2, User, Lock, Gem, Gift, Video, Phone, Trash2
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
-import { sendGiftAction, clearChatAction } from "@/app/actions/matchflow-actions"
+import { sendGiftAction, clearChatAction, sendMessageAction } from "@/app/actions/matchflow-actions"
 import { checkCallBalanceAction, startCallAction } from "@/app/actions/call-actions"
 import { useBalance } from "@/lib/providers/BalanceProvider"
 import {
@@ -166,7 +166,7 @@ function ChatsContent() {
       const cId = `direct_${ids[0]}_${ids[1]}`
       setChatId(cId)
       markAsSeen(cId)
-      setMessages([]) // CLEAR messages immediately to avoid blink
+      setMessages([])
       supabase.from('users').select('*').eq('uid', startWithId).maybeSingle().then(({ data }) => setPartnerProfile(data))
       supabase.from('chats').select('cleared_at').eq('id', cId).maybeSingle().then(({ data }) => {
         const cleared = data?.cleared_at?.[currentUser.id] || 0
@@ -187,7 +187,7 @@ function ChatsContent() {
       const newMsg = payload.new as Message
       if (newMsg.timestamp <= activeChatClearedAt) return
       setMessages(prev => {
-        const exists = prev.some(m => m.text === newMsg.text && Math.abs(m.timestamp - newMsg.timestamp) < 5000)
+        const exists = prev.some(m => (m.text === newMsg.text && Math.abs(m.timestamp - newMsg.timestamp) < 5000) || m.id === newMsg.id)
         if (exists) return prev.map(m => (m.text === newMsg.text && m.is_optimistic) ? newMsg : m)
         return [newMsg, ...prev]
       })
@@ -200,41 +200,39 @@ function ChatsContent() {
     if (chatId && autoMsg === 'buy_coins' && !hasSentAutoMsg.current && currentUser?.id && startWithId) {
       hasSentAutoMsg.current = true;
       const text = "I want to buy coins. Please guide me on the payment process.";
-      const ts = Date.now();
-      supabase.from('chats').upsert({ id: chatId, last_message: text, last_message_at: ts, participant_ids: [currentUser.id, startWithId] }).then(() => {
-        supabase.from('messages').insert({ chat_id: chatId, text, sender_id: currentUser.id, timestamp: ts })
-      });
+      handleSendMessage(text);
     }
   }, [chatId, autoMsg, currentUser?.id, startWithId])
 
-  const handleSendMessage = async () => {
-    if (!newMessage.trim() || !chatId || !currentUser?.id || !startWithId) return
-    const text = newMessage.trim()
+  const handleSendMessage = async (customText?: string) => {
+    const text = customText || newMessage.trim()
+    if (!text || !chatId || !currentUser?.id || !startWithId) return
+    
     const timestamp = Date.now()
     const optimisticMsg: Message = { id: `temp-${timestamp}`, text, sender_id: currentUser.id, timestamp, is_optimistic: true }
     
     setMessages(prev => [optimisticMsg, ...prev])
-    setNewMessage("")
+    if (!customText) setNewMessage("")
 
-    const { error: chatError } = await supabase.from('chats').upsert({ 
-      id: chatId, 
-      last_message: text, 
-      last_message_at: timestamp, 
-      participant_ids: [currentUser.id, startWithId] 
-    })
+    const res = await sendMessageAction({
+      chatId,
+      senderId: currentUser.id,
+      recipientId: startWithId,
+      text
+    });
 
-    if (chatError) {
+    if (!res.success) {
       setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
-      toast({ variant: "destructive", title: "Chat failed to initialize" })
-      return
-    }
-
-    const { error: msgError } = await supabase.from('messages').insert({ chat_id: chatId, text, sender_id: currentUser.id, timestamp })
-    if (!msgError) {
-      await markAsSeen(chatId, timestamp)
+      if (res.error === "offensive_content") {
+        toast({ variant: "destructive", title: "Warning", description: "Offensive content detected." })
+      } else if (res.error === "insufficient_funds") {
+        toast({ variant: "destructive", title: "Insufficient Coins", description: "Recharge to continue chatting." })
+        router.push("/recharge")
+      } else {
+        toast({ variant: "destructive", title: "System Error", description: "Could not send message." })
+      }
     } else {
-      setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
-      toast({ variant: "destructive", title: "Failed to send message" })
+      await markAsSeen(chatId, timestamp)
     }
   }
 
@@ -245,7 +243,7 @@ function ChatsContent() {
     if (res.success) {
       toast({ title: "Chat Deleted" })
       if (!id) {
-          setMessages([]) // Wipe state immediately
+          setMessages([])
           router.push("/chats")
       }
       else fetchSummaries()
@@ -283,11 +281,6 @@ function ChatsContent() {
       if (res.success) {
         toast({ title: "Gift Sent!", description: `You sent a ${gift.name}.` })
         setGiftDialogOpen(false)
-        // FORCE a refresh check for messages
-        const { data } = await supabase.from('messages').select('*').eq('chat_id', chatId!).gt('timestamp', activeChatClearedAt).order('timestamp', { ascending: false }).limit(1)
-        if (data && data[0]) {
-           setMessages(prev => [data[0], ...prev])
-        }
       } else {
         toast({ variant: "destructive", title: "Error", description: res.error })
       }
@@ -467,8 +460,16 @@ function ChatsContent() {
               </DialogContent>
             </Dialog>
 
-            <input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendMessage()} className="flex-1 h-12 bg-gray-50 rounded-2xl px-5 text-sm font-bold outline-none border border-transparent focus:border-[#00A2FF]/20 transition-all min-w-0" placeholder="Type something..." />
-            <Button onClick={handleSendMessage} size="icon" className="rounded-full h-12 w-12 bg-[#00A2FF] shadow-lg shadow-blue-100 shrink-0"><Send className="w-5 h-5" /></Button>
+            <input 
+              value={newMessage} 
+              onChange={e => setNewMessage(e.target.value)} 
+              onKeyDown={e => e.key === 'Enter' && handleSendMessage()} 
+              className="flex-1 h-12 bg-gray-50 rounded-2xl px-5 text-sm font-bold outline-none border border-transparent focus:border-[#00A2FF]/20 transition-all min-w-0" 
+              placeholder="Type something..." 
+            />
+            <Button onClick={() => handleSendMessage()} size="icon" className="rounded-full h-12 w-12 bg-[#00A2FF] shadow-lg shadow-blue-100 shrink-0">
+              <Send className="w-5 h-5" />
+            </Button>
           </div>
         )}
       </footer>
