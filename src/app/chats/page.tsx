@@ -257,7 +257,10 @@ function ChatsContent() {
     <div className="flex flex-col h-screen bg-white select-none overflow-hidden">
       <header className="h-16 border-b flex items-center px-4 gap-4 bg-white z-50">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
-        <div className="flex items-center gap-3 flex-1">
+        <div 
+          className="flex items-center gap-3 flex-1 cursor-pointer active:opacity-70 transition-opacity" 
+          onClick={() => router.push(`/users/${startWithId}`)}
+        >
           <Avatar className="w-10 h-10 border"><AvatarImage src={partnerProfile?.photo_url} className="object-cover" /><AvatarFallback>{partnerProfile?.name?.[0]}</AvatarFallback></Avatar>
           <div><p className="font-black text-sm leading-none">{partnerProfile?.name || '...'}</p></div>
         </div>

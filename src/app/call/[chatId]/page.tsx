@@ -1,10 +1,8 @@
-
 "use client"
 
 import { useEffect, useState, useRef, use } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { PhoneOff, Mic, MicOff, Video, VideoOff, Camera, Loader2, User } from "lucide-react"
+import { PhoneOff, Mic, MicOff, Video, VideoOff, Loader2, User } from "lucide-react"
 import { useUser } from "@/firebase/auth/use-user"
 import { supabase } from "@/lib/supabase"
 import { generateAgoraTokenAction, deductCallCoinsAction, endCallAction } from "@/app/actions/call-actions"
@@ -12,8 +10,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
 /**
- * @fileOverview Hardened Agora Call Page.
- * Fixed crashing during 'securing connection' by improving initialization sequence.
+ * @fileOverview Streamlined & Hardened Agora Call Page.
+ * Removed intermediate "Securing Connection" overlays for instant connection.
  */
 
 export default function CallPage({ params }: { params: Promise<{ chatId: string }> }) {
@@ -26,7 +24,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   const partnerId = searchParams.get("partnerId")
   const callId = searchParams.get("callId")
 
-  const [rtc, setRtc] = useState<{ client: any, localAudioTrack: any, localVideoTrack: any }>({ 
+  const rtc = useRef<{ client: any, localAudioTrack: any, localVideoTrack: any }>({ 
     client: null, 
     localAudioTrack: null, 
     localVideoTrack: null 
@@ -48,7 +46,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     supabase.from('users').select('uid, name, photo_url').eq('uid', partnerId).single().then(({ data }) => setPartnerProfile(data))
   }, [partnerId])
 
-  // REALTIME SIGNALING: End call on both sides
+  // REALTIME SIGNALING
   useEffect(() => {
     if (!callId) return
     const channel = supabase.channel(`call-sig-${callId}`)
@@ -61,13 +59,12 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     return () => { supabase.removeChannel(channel) }
   }, [callId])
 
-  // BILLING TIMER (Only starts AFTER joined is true)
+  // BILLING TIMER
   useEffect(() => {
     if (joined && user?.id && partnerId) {
       billingTimer.current = setInterval(async () => {
         setDuration(prev => {
           const next = prev + 1
-          
           const isFirstMinuteDeduction = next === 11;
           const isSubsequentMinuteDeduction = next > 11 && (next - 11) % 60 === 0;
 
@@ -76,7 +73,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
               if (!res.success) handleEndCall(true)
             })
           }
-          
           return next
         })
       }, 1000)
@@ -102,14 +98,21 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         
         if (type === 'video') {
           videoTrack = await AgoraRTC.createCameraVideoTrack()
-          if (localVideoRef.current) {
+          if (localVideoRef.current && videoTrack) {
             videoTrack.play(localVideoRef.current)
           }
         }
 
+        if (!mounted) {
+          audioTrack.close();
+          if (videoTrack) videoTrack.close();
+          await client.leave();
+          return;
+        }
+
         await client.publish(videoTrack ? [audioTrack, videoTrack] : [audioTrack])
         
-        setRtc({ client, localAudioTrack: audioTrack, localVideoTrack: videoTrack })
+        rtc.current = { client, localAudioTrack: audioTrack, localVideoTrack: videoTrack }
         setJoined(true)
 
         client.on("user-published", async (remoteUser, mediaType) => {
@@ -134,7 +137,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         })
       } catch (err) {
         console.error("Agora Init Failed", err)
-        router.replace('/home')
+        if (mounted) router.replace('/home')
       }
     }
 
@@ -142,44 +145,32 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     
     return () => { 
       mounted = false;
-      if (rtc.client) {
-        rtc.localAudioTrack?.stop()
-        rtc.localAudioTrack?.close()
-        rtc.localVideoTrack?.stop()
-        rtc.localVideoTrack?.close()
-        rtc.client.leave()
-      }
+      const { client, localAudioTrack, localVideoTrack } = rtc.current;
+      if (localAudioTrack) { localAudioTrack.stop(); localAudioTrack.close(); }
+      if (localVideoTrack) { localVideoTrack.stop(); localVideoTrack.close(); }
+      if (client) { client.leave().catch(() => {}); }
     }
   }, [chatId, user?.id])
 
   const handleEndCall = async (manual = true) => {
-    if (rtc.localAudioTrack) {
-      rtc.localAudioTrack.stop()
-      rtc.localAudioTrack.close()
-    }
-    if (rtc.localVideoTrack) {
-      rtc.localVideoTrack.stop()
-      rtc.localVideoTrack.close()
-    }
-    if (rtc.client) {
-      try { await rtc.client.leave() } catch (e) {}
-    }
-    if (manual && callId) {
-      await endCallAction(callId)
-    }
+    const { client, localAudioTrack, localVideoTrack } = rtc.current;
+    if (localAudioTrack) { localAudioTrack.stop(); localAudioTrack.close(); }
+    if (localVideoTrack) { localVideoTrack.stop(); localVideoTrack.close(); }
+    if (client) { try { await client.leave() } catch (e) {} }
+    if (manual && callId) { await endCallAction(callId) }
     router.replace(`/chats?startWith=${partnerId}`)
   }
 
   const toggleMute = () => {
-    if (rtc.localAudioTrack) {
-      rtc.localAudioTrack.setEnabled(muted)
+    if (rtc.current.localAudioTrack) {
+      rtc.current.localAudioTrack.setEnabled(muted)
       setMute(!muted)
     }
   }
 
   const toggleCamera = () => {
-    if (rtc.localVideoTrack) {
-      rtc.localVideoTrack.setEnabled(cameraOff)
+    if (rtc.current.localVideoTrack) {
+      rtc.current.localVideoTrack.setEnabled(cameraOff)
       setCameraOff(!cameraOff)
     }
   }
@@ -203,7 +194,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
              </Avatar>
              <h2 className="text-white text-2xl font-black mt-6 tracking-tight">{partnerProfile?.name || 'Connecting...'}</h2>
              <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.3em] mt-2">
-               {joined ? formatDuration(duration) : 'Initializing Agora...'}
+               {joined ? formatDuration(duration) : 'Initializing...'}
              </p>
              {duration < 11 && joined && (
                <div className="mt-4 px-4 py-1.5 bg-green-500/20 text-green-400 rounded-full border border-green-500/30 animate-pulse">
@@ -244,13 +235,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
           </button>
         )}
       </div>
-
-      {!joined && (
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[110] flex flex-col items-center justify-center gap-4">
-          <Loader2 className="w-10 h-10 animate-spin text-[#00A2FF]" />
-          <p className="text-white text-xs font-black uppercase tracking-widest opacity-60">Securing Channel...</p>
-        </div>
-      )}
     </div>
   )
 }
