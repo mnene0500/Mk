@@ -2,32 +2,29 @@
 # QIVO Production SQL (Run in SQL Editor)
 
 ```sql
--- 1. SETUP ATOMIC HELPERS
+-- 1. SETUP ATOMIC HELPERS (Hardened for Realtime Economy)
 CREATE OR REPLACE FUNCTION public.increment_diamonds(user_id UUID, amount NUMERIC)
 RETURNS VOID AS $$
 BEGIN
   INSERT INTO public.balances (user_id, diamonds)
   VALUES (user_id, amount)
   ON CONFLICT (user_id)
-  DO UPDATE SET diamonds = balances.diamonds + amount, updated_at = NOW();
+  DO UPDATE SET diamonds = COALESCE(balances.diamonds, 0) + amount, updated_at = NOW();
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE OR REPLACE FUNCTION public.increment_coins(user_uid UUID, amount BIGINT)
+CREATE OR REPLACE FUNCTION public.increment_coins(user_id UUID, amount BIGINT)
 RETURNS VOID AS $$
 BEGIN
   INSERT INTO public.balances (user_id, coins)
-  VALUES (user_uid, amount)
+  VALUES (user_id, amount)
   ON CONFLICT (user_id)
-  DO UPDATE SET coins = balances.coins + amount, updated_at = NOW();
+  DO UPDATE SET coins = COALESCE(balances.coins, 0) + amount, updated_at = NOW();
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 2. RESET TABLES
-DROP TABLE IF EXISTS public.users, public.balances, public.coin_history, public.diamond_history, public.processed_payments, public.chats, public.messages, public.agencies, public.withdrawals, public.reports CASCADE;
-
--- 3. CREATE CORE TABLES
-CREATE TABLE public.users (
+-- 2. CREATE CORE TABLES
+CREATE TABLE IF NOT EXISTS public.users (
   uid UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT UNIQUE,
   name TEXT,
@@ -55,14 +52,23 @@ CREATE TABLE public.users (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE public.balances (
+CREATE TABLE IF NOT EXISTS public.balances (
   user_id UUID PRIMARY KEY REFERENCES public.users(uid) ON DELETE CASCADE,
   coins BIGINT DEFAULT 0,
   diamonds NUMERIC DEFAULT 0,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE public.coin_history (
+CREATE TABLE IF NOT EXISTS public.processed_payments (
+  order_tracking_id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  amount NUMERIC,
+  coins BIGINT,
+  payment_method TEXT,
+  timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
+);
+
+CREATE TABLE IF NOT EXISTS public.coin_history (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
   amount BIGINT,
@@ -71,7 +77,7 @@ CREATE TABLE public.coin_history (
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
-CREATE TABLE public.diamond_history (
+CREATE TABLE IF NOT EXISTS public.diamond_history (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
   amount NUMERIC,
@@ -80,16 +86,7 @@ CREATE TABLE public.diamond_history (
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
-CREATE TABLE public.processed_payments (
-  order_tracking_id TEXT PRIMARY KEY,
-  user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
-  amount NUMERIC,
-  coins BIGINT,
-  payment_method TEXT,
-  timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
-);
-
-CREATE TABLE public.chats (
+CREATE TABLE IF NOT EXISTS public.chats (
   id TEXT PRIMARY KEY,
   participant_ids UUID[] NOT NULL,
   last_message TEXT,
@@ -98,7 +95,7 @@ CREATE TABLE public.chats (
   last_seen_at JSONB DEFAULT '{}'::jsonb
 );
 
-CREATE TABLE public.messages (
+CREATE TABLE IF NOT EXISTS public.messages (
   id BIGSERIAL PRIMARY KEY,
   chat_id TEXT REFERENCES public.chats(id) ON DELETE CASCADE,
   sender_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
@@ -107,14 +104,14 @@ CREATE TABLE public.messages (
   is_gift BOOLEAN DEFAULT FALSE
 );
 
-CREATE TABLE public.agencies (
+CREATE TABLE IF NOT EXISTS public.agencies (
   code TEXT PRIMARY KEY,
   agent_uid UUID REFERENCES public.users(uid) ON DELETE CASCADE,
   name TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE public.withdrawals (
+CREATE TABLE IF NOT EXISTS public.withdrawals (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
   agency_id TEXT REFERENCES public.agencies(code) ON DELETE CASCADE,
@@ -124,7 +121,7 @@ CREATE TABLE public.withdrawals (
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
-CREATE TABLE public.reports (
+CREATE TABLE IF NOT EXISTS public.reports (
   id BIGSERIAL PRIMARY KEY,
   reporter_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
   reported_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
@@ -135,10 +132,30 @@ CREATE TABLE public.reports (
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
--- 4. ENABLE REALTIME
-ALTER PUBLICATION supabase_realtime ADD TABLE public.balances, public.coin_history, public.diamond_history, public.chats, public.messages, public.users, public.withdrawals, public.reports;
+-- 3. ENABLE REALTIME SAFELY (FULL PAYLOAD)
+ALTER TABLE public.balances REPLICA IDENTITY FULL;
+ALTER TABLE public.users REPLICA IDENTITY FULL;
+ALTER TABLE public.coin_history REPLICA IDENTITY FULL;
+ALTER TABLE public.diamond_history REPLICA IDENTITY FULL;
 
--- 5. ENABLE RLS & POLICIES
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    CREATE PUBLICATION supabase_realtime;
+  END IF;
+END $$;
+
+ALTER PUBLICATION supabase_realtime SET TABLE 
+  public.balances, 
+  public.coin_history, 
+  public.diamond_history, 
+  public.chats, 
+  public.messages, 
+  public.users, 
+  public.withdrawals, 
+  public.reports;
+
+-- 4. ENABLE RLS & POLICIES
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.balances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coin_history ENABLE ROW LEVEL SECURITY;
@@ -150,14 +167,19 @@ ALTER TABLE public.agencies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.withdrawals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Public profiles are viewable by everyone" ON public.users FOR SELECT USING (true);
-CREATE POLICY "Users can insert own profile" ON public.users FOR INSERT WITH CHECK (auth.uid() = uid);
-CREATE POLICY "Users can update own profile" ON public.users FOR UPDATE USING (auth.uid() = uid);
-CREATE POLICY "Users can view own balance" ON public.balances FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own balance" ON public.balances FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own balance" ON public.balances FOR UPDATE USING (auth.uid() = user_id);
+-- 5. CREATE POLICIES
+DROP POLICY IF EXISTS "Users can manage own profile" ON public.users;
+CREATE POLICY "Users can manage own profile" ON public.users 
+FOR ALL USING (auth.uid() = uid) WITH CHECK (auth.uid() = uid);
+
+DROP POLICY IF EXISTS "Public profiles are viewable" ON public.users;
+CREATE POLICY "Public profiles are viewable" ON public.users FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Users view own balance" ON public.balances;
+CREATE POLICY "Users view own balance" ON public.balances FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Participants can view chats" ON public.chats;
 CREATE POLICY "Participants can view chats" ON public.chats FOR SELECT USING (auth.uid() = ANY(participant_ids));
-CREATE POLICY "Participants can send messages" ON public.messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
 
 -- 6. GRANT PERMISSIONS
 GRANT USAGE ON SCHEMA public TO anon, authenticated;

@@ -46,7 +46,6 @@ export default function HomePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [statusChecked, setStatusChecked] = useState(false)
 
-  // 1. Auth and Global Profile Sync
   useEffect(() => {
     if (!isInitialized || authLoading) return;
     if (!currentUser) { router.replace("/welcome"); return; }
@@ -103,9 +102,9 @@ export default function HomePage() {
 
   return (
     <div className="flex-1 pb-24 bg-white min-h-screen relative select-none animate-in fade-in duration-300">
-      {/* BLUE TOP SECTION */}
-      <div className="bg-[#00A2FF] pb-8 pt-6 relative shadow-lg">
-        <div className="relative px-4 grid grid-cols-2 gap-3 z-20 mb-4 pt-4">
+      {/* BLUE TOP SECTION - SCROLLABLE */}
+      <div className="bg-[#00A2FF] pb-4 pt-6 relative shadow-lg">
+        <div className="relative px-4 grid grid-cols-2 gap-3 z-20 mb-6 pt-4">
           <button 
             onClick={() => router.push('/mystery-note')} 
             className="h-28 bg-white/10 backdrop-blur-xl border border-white/20 rounded-[1.5rem] p-4 flex flex-col items-start justify-end gap-1 shadow-2xl active:scale-95 transition-all text-white text-left"
@@ -127,27 +126,28 @@ export default function HomePage() {
             <p className="text-[8px] font-bold opacity-60 tracking-widest uppercase">EARN REWARDS</p>
           </button>
         </div>
+      </div>
 
-        <div className="sticky top-0 z-30">
-          <div className="px-6 py-2 flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              <button 
-                onClick={() => setActiveTab('Recommend')} 
-                className={cn("text-sm font-black transition-all relative pb-2", activeTab === 'Recommend' ? "text-white" : "text-white/40")}
-              >
-                Recommend
-                {activeTab === 'Recommend' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-white rounded-full animate-in zoom-in" />}
-              </button>
-              <button 
-                onClick={() => setActiveTab('Nearby')} 
-                className={cn("text-sm font-black transition-all relative pb-2", activeTab === 'Nearby' ? "text-white" : "text-white/40")}
-              >
-                Nearby
-                {activeTab === 'Nearby' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-white rounded-full animate-in zoom-in" />}
-              </button>
-            </div>
-            <button onClick={() => fetchUsers(true)} disabled={isRefreshing} className={cn("p-2 text-white/60 active:scale-90 transition-transform", isRefreshing && "animate-spin")}><RotateCw className="w-4 h-4" /></button>
+      {/* STICKY NAV TABS */}
+      <div className="sticky top-0 z-40 bg-white shadow-sm">
+        <div className="px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-8">
+            <button 
+              onClick={() => setActiveTab('Recommend')} 
+              className={cn("text-sm font-black transition-all relative pb-2", activeTab === 'Recommend' ? "text-black" : "text-gray-300")}
+            >
+              Recommend
+              {activeTab === 'Recommend' && <div className="absolute -bottom-1 left-0 right-0 h-1 bg-[#00A2FF] rounded-full animate-in zoom-in" />}
+            </button>
+            <button 
+              onClick={() => setActiveTab('Nearby')} 
+              className={cn("text-sm font-black transition-all relative pb-2", activeTab === 'Nearby' ? "text-black" : "text-gray-300")}
+            >
+              Nearby
+              {activeTab === 'Nearby' && <div className="absolute -bottom-1 left-0 right-0 h-1 bg-[#00A2FF] rounded-full animate-in zoom-in" />}
+            </button>
           </div>
+          <button onClick={() => fetchUsers(true)} disabled={isRefreshing} className={cn("p-2 text-gray-300 active:scale-90 transition-transform", isRefreshing && "animate-spin")}><RotateCw className="w-4 h-4" /></button>
         </div>
       </div>
 

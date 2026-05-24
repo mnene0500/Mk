@@ -187,7 +187,7 @@ export async function sendMysteryNoteAction(user_id: string, message: string, re
       throw new Error("Insufficient coins for this operation.");
     }
 
-    const { error: deductErr } = await supabase.rpc("increment_coins", { user_id, amount: -cost });
+    const { error: deductErr } = await supabase.rpc("increment_coins", { user_id: user_id, amount: -cost });
     if (deductErr) throw new Error("Payment deduction failed.");
 
     await supabase.from('coin_history').insert({ 
