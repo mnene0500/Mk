@@ -72,25 +72,27 @@ export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: s
     if (!merchant?.is_admin && !merchant?.is_coin_seller) throw new Error("Unauthorized to award coins.");
 
     // 2. Find Target User strictly by match_flow_id
+    const cleanedId = targetMatchFlowId.trim();
     const { data: target, error: targetErr } = await supabase
       .from('users')
       .select('uid, name')
-      .eq('match_flow_id', targetMatchFlowId.trim())
+      .eq('match_flow_id', cleanedId)
       .single();
     
-    if (targetErr || !target) throw new Error("Recipient user not found.");
+    if (targetErr || !target) throw new Error(`Recipient ID (${cleanedId}) not found.`);
 
     const ts = Date.now();
 
     // 3. Logic for Merchant (Deduction Required) vs Admin (Unlimited)
-    if (merchant.is_coin_seller && !merchant.is_admin) {
+    // Only deduct if NOT an admin (Admins have unlimited awarding power)
+    if (!merchant.is_admin && merchant.is_coin_seller) {
       const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', merchantUid).single();
       const currentBal = Number(bal?.coins) || 0;
       if (currentBal < amount) throw new Error(`Insufficient coins. Your balance: ${currentBal}`);
 
       // Deduct from Merchant
       const { error: deductErr } = await supabase.rpc("increment_coins", { user_id: merchantUid, amount: -amount });
-      if (deductErr) throw deductErr;
+      if (deductErr) throw new Error("Could not deduct coins from your wallet.");
 
       await supabase.from("coin_history").insert({
         user_id: merchantUid,
@@ -103,13 +105,13 @@ export async function awardCoinsAction(merchantUid: string, targetMatchFlowId: s
 
     // 4. Award Recipient
     const { error: awardErr } = await supabase.rpc("increment_coins", { user_id: target.uid, amount });
-    if (awardErr) throw awardErr;
+    if (awardErr) throw new Error("Failed to credit coins to the recipient.");
 
     await supabase.from("coin_history").insert({
       user_id: target.uid,
       amount,
       type: "merchant_award",
-      description: merchant.is_admin ? "System Award (Admin)" : "Merchant Load",
+      description: merchant.is_admin ? "System Award (Admin)" : `Purchased from ${merchant.name}`,
       timestamp: ts
     });
 
@@ -144,7 +146,7 @@ export async function toggleUserRoleAction(callerUid: string, targetMatchFlowId:
     if (!validRoles.includes(role)) throw new Error("Invalid authority role.");
 
     // 3. Update the target user
-    const { error } = await supabase.from('users').update({ [role]: value }).eq('match_flow_id', targetMatchFlowId);
+    const { error } = await supabase.from('users').update({ [role]: value }).eq('match_flow_id', targetMatchFlowId.trim());
     if (error) throw error;
     
     return { success: true, message: "Authority updated successfully." };

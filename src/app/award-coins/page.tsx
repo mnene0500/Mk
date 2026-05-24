@@ -46,13 +46,14 @@ export default function AwardCoinsPage() {
     if (!user || !targetId || !amount || isNaN(Number(amount))) return
     
     const numAmount = Number(amount);
-    if (numAmount < 10) {
-      toast({ variant: "destructive", title: "Error", description: "Minimum award is 10 coins." });
+    if (numAmount < 1) {
+      toast({ variant: "destructive", title: "Error", description: "Invalid amount." });
       return;
     }
 
+    // Only non-admin merchants are restricted by their own balance
     if (!profile?.is_admin && balance < numAmount) {
-      toast({ variant: "destructive", title: "Insufficient Balance", description: "You don't have enough coins to sell." });
+      toast({ variant: "destructive", title: "Insufficient Balance", description: "You don't have enough coins to transfer." });
       return;
     }
 
@@ -64,10 +65,10 @@ export default function AwardCoinsPage() {
         setTargetId("")
         setAmount("")
       } else {
-        toast({ variant: "destructive", title: "Error", description: result.error })
+        toast({ variant: "destructive", title: "Transfer Error", description: result.error })
       }
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.message })
+      toast({ variant: "destructive", title: "Critical Error", description: err.message })
     } finally {
       setLoading(false)
     }
@@ -93,7 +94,7 @@ export default function AwardCoinsPage() {
           <div className="space-y-1">
             <h2 className="text-2xl font-black text-black tracking-tight">Transfer QIVO Coins</h2>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-              {isAdmin ? "Admin (Unlimited Access)" : "Official Merchant Portal"}
+              {isAdmin ? "Admin (Unlimited Access)" : "Certified Merchant Portal"}
             </p>
           </div>
         </div>
@@ -123,14 +124,14 @@ export default function AwardCoinsPage() {
             <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Amount to Transfer</label>
             <Input 
               type="number"
-              placeholder="Min 10" 
+              placeholder="Enter amount" 
               value={amount} 
               onChange={(e) => setAmount(e.target.value)} 
               className="rounded-2xl h-16 text-center text-xl font-bold border-gray-100 bg-gray-50 text-black placeholder:text-gray-300"
             />
             <div className="flex items-center gap-1.5 px-2 text-[9px] font-bold text-amber-600 uppercase">
               <AlertCircle className="w-3 h-3" />
-              This action is permanent and irreversible.
+              Transfer will take effect immediately.
             </div>
           </div>
 
