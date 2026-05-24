@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
@@ -212,9 +211,6 @@ export default function MePage() {
           <section className="space-y-3">
             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Account & Support</h3>
             <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">
-              <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
-                <Link href="/coin-history"><div className="flex items-center gap-4"><div className="bg-amber-50 p-2.5 rounded-xl"><History className="w-5 h-5 text-amber-600" /></div><span className="font-semibold text-xs text-black">Coin History</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link>
-              </Button>
               <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
                 <Link href="/support"><div className="flex items-center gap-4"><div className="bg-blue-50 p-2.5 rounded-xl"><Headphones className="w-5 h-5 text-blue-600" /></div><span className="font-semibold text-xs text-black">Support Center</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link>
               </Button>
