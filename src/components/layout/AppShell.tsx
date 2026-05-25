@@ -60,15 +60,14 @@ function ShellContent({ children }: { children: React.ReactNode }) {
     if (!incomingCall) return
     const call = incomingCall
     setIncomingCall(null)
-    // ROUTE TO CALL PAGE WITH FULL SIGNAL DATA
     router.push(`/call/${call.chat_id}?type=${call.type}&partnerId=${call.caller_id}&callId=${call.id}`)
   }
 
   const handleReject = async () => {
     if (!incomingCall) return
-    // UPDATE SIGNAL STATUS TO NOTIFY CALLER
-    await supabase.from('calls').update({ status: 'ended' }).eq('id', incomingCall.id)
+    const callId = incomingCall.id
     setIncomingCall(null)
+    await supabase.from('calls').update({ status: 'ended' }).eq('id', callId)
   }
   
   const isChatDetail = pathname === '/chats' && searchParams.has('startWith')

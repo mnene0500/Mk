@@ -36,14 +36,16 @@ export async function completeOnboardingAction(payload: {
     const initialDiamonds = (payload.gender === 'female') ? 150 : 0;
 
     if (initialCoins > 0) {
-      await supabase.rpc("increment_coins", { p_user_id: payload.uid, p_amount: initialCoins });
+      const { error: coinErr } = await supabase.rpc("increment_coins", { p_user_id: payload.uid, p_amount: initialCoins });
+      if (coinErr) throw coinErr;
       await supabase.from('coin_history').insert({ 
         user_id: payload.uid, amount: initialCoins, type: 'bonus', description: 'Welcome Bonus', timestamp 
       });
     }
 
     if (initialDiamonds > 0) {
-      await supabase.rpc("increment_diamonds", { p_user_id: payload.uid, p_amount: initialDiamonds });
+      const { error: diaErr } = await supabase.rpc("increment_diamonds", { p_user_id: payload.uid, p_amount: initialDiamonds });
+      if (diaErr) throw diaErr;
       await supabase.from('diamond_history').insert({ 
         user_id: payload.uid, amount: initialDiamonds, type: 'bonus', description: 'Welcome Bonus', timestamp 
       });
@@ -179,7 +181,6 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
       await supabase.rpc("increment_coins", { p_user_id: payload.senderId, p_amount: -cost });
       await supabase.from("coin_history").insert({ user_id: payload.senderId, amount: -cost, type: "chat_cost", description: `Message`, timestamp });
     }
-    // Set participant_ids[0] as the sender to track most recent activity for unread logic
     await supabase.from('chats').upsert({ id: payload.chatId, last_message: payload.text.slice(0, 100), last_message_at: timestamp, participant_ids: [payload.senderId, payload.recipientId] }, { onConflict: 'id' });
     const { error: msgError } = await supabase.from('messages').insert({ chat_id: payload.chatId, text: payload.text, sender_id: payload.senderId, timestamp });
     if (msgError) throw msgError;

@@ -121,7 +121,7 @@ export default function MePage() {
       <div className="relative z-10">
         <header className="pt-12 pb-10 px-6 flex flex-col items-center text-center">
           <div className="relative mb-4">
-            <div className="relative w-28 h-28 rounded-full overflow-hidden bg-white shadow-xl">
+            <div className="relative w-28 h-28 rounded-full overflow-hidden bg-white shadow-xl border-none">
               <Image src={`${displayPhoto}?t=${cacheBust}`} alt={profile?.name || "Me"} fill className="object-cover" sizes="112px" />
             </div>
             <button className="absolute bottom-1 right-1 bg-white p-2.5 rounded-full shadow-lg active:scale-90 transition-transform" onClick={() => router.push('/edit-profile')}>
