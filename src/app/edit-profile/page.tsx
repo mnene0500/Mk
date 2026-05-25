@@ -92,7 +92,7 @@ export default function EditProfilePage() {
           setTempImage(result)
           setCropOpen(true)
         } else {
-          // DIRECTLY UPDATE GALLERY (SKIP CROP)
+          // GALLERY PHOTOS SKIP CROPPING
           const newPhotos = [...formData.additional_photos]
           if (typeof targetPhotoIndex === 'number') {
             newPhotos[targetPhotoIndex] = result
@@ -178,10 +178,9 @@ export default function EditProfilePage() {
       
       if (dbError) throw dbError;
 
-      toast({ title: "Profile Updated Successfully" })
+      toast({ title: "Profile Updated" })
       window.location.replace('/profile');
     } catch (error: any) {
-      console.error("[Profile Save Crash]", error);
       toast({ variant: "destructive", title: "Update Failed", description: error.message })
       setSaving(false)
     }

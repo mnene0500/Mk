@@ -114,7 +114,7 @@ export async function completeOnboardingAction(payload: {
 export async function deleteUserCompletelyAction(uid: string) {
   const supabase = getSupabaseAdmin();
   try {
-    // 1. Manually clear blocking relations, reports, and calls to prevent foreign key errors
+    // 1. Manually clear dependent relations to prevent foreign key errors
     await Promise.all([
       supabase.from('reports').delete().or(`reporter_id.eq.${uid},reported_id.eq.${uid}`),
       supabase.from('calls').delete().or(`caller_id.eq.${uid},receiver_id.eq.${uid}`),
@@ -122,15 +122,14 @@ export async function deleteUserCompletelyAction(uid: string) {
       supabase.from('withdrawals').delete().eq('user_id', uid)
     ]);
 
-    // 2. If user is an agent, handle agency cleanup
+    // 2. If user is an agent, handle agency cleanup references
     const { data: userRow } = await supabase.from('users').select('is_agent, agency_id').eq('uid', uid).single();
-    if (userRow?.is_agent && userRow?.agency_id) {
+    if (userRow?.agency_id) {
        await supabase.from('users').update({ agency_id: null, agency_status: null }).eq('agency_id', userRow.agency_id);
-       await supabase.from('agencies').delete().eq('code', userRow.agency_id);
     }
     
     // 3. Explicitly delete the profile from public.users
-    // This triggers ON DELETE CASCADE for balances, coin_history, diamond_history
+    // This triggers ON DELETE CASCADE for balances, history tables
     await supabase.from('users').delete().eq('uid', uid);
     
     // 4. Delete the actual Auth account
@@ -290,31 +289,10 @@ export async function leaveAgencyAction(userUid: string) {
   }
 }
 
-export async function deleteAgencyAction(agentUid: string, agencyCode: string) {
-  const supabase = getSupabaseAdmin();
-  try {
-    // 1. Clear everyone who was in this agency
-    await supabase.from('users').update({ agency_id: null, agency_status: null }).eq('agency_id', agencyCode);
-    
-    // 2. Delete the agency record itself
-    const { error } = await supabase.from('agencies').delete().eq('code', agencyCode).eq('agent_uid', agentUid);
-    
-    if (error) throw error;
-
-    // 3. Demote the agent
-    await supabase.from('users').update({ is_agent: false, agency_id: null, agency_status: null }).eq('uid', agentUid);
-    
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
 export async function reviewRecruitmentAction(applicantUid: string, status: 'approved' | 'rejected') {
   const supabase = getSupabaseAdmin();
   try {
     if (status === 'rejected') {
-      // Clear agency ID and status completely so they can apply elsewhere
       const { error } = await supabase.from('users').update({ agency_id: null, agency_status: null }).eq('uid', applicantUid);
       if (error) throw error;
     } else {
@@ -323,7 +301,6 @@ export async function reviewRecruitmentAction(applicantUid: string, status: 'app
     }
     return { success: true };
   } catch (err: any) {
-    console.error("[Agency Review Error]:", err.message);
     return { success: false, error: err.message };
   }
 }

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useRef, use } from "react"
@@ -10,8 +11,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
 /**
- * @fileOverview Agora Call Page implemented using official Quick Start logic.
- * Optimized for stability, audio/video synchronization, and 40s answer timeout.
+ * @fileOverview Agora Call Page with Hardened Lifecycle.
+ * Prevents race conditions during initialization and ensures proper cleanup.
  */
 
 export default function CallPage({ params }: { params: Promise<{ chatId: string }> }) {
@@ -24,7 +25,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   const partnerId = searchParams.get("partnerId")
   const callId = searchParams.get("callId")
 
-  // RTC client instance and tracks stored in refs to survive re-renders
   const rtc = useRef<{ 
     client: any, 
     localAudioTrack: any, 
@@ -54,7 +54,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     supabase.from('users').select('uid, name, photo_url').eq('uid', partnerId).single().then(({ data }) => setPartnerProfile(data))
   }, [partnerId])
 
-  // REALTIME SIGNALING: Listen for "ended" status from the other side
   useEffect(() => {
     if (!callId) return
     const channel = supabase.channel(`call-sig-${callId}`)
@@ -67,7 +66,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     return () => { supabase.removeChannel(channel) }
   }, [callId])
 
-  // 40 SECOND RINGING TIMEOUT
   useEffect(() => {
     if (joined && isRinging) {
       ringTimeout.current = setTimeout(() => {
@@ -79,7 +77,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     return () => { if (ringTimeout.current) clearTimeout(ringTimeout.current) }
   }, [joined, isRinging, remoteUser])
 
-  // BILLING TIMER: Starts when remote user joins
   useEffect(() => {
     if (joined && remoteUser && user?.id && partnerId) {
       billingTimer.current = setInterval(async () => {
@@ -108,12 +105,11 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
       try {
         const AgoraRTC = (await import('agora-rtc-sdk-ng')).default
         
-        // 1. Initialize client
         const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
         rtc.current.client = client
 
-        // 2. Set up event listeners BEFORE joining
         client.on("user-published", async (user, mediaType) => {
+          if (!mounted) return;
           await client.subscribe(user, mediaType)
           if (mediaType === "video") {
             setRemoteUser(user)
@@ -133,13 +129,11 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
           if (mounted) handleEndCall(false)
         })
 
-        // 3. Generate Token and Join
         const tokenData = await generateAgoraTokenAction(chatId, user.id)
         if (!mounted) return;
 
         await client.join(tokenData.appId, tokenData.channelName, tokenData.token, tokenData.uid)
         
-        // 4. Create Local Tracks
         const audioTrack = await AgoraRTC.createMicrophoneAudioTrack()
         rtc.current.localAudioTrack = audioTrack
         
@@ -152,7 +146,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         if (!mounted) {
           if (audioTrack) { audioTrack.stop(); audioTrack.close(); }
           if (videoTrack) { videoTrack.stop(); videoTrack.close(); }
-          await client.leave();
+          await client.leave().catch(() => {});
           return;
         }
 
