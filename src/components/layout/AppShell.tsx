@@ -1,4 +1,3 @@
-
 "use client"
 
 import { usePathname, useSearchParams } from "next/navigation"
@@ -13,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useRouter } from "next/navigation"
 
 /**
- * Internal Shell component that handles navigation and incoming call signaling.
+ * @fileOverview Signaling Shell for incoming calls and persistent navigation.
  */
 function ShellContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -24,7 +23,6 @@ function ShellContent({ children }: { children: React.ReactNode }) {
   const [incomingCall, setIncomingCall] = useState<any>(null)
   const [callerProfile, setCallerProfile] = useState<any>(null)
 
-  // Listen for incoming calls via the 'calls' table
   useEffect(() => {
     if (!user?.id) return
 
@@ -35,10 +33,18 @@ function ShellContent({ children }: { children: React.ReactNode }) {
         filter: `receiver_id=eq.${user.id}` 
       }, async (payload) => {
         if (payload.new.status === 'calling') {
-          // Fetch caller profile
           const { data } = await supabase.from('users').select('*').eq('uid', payload.new.caller_id).single()
           setCallerProfile(data)
           setIncomingCall(payload.new)
+        }
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        table: 'calls',
+        filter: `receiver_id=eq.${user.id}`
+      }, (payload) => {
+        if (payload.new.status === 'ended') {
+          setIncomingCall(null)
         }
       })
       .subscribe()
@@ -73,7 +79,6 @@ function ShellContent({ children }: { children: React.ReactNode }) {
       </main>
       {isVisible && <BottomNav />}
 
-      {/* INCOMING CALL DIALOG (Global Overlay) */}
       <Dialog open={!!incomingCall} onOpenChange={(open) => !open && handleReject()}>
         <DialogContent className="rounded-[2.5rem] p-8 max-w-[85vw] border-none shadow-2xl bg-zinc-900 text-white overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-b from-blue-500/10 to-transparent pointer-events-none" />

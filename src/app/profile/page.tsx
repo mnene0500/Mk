@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
@@ -17,8 +16,8 @@ import { useBalance } from "@/lib/providers/BalanceProvider"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
 /**
- * @fileOverview Refined Profile (Me) Screen.
- * Removed borders and shadows from avatar for a cleaner look.
+ * @fileOverview Refined Me Page.
+ * Removed avatar border for a cleaner, unified profile look.
  */
 export default function MePage() {
   const router = useRouter()
@@ -37,28 +36,17 @@ export default function MePage() {
   const fetchProfile = useCallback(async () => {
     if (!user?.id) return
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('uid, name, photo_url, match_flow_id, is_verified, is_owner, is_coin_seller, is_agent, gender, agency_id, agency_status, updated_at')
-        .eq('uid', user.id)
-        .maybeSingle();
-      
-      if (data) {
-        setProfile(data)
-      } else if (error) {
-        console.error("Profile fetch error:", error.message)
-      }
+      const { data } = await supabase.from('users').select('*').eq('uid', user.id).maybeSingle();
+      if (data) setProfile(data)
     } catch (e) {
-      console.error("Profile catch:", e)
+      console.error("Profile load error")
     } finally {
       setIsReady(true)
     }
   }, [user?.id])
 
   useEffect(() => {
-    if (isInitialized && !authLoading && !user) {
-      router.replace("/welcome")
-    }
+    if (isInitialized && !authLoading && !user) router.replace("/welcome")
     if (user?.id) fetchProfile()
   }, [user, isInitialized, authLoading, fetchProfile, router])
 
@@ -66,7 +54,7 @@ export default function MePage() {
     if (!text) return;
     navigator.clipboard.writeText(text);
     setCopied(true);
-    toast({ title: "Copied to clipboard" });
+    toast({ title: "Copied" });
     setTimeout(() => setCopied(false), 2000);
   }
 
@@ -75,8 +63,7 @@ export default function MePage() {
     setIsProcessing(true)
     const res = await joinAgencyAction(user.id, agencyCode)
     if (res.success) {
-      toast({ title: "Request Sent", description: "Waiting for agent approval." })
-      fetchProfile()
+      toast({ title: "Request Sent" }); fetchProfile()
     } else {
       toast({ variant: "destructive", title: "Error", description: res.error })
     }
@@ -88,8 +75,7 @@ export default function MePage() {
     setIsProcessing(true)
     const res = await leaveAgencyAction(user.id)
     if (res.success) {
-      toast({ title: "Left Agency" })
-      fetchProfile()
+      toast({ title: "Left Agency" }); fetchProfile()
     } else {
       toast({ variant: "destructive", title: "Error", description: res.error })
     }
@@ -101,8 +87,7 @@ export default function MePage() {
     setIsProcessing(true)
     const res = await createAgencyAction(user.id, agencyName)
     if (res.success) {
-      toast({ title: "Agency Created!", description: `Code: ${res.code}` })
-      fetchProfile()
+      toast({ title: "Agency Created!" }); fetchProfile()
     } else {
       toast({ variant: "destructive", title: "Error", description: res.error })
     }
@@ -111,9 +96,7 @@ export default function MePage() {
 
   if (!isReady || authLoading) return (
     <div className="fixed inset-0 bg-white flex items-center justify-center select-none z-[9999]">
-       <h1 className="text-7xl font-logo font-black text-[#00A2FF] tracking-tight animate-pulse">
-         QIVO
-       </h1>
+       <h1 className="text-7xl font-logo font-black text-[#00A2FF] tracking-tight animate-pulse">QIVO</h1>
     </div>
   );
 
@@ -130,30 +113,21 @@ export default function MePage() {
   return (
     <div className="flex-1 pb-24 bg-[#F8F9FA] min-h-screen relative animate-in fade-in duration-300 select-none">
       <div className="absolute top-0 left-0 w-full h-[280px] bg-[#00A2FF]" />
-      
       <div className="relative z-10">
         <header className="pt-12 pb-10 px-6 flex flex-col items-center text-center">
           <div className="relative mb-4">
-            {/* REMOVED BORDER AND SHADOW PER REQUEST */}
-            <div className="relative w-28 h-28 rounded-full overflow-hidden bg-white">
-              <Image 
-                src={`${displayPhoto}?t=${cacheBust}`} 
-                alt={profile?.name || "Me"} 
-                fill 
-                className="object-cover" 
-                sizes="112px" 
-              />
+            <div className="relative w-28 h-28 rounded-full overflow-hidden bg-white shadow-xl">
+              <Image src={`${displayPhoto}?t=${cacheBust}`} alt={profile?.name || "Me"} fill className="object-cover" sizes="112px" />
             </div>
             <button className="absolute bottom-1 right-1 bg-white p-2.5 rounded-full shadow-lg border border-blue-50 active:scale-90 transition-transform" onClick={() => router.push('/edit-profile')}>
               <Pencil className="w-4 h-4 text-[#00A2FF]" />
             </button>
           </div>
           <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-1.5">
-            {profile?.name || "User"} 
-            {isVerified && <BadgeCheck className="w-4 h-4 text-white fill-blue-500" />}
+            {profile?.name || "User"} {isVerified && <BadgeCheck className="w-4 h-4 text-white fill-blue-500" />}
           </h2>
           <p onClick={() => copyToClipboard(profile?.match_flow_id, setIdCopied)} className="text-white/70 font-semibold text-[9px] uppercase tracking-widest mt-1 cursor-pointer active:opacity-50 transition-opacity">
-            ID: {profile?.match_flow_id || "---"} {idCopied ? <Check className="w-2.5 h-2.5 inline text-green-300" /> : <div className="inline-block"><Copy className="w-2.5 h-2.5 opacity-50" /></div>}
+            ID: {profile?.match_flow_id || "---"} {idCopied ? <Check className="w-2.5 h-2.5 inline text-green-300" /> : <Copy className="w-2.5 h-2.5 inline opacity-50" />}
           </p>
         </header>
 
@@ -238,52 +212,37 @@ export default function MePage() {
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="rounded-[2.5rem] p-8">
-                      <DialogHeader>
-                        <DialogTitle className="text-xl font-bold">Agency Access</DialogTitle>
-                        <DialogDescription className="text-xs">Join an agency to unlock diamond withdrawals.</DialogDescription>
-                      </DialogHeader>
+                      <DialogHeader><DialogTitle className="text-xl font-bold">Agency Access</DialogTitle></DialogHeader>
                       <div className="space-y-4 py-4">
                         <div className="space-y-2">
                           <label className="text-[10px] font-black uppercase text-gray-400">Join via Code</label>
                           <Input placeholder="5-digit code" value={agencyCode} onChange={(e) => setAgencyCode(e.target.value)} className="rounded-2xl h-12" />
                         </div>
                         <Button onClick={handleJoinAgency} disabled={isProcessing || !agencyCode} className="w-full h-12 rounded-full bg-[#00A2FF]">Join Now</Button>
-                        
                         {isAgent && !profile?.agency_id && (
                           <div className="pt-4 border-t mt-4 space-y-4">
-                            <div className="text-center"><span className="text-[8px] font-bold uppercase text-gray-400">Initialize Your Agency</span></div>
                             <div className="space-y-2">
                               <label className="text-[10px] font-black uppercase text-gray-400">Agency Name</label>
                               <Input placeholder="Enter agency name" value={agencyName} onChange={(e) => setAgencyName(e.target.value)} className="rounded-2xl h-12" />
                             </div>
-                            <Button onClick={handleCreateAgency} disabled={isProcessing || !agencyName} variant="outline" className="w-full h-12 rounded-full border-purple-200 text-purple-600">Create My Agency</Button>
+                            <Button onClick={handleCreateAgency} disabled={isProcessing || !agencyName} variant="outline" className="w-full h-12 rounded-full border-purple-200 text-purple-600">Create Agency</Button>
                           </div>
                         )}
                       </div>
                     </DialogContent>
                   </Dialog>
                 ) : (
-                  <div className="flex flex-col">
-                    <div className="h-16 flex items-center justify-between px-5">
-                       <div className="flex items-center gap-4">
-                         <div className="bg-blue-50 p-2.5 rounded-xl"><Briefcase className="w-5 h-5 text-blue-600" /></div>
-                         <div className="flex flex-col">
-                            <span className="font-semibold text-xs text-black">{isAgent ? "Agency Leader" : "Member Status"}</span>
-                            <span className="text-[9px] font-bold text-[#00A2FF] uppercase">{profile.agency_status}</span>
-                         </div>
-                       </div>
-                       {isAgent ? (
-                         <button onClick={() => copyToClipboard(profile.agency_id, setAgencyCopied)} className="flex items-center gap-1.5 px-3 py-1 bg-gray-50 rounded-full border hover:bg-gray-100 transition-colors">
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Code: {profile.agency_id}</span>
-                            {agencyCopied ? <Check className="w-2.5 h-2.5 text-green-500" /> : <Copy className="w-2.5 h-2.5 text-gray-300" />}
-                         </button>
-                       ) : (
-                         <AlertDialog>
-                            <AlertDialogTrigger asChild><Button variant="ghost" size="sm" className="h-8 rounded-full text-red-500 text-[9px] font-black uppercase tracking-widest bg-red-50">Leave</Button></AlertDialogTrigger>
-                            <AlertDialogContent className="rounded-[2rem] p-8 border-none shadow-2xl"><AlertDialogHeader><AlertDialogTitle>Leave Agency?</AlertDialogTitle><AlertDialogDescription className="text-[10px] font-bold uppercase tracking-widest text-gray-400 pt-2">You will lose access to diamond withdrawals until you join another agency.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter className="gap-3 mt-6"><AlertDialogCancel className="h-12 rounded-full border-none bg-gray-50 text-gray-400 uppercase font-black text-[10px]">Cancel</AlertDialogCancel><AlertDialogAction onClick={handleLeaveAgency} className="h-12 rounded-full bg-red-500 text-white uppercase font-black text-[10px]">Yes, Leave</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
-                         </AlertDialog>
-                       )}
-                    </div>
+                  <div className="h-16 flex items-center justify-between px-5">
+                     <div className="flex items-center gap-4">
+                       <div className="bg-blue-50 p-2.5 rounded-xl"><Briefcase className="w-5 h-5 text-blue-600" /></div>
+                       <div className="flex flex-col"><span className="font-semibold text-xs text-black">{isAgent ? "Leader" : "Member"}</span><span className="text-[9px] font-bold text-[#00A2FF] uppercase">{profile.agency_status}</span></div>
+                     </div>
+                     {!isAgent && (
+                       <AlertDialog>
+                          <AlertDialogTrigger asChild><Button variant="ghost" size="sm" className="h-8 rounded-full text-red-500 text-[9px] font-black uppercase tracking-widest bg-red-50 px-4">Leave</Button></AlertDialogTrigger>
+                          <AlertDialogContent className="rounded-[2rem] p-8 border-none"><AlertDialogHeader><AlertDialogTitle>Leave Agency?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter className="gap-3 mt-6"><AlertDialogCancel className="h-12 rounded-full">Cancel</AlertDialogCancel><AlertDialogAction onClick={handleLeaveAgency} className="h-12 rounded-full bg-red-500">Leave</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+                       </AlertDialog>
+                     )}
                   </div>
                 )}
               </div>

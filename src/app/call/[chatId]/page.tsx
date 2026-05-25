@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, use } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { PhoneOff, Mic, MicOff, Video, VideoOff, User, Loader2 } from "lucide-react"
+import { PhoneOff, Mic, MicOff, Video, VideoOff, User, Loader2, AlertCircle } from "lucide-react"
 import { useUser } from "@/firebase/auth/use-user"
 import { supabase } from "@/lib/supabase"
 import { generateAgoraTokenAction, deductCallCoinsAction, endCallAction } from "@/app/actions/call-actions"
@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 
 /**
  * @fileOverview Hardened Agora Call Page.
- * Implements a strict singleton lifecycle to prevent race-condition crashes.
+ * Implements strict permission handling and signaling listeners.
  */
 
 export default function CallPage({ params }: { params: Promise<{ chatId: string }> }) {
@@ -41,6 +41,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   const [partnerProfile, setPartnerProfile] = useState<any>(null)
   const [duration, setDuration] = useState(0)
   const [isRinging, setIsRinging] = useState(true)
+  const [permissionError, setPermissionError] = useState<string | null>(null)
 
   const localVideoRef = useRef<HTMLDivElement>(null)
   const remoteVideoRef = useRef<HTMLDivElement>(null)
@@ -59,7 +60,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
 
   useEffect(() => {
     if (!callId) return
-    const channel = supabase.channel(`call-sig-${callId}`)
+    const channel = supabase.channel(`call-status-${callId}`)
       .on('postgres_changes', { event: 'UPDATE', table: 'calls', filter: `id=eq.${callId}` }, (payload) => {
         if (payload.new.status === 'ended') {
           handleEndCall(false)
@@ -69,7 +70,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     return () => { supabase.removeChannel(channel) }
   }, [callId])
 
-  // Ringing timeout
   useEffect(() => {
     if (joined && isRinging) {
       ringTimeout.current = setTimeout(() => {
@@ -81,17 +81,13 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     return () => { if (ringTimeout.current) clearTimeout(ringTimeout.current) }
   }, [joined, isRinging, remoteUser])
 
-  // Billing interval
   useEffect(() => {
     if (joined && remoteUser && user?.id && partnerId) {
       billingTimer.current = setInterval(async () => {
         if (!mounted.current) return;
-        
         setDuration(prev => {
           const next = prev + 1
-          // Logic: 11th second is first minute. Then every 60s.
           const isDeductionPoint = next === 11 || (next > 11 && (next - 11) % 60 === 0);
-          
           if (isDeductionPoint) {
             deductCallCoinsAction(user.id, type, partnerId).then(res => {
               if (!res.success && mounted.current) handleEndCall(true)
@@ -112,27 +108,41 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
       try {
         const AgoraRTC = (await import('agora-rtc-sdk-ng')).default
         
+        // 1. Check permissions early
+        let audioTrack, videoTrack = null;
+        try {
+          audioTrack = await AgoraRTC.createMicrophoneAudioTrack()
+          if (type === 'video') {
+            videoTrack = await AgoraRTC.createCameraVideoTrack()
+          }
+        } catch (permErr: any) {
+          console.error("Permissions denied:", permErr)
+          setPermissionError("Please allow camera and microphone access to start the call.")
+          return
+        }
+
+        rtc.current.localAudioTrack = audioTrack
+        rtc.current.localVideoTrack = videoTrack
+
         const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
         rtc.current.client = client
 
-        client.on("user-published", async (user, mediaType) => {
+        client.on("user-published", async (remote, mediaType) => {
           if (!mounted.current) return
-          await client.subscribe(user, mediaType)
-          
+          await client.subscribe(remote, mediaType)
           if (mediaType === "video") {
-            setRemoteUser(user)
+            setRemoteUser(remote)
             setIsRinging(false)
-            // Wait for ref to be available
             setTimeout(() => {
-              if (remoteVideoRef.current && user.videoTrack) {
-                user.videoTrack.play(remoteVideoRef.current)
+              if (remoteVideoRef.current && remote.videoTrack) {
+                remote.videoTrack.play(remoteVideoRef.current)
               }
-            }, 300)
+            }, 500)
           }
           if (mediaType === "audio") {
-            user.audioTrack?.play()
+            remote.audioTrack?.play()
             setIsRinging(false)
-            setRemoteUser((prev: any) => prev || user)
+            setRemoteUser((prev: any) => prev || remote)
           }
         })
 
@@ -145,30 +155,14 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
 
         await client.join(tokenData.appId, tokenData.channelName, tokenData.token, tokenData.uid)
         
-        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack()
-        rtc.current.localAudioTrack = audioTrack
-        
-        let videoTrack = null
-        if (type === 'video') {
-          videoTrack = await AgoraRTC.createCameraVideoTrack()
-          rtc.current.localVideoTrack = videoTrack
-        }
-
-        if (!mounted.current) {
-          audioTrack.stop(); audioTrack.close();
-          if (videoTrack) { videoTrack.stop(); videoTrack.close(); }
-          await client.leave()
-          return
-        }
-
         if (localVideoRef.current && videoTrack) {
           videoTrack.play(localVideoRef.current)
         }
 
         await client.publish(videoTrack ? [audioTrack, videoTrack] : [audioTrack])
         setJoined(true)
-      } catch (err) {
-        console.error("Call Initialization Failed:", err)
+      } catch (err: any) {
+        console.error("Call Init Error:", err)
         if (mounted.current) router.replace('/home')
       } finally {
         joining.current = false
@@ -225,6 +219,17 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
+  if (permissionError) {
+    return (
+      <div className="fixed inset-0 bg-zinc-900 z-[100] flex flex-col items-center justify-center p-10 text-center">
+        <AlertCircle className="w-16 h-16 text-red-500 mb-6" />
+        <h2 className="text-white text-xl font-bold mb-2">Permission Required</h2>
+        <p className="text-zinc-400 text-sm mb-8 leading-relaxed">{permissionError}</p>
+        <Button onClick={() => router.back()} className="w-full h-14 rounded-full bg-white text-black font-bold">Go Back</Button>
+      </div>
+    )
+  }
+
   return (
     <div className="fixed inset-0 bg-black z-[100] flex flex-col items-center justify-center select-none overflow-hidden">
       <div className="absolute inset-0 z-0">
@@ -242,7 +247,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
              <h2 className="text-white text-2xl font-black mt-6 tracking-tight">{partnerProfile?.name || 'Connecting...'}</h2>
              <div className="flex flex-col items-center gap-2 mt-4">
                 <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.3em]">
-                  {joined ? (remoteUser ? formatDuration(duration) : 'Ringing...') : 'Initializing...'}
+                  {joined ? (remoteUser ? formatDuration(duration) : 'Ringing...') : 'Initializing Media...'}
                 </p>
                 {remoteUser && duration < 11 && (
                   <div className="px-4 py-1.5 bg-green-500/20 text-green-400 rounded-full border border-green-500/30">
