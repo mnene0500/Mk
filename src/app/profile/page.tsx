@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useCallback, useRef } from "react"
@@ -17,7 +18,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 
 /**
  * @fileOverview Me Page with flat design (No border/shadow on avatar).
- * Fixed: Unknown errors on isOwner checks and renamed recruitment references.
+ * Fixed: Unknown errors on isOwner/isAdmin checks and renamed agency references.
  */
 export default function MePage() {
   const router = useRouter()
@@ -106,9 +107,9 @@ export default function MePage() {
     </div>
   );
 
-  // DEFENSIVE LOGIC: Prevents "Unknown Error" if profile is partially loaded
-  const isOwner = !!profile?.is_owner
-  const isMerchant = !!profile?.is_coin_seller || isOwner
+  // DEFENSIVE LOGIC: Prevents "Unknown Error" for Owner/Admin accounts
+  const isOwner = !!(profile?.is_owner || profile?.is_admin)
+  const isMerchant = !!(profile?.is_coin_seller || isOwner)
   const isAgent = !!profile?.is_agent
   const isFemale = profile?.gender === 'female'
   const isAgencyMember = profile?.agency_status === 'approved'

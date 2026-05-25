@@ -1,3 +1,4 @@
+
 "use client"
 
 import { use, useState, useEffect } from "react"
@@ -66,7 +67,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
         <Image src={profile.photo_url} alt={profile.name} fill className="object-cover" priority sizes="100vw" />
         <div className="absolute top-12 inset-x-0 px-6 flex justify-between items-center z-20">
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full bg-white/10 backdrop-blur-xl text-white w-10 h-10 border border-white/20 shadow-2xl active:scale-90 transition-all"><ChevronLeft className="w-6 h-6" /></Button>
-          {!profile.is_owner && (
+          {!profile.is_owner && !profile.is_admin && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="rounded-full bg-white/10 backdrop-blur-xl text-white w-10 h-10 border border-white/20 shadow-2xl active:scale-90 transition-all"><MoreHorizontal className="w-6 h-6" /></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="rounded-2xl min-w-[180px] p-2 border-none shadow-2xl">
