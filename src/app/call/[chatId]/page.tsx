@@ -195,15 +195,17 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
 
   const toggleMute = () => {
     if (rtc.current.localAudioTrack) {
-      rtc.current.localAudioTrack.setEnabled(muted)
-      setMute(!muted)
+      const newState = !muted
+      rtc.current.localAudioTrack.setEnabled(!newState)
+      setMute(newState)
     }
   }
 
   const toggleCamera = () => {
     if (rtc.current.localVideoTrack) {
-      rtc.current.localVideoTrack.setEnabled(cameraOff)
-      setCameraOff(!cameraOff)
+      const newState = !cameraOff
+      rtc.current.localVideoTrack.setEnabled(!newState)
+      setCameraOff(newState)
     }
   }
 
