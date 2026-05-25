@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ChevronLeft, Users, Loader2, UserPlus, UserMinus, Search, ShieldCheck, Briefcase, Coins, Crown } from "lucide-react"
+import { ChevronLeft, Users, Loader2, UserPlus, UserMinus, Search, ShieldCheck, Briefcase, Coins, Crown, Star } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { toggleUserRoleAction } from "@/app/actions/matchflow-actions"
 import { supabase } from "@/lib/supabase"
@@ -18,6 +18,7 @@ interface TargetUser {
   is_coin_seller: boolean
   is_agent: boolean
   is_owner: boolean
+  is_special_user: boolean
 }
 
 export default function ManageRolesPage() {
@@ -35,7 +36,7 @@ export default function ManageRolesPage() {
     try {
       const { data, error } = await supabase
         .from("users")
-        .select('uid, name, match_flow_id, gender, is_coin_seller, is_agent, is_owner')
+        .select('uid, name, match_flow_id, gender, is_coin_seller, is_agent, is_owner, is_special_user')
         .eq("match_flow_id", targetId.trim())
         .maybeSingle()
       
@@ -52,7 +53,7 @@ export default function ManageRolesPage() {
     }
   }
 
-  const handleRoleUpdate = async (role: 'is_coin_seller' | 'is_agent' | 'is_owner', value: boolean) => {
+  const handleRoleUpdate = async (role: 'is_coin_seller' | 'is_agent' | 'is_owner' | 'is_special_user', value: boolean) => {
     if (!user || !targetUser) return
     
     // Enforcement: Only females can be agents per policy
@@ -91,8 +92,8 @@ export default function ManageRolesPage() {
             <ShieldCheck className="w-10 h-10 text-indigo-600" />
           </div>
           <div className="space-y-1">
-            <h2 className="text-2xl font-black text-black tracking-tight uppercase">Owner Console</h2>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Appoint Owners, Merchants & Agents</p>
+            <h2 className="text-2xl font-black text-black tracking-tight uppercase">Master Console</h2>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Manage User Authority Levels</p>
           </div>
         </div>
 
@@ -122,6 +123,22 @@ export default function ManageRolesPage() {
               </div>
               
               <div className="space-y-4">
+                {/* SPECIAL USER ROLE */}
+                <div className="p-4 bg-white rounded-2xl border flex items-center justify-between">
+                   <div className="flex items-center gap-3">
+                     <Star className="w-5 h-5 text-yellow-500 fill-current" />
+                     <span className="text-[10px] font-black uppercase text-gray-500">Special User</span>
+                   </div>
+                   <Button 
+                    onClick={() => handleRoleUpdate('is_special_user', !targetUser.is_special_user)} 
+                    disabled={loading}
+                    variant={targetUser.is_special_user ? "destructive" : "outline"}
+                    className="h-9 px-6 rounded-full text-[9px] font-black uppercase tracking-widest"
+                   >
+                     {targetUser.is_special_user ? "Revoke" : "Appoint"}
+                   </Button>
+                </div>
+
                 {/* OWNER ROLE */}
                 <div className="p-4 bg-white rounded-2xl border flex items-center justify-between">
                    <div className="flex items-center gap-3">

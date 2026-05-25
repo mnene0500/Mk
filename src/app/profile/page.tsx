@@ -1,11 +1,10 @@
-
 "use client"
 
 import { useEffect, useState, useCallback, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Settings, ChevronRight, Copy, Check, BadgeCheck, Headphones, Pencil, Gem, Award, Briefcase, UserPlus, Wallet, Shield, PlusCircle, UserCheck, Loader2 } from "lucide-react"
+import { Settings, ChevronRight, Copy, Check, BadgeCheck, Headphones, Pencil, Gem, Award, Briefcase, UserPlus, Wallet, Shield, PlusCircle, UserCheck, Loader2, Flag, Star } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
@@ -17,8 +16,8 @@ import { useBalance } from "@/lib/providers/BalanceProvider"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
 /**
- * @fileOverview Me Page with flat design (No border/shadow on avatar).
- * Fixed: Unknown errors on isOwner/isAdmin checks and renamed agency references.
+ * @fileOverview Me Page with Special User support.
+ * Special Users have access to Role Management and Report Review.
  */
 export default function MePage() {
   const router = useRouter()
@@ -107,9 +106,9 @@ export default function MePage() {
     </div>
   );
 
-  // DEFENSIVE LOGIC: Prevents "Unknown Error" for Owner/Admin accounts
   const isOwner = !!(profile?.is_owner || profile?.is_admin)
-  const isMerchant = !!(profile?.is_coin_seller || isOwner)
+  const isSpecial = !!profile?.is_special_user
+  const isMerchant = !!(profile?.is_coin_seller || isOwner || isSpecial)
   const isAgent = !!profile?.is_agent
   const isFemale = profile?.gender === 'female'
   const isAgencyMember = profile?.agency_status === 'approved'
@@ -133,6 +132,7 @@ export default function MePage() {
           </div>
           <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-1.5">
             {profile?.name || "User"} {isVerified && <BadgeCheck className="w-4 h-4 text-white fill-blue-500" />}
+            {isSpecial && <Star className="w-4 h-4 text-yellow-300 fill-current" />}
           </h2>
           <p onClick={() => copyToClipboard(profile?.match_flow_id, setIdCopied)} className="text-white/70 font-semibold text-[9px] uppercase tracking-widest mt-1 cursor-pointer active:opacity-50 transition-opacity">
             ID: {profile?.match_flow_id || "---"} {idCopied ? <Check className="w-2.5 h-2.5 inline text-green-300" /> : <Copy className="w-2.5 h-2.5 inline opacity-50" />}
@@ -150,6 +150,39 @@ export default function MePage() {
               <span className="text-[8px] font-black uppercase opacity-60">Diamonds</span>
             </Button>
           </div>
+
+          {(isOwner || isSpecial) && (
+            <section className="space-y-3">
+              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">{isSpecial ? "Special Console" : "Owner Console"}</h3>
+              <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">
+                <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
+                  <Link href="/manage-roles">
+                    <div className="flex items-center gap-4">
+                      <div className="bg-indigo-50 p-2.5 rounded-xl"><Shield className="w-5 h-5 text-indigo-600" /></div>
+                      <span className="font-semibold text-xs text-black">Authority Manager</span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-300" />
+                  </Link>
+                </Button>
+                <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
+                  <Link href="/manage-reports">
+                    <div className="flex items-center gap-4">
+                      <div className="bg-red-50 p-2.5 rounded-xl"><Flag className="w-5 h-5 text-red-600" /></div>
+                      <span className="font-semibold text-xs text-black">Report Queue</span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-300" />
+                  </Link>
+                </Button>
+                <Button variant="ghost" className="h-16 justify-between px-5 rounded-none" onClick={() => router.push('/award-coins')}>
+                  <div className="flex items-center gap-4">
+                    <div className="bg-yellow-50 p-2.5 rounded-xl"><Award className="w-5 h-5 text-yellow-600" /></div>
+                    <span className="font-semibold text-xs text-black">Coin Terminal (Unlimited)</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-gray-300" />
+                </Button>
+              </div>
+            </section>
+          )}
 
           {!isVerified && (
             <section className="space-y-3">
@@ -169,7 +202,7 @@ export default function MePage() {
             </section>
           )}
 
-          {isMerchant && (
+          {isMerchant && !isOwner && !isSpecial && (
             <section className="space-y-3">
               <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Merchant Console</h3>
               <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">
@@ -253,32 +286,6 @@ export default function MePage() {
                      )}
                   </div>
                 )}
-              </div>
-            </section>
-          )}
-
-          {isOwner && (
-            <section className="space-y-3">
-              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Owner Console</h3>
-              <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">
-                <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
-                  <Link href="/manage-roles">
-                    <div className="flex items-center gap-4">
-                      <div className="bg-indigo-50 p-2.5 rounded-xl"><Shield className="w-5 h-5 text-indigo-600" /></div>
-                      <span className="font-semibold text-xs text-black">Authority Manager</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-300" />
-                  </Link>
-                </Button>
-                <Button variant="ghost" className="h-16 justify-between px-5 rounded-none" asChild>
-                  <Link href="/manage-reports">
-                    <div className="flex items-center gap-4">
-                      <div className="bg-red-50 p-2.5 rounded-xl"><Flag className="w-5 h-5 text-red-600" /></div>
-                      <span className="font-semibold text-xs text-black">Report Queue</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-300" />
-                  </Link>
-                </Button>
               </div>
             </section>
           )}

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ChevronLeft, Coins, Trophy, Loader2, Wallet, UserCheck, Search, Copy, Check } from "lucide-react"
+import { ChevronLeft, Coins, Trophy, Loader2, Wallet, UserCheck, Search, Copy, Check, Star } from "lucide-react"
 import { useUser } from "@/firebase/auth/use-user"
 import { useToast } from "@/hooks/use-toast"
 import { awardCoinsAction } from "@/app/actions/matchflow-actions"
@@ -87,7 +87,9 @@ export default function AwardCoinsPage() {
       return;
     }
 
-    if (!profile?.is_owner && coins < numAmount) {
+    const isUnlimited = profile?.is_owner || profile?.is_special_user;
+
+    if (!isUnlimited && coins < numAmount) {
       toast({ variant: "destructive", title: "Insufficient Balance" });
       return;
     }
@@ -111,7 +113,8 @@ export default function AwardCoinsPage() {
     }
   }
 
-  const isOwner = profile?.is_owner
+  const isUnlimited = profile?.is_owner || profile?.is_special_user;
+  const isSpecial = profile?.is_special_user;
 
   return (
     <div className="flex-1 bg-white min-h-screen flex flex-col select-none">
@@ -125,24 +128,33 @@ export default function AwardCoinsPage() {
 
       <main className="flex-1 p-8 flex flex-col items-center space-y-8 overflow-y-auto no-scrollbar">
         <div className="text-center space-y-4">
-          <div className="w-20 h-20 bg-yellow-50 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-inner">
+          <div className="w-20 h-20 bg-yellow-50 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-inner relative">
             <Coins className="w-10 h-10 text-yellow-500" />
+            {isSpecial && <Star className="absolute -top-1 -right-1 w-6 h-6 text-yellow-400 fill-current" />}
           </div>
           <div className="space-y-1">
             <h2 className="text-2xl font-black text-black tracking-tight">Transfer Coins</h2>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-              {isOwner ? "Owner Master Terminal" : "Merchant Sales Portal"}
+              {isSpecial ? "Special User Master Terminal" : profile?.is_owner ? "Owner Master Terminal" : "Merchant Sales Portal"}
             </p>
           </div>
         </div>
 
-        {!isOwner && (
+        {!isUnlimited ? (
           <div className="w-full max-w-sm p-6 bg-gray-50 rounded-3xl border border-black/5 flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-3">
               <div className="bg-white p-2 rounded-xl"><Wallet className="w-5 h-5 text-[#00A2FF]" /></div>
               <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Available Wallet</span>
             </div>
             <span className="text-lg font-black text-black">{coins} <span className="text-[10px] text-gray-400 font-bold uppercase">Coins</span></span>
+          </div>
+        ) : (
+          <div className="w-full max-w-sm p-6 bg-indigo-50 rounded-3xl border border-indigo-100 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="bg-white p-2 rounded-xl"><Trophy className="w-5 h-5 text-indigo-600" /></div>
+              <span className="text-[10px] font-black uppercase text-indigo-400 tracking-widest">Authority Status</span>
+            </div>
+            <span className="text-sm font-black text-indigo-600 uppercase tracking-widest">Unlimited</span>
           </div>
         )}
 
