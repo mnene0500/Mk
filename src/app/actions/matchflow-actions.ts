@@ -59,7 +59,7 @@ export async function completeOnboardingAction(payload: {
 export async function deleteUserCompletelyAction(uid: string) {
   const supabase = getSupabaseAdmin();
   try {
-    // 1. Manual Deep Purge
+    // 1. Manual Deep Purge to avoid FK errors
     await Promise.all([
       supabase.from('calls').delete().or(`caller_id.eq.${uid},receiver_id.eq.${uid}`),
       supabase.from('reports').delete().or(`reporter_id.eq.${uid},reported_id.eq.${uid}`),
@@ -179,6 +179,7 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
       await supabase.rpc("increment_coins", { p_user_id: payload.senderId, p_amount: -cost });
       await supabase.from("coin_history").insert({ user_id: payload.senderId, amount: -cost, type: "chat_cost", description: `Message`, timestamp });
     }
+    // Set participant_ids[0] as the sender to track most recent activity for unread logic
     await supabase.from('chats').upsert({ id: payload.chatId, last_message: payload.text.slice(0, 100), last_message_at: timestamp, participant_ids: [payload.senderId, payload.recipientId] }, { onConflict: 'id' });
     const { error: msgError } = await supabase.from('messages').insert({ chat_id: payload.chatId, text: payload.text, sender_id: payload.senderId, timestamp });
     if (msgError) throw msgError;

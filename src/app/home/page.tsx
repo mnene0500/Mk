@@ -33,6 +33,9 @@ function calculateAge(dob: string) {
   return age
 }
 
+/**
+ * @fileOverview Home feed with Fetch Guards to prevent unnecessary refreshes.
+ */
 export default function HomePage() {
   const router = useRouter()
   const { user: currentUser, loading: authLoading, isInitialized } = useUser()
@@ -44,12 +47,14 @@ export default function HomePage() {
   const [profile, setProfile] = useState<any>(null)
   
   const hasFetched = useRef(false)
+  const fetchGuard = useRef(false)
 
   const fetchUsers = useCallback(async (isManual = false) => {
-    if (!profile) return;
+    if (!profile || (fetchGuard.current && !isManual)) return;
     
     if (isManual) setIsRefreshing(true);
     if (!isManual) setInitialLoading(true);
+    fetchGuard.current = true;
 
     try {
       const oppositeGender = profile.gender === 'male' ? 'female' : profile.gender === 'female' ? 'male' : null;
@@ -100,6 +105,7 @@ export default function HomePage() {
   const handleTabChange = (tab: 'Recommend' | 'Nearby') => {
     if (activeTab === tab) return
     setActiveTab(tab)
+    fetchGuard.current = false 
     hasFetched.current = false 
   }
 

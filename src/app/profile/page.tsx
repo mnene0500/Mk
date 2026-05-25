@@ -15,6 +15,9 @@ import { createAgencyAction, joinAgencyAction, leaveAgencyAction } from "@/app/a
 import { useBalance } from "@/lib/providers/BalanceProvider"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
+/**
+ * @fileOverview Me Page with Flat Design (No avatar border) and Owner Console.
+ */
 export default function MePage() {
   const router = useRouter()
   const { user, loading: authLoading, isInitialized } = useUser()

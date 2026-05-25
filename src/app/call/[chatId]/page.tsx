@@ -10,8 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
 /**
- * @fileOverview Hardened Agora Call Page with Phased Media Activation & Camera Switching.
- * Accesses camera first, then activates mic upon connection.
+ * @fileOverview Hardened Agora Call Page with Phased Media Activation, Camera Switching, Mute, and Camera Cover.
  */
 
 export default function CallPage({ params }: { params: Promise<{ chatId: string }> }) {
@@ -35,7 +34,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   })
   
   const [joined, setJoined] = useState(false)
-  const [muted, setMute] = useState(false)
+  const [muted, setMuted] = useState(false)
   const [cameraOff, setCameraOff] = useState(type === 'voice')
   const [remoteUser, setRemoteUser] = useState<any>(null)
   const [partnerProfile, setPartnerProfile] = useState<any>(null)
@@ -208,7 +207,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     if (rtc.current.localAudioTrack) {
       const newState = !muted
       rtc.current.localAudioTrack.setEnabled(!newState)
-      setMute(newState)
+      setMuted(newState)
     }
   }
 
