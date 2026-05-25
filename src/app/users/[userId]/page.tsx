@@ -32,7 +32,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
     if (!profile?.match_flow_id) return
     navigator.clipboard.writeText(profile.match_flow_id)
     setIdCopied(true)
-    toast({ title: "ID Copied" })
+    toast({ title: "ID Copied to clipboard" })
     setTimeout(() => setIdCopied(false), 2000)
   }
 
@@ -94,7 +94,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
             <div className="bg-black text-white px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-md flex items-center gap-2"><span>{profile.gender === 'female' ? '♀' : '♂'}</span><span>{age} Years</span></div>
             <button 
               onClick={handleCopyId}
-              className="bg-gray-50 text-gray-400 px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border border-gray-100 active:scale-95 transition-all flex items-center gap-1.5"
+              className="bg-gray-50 text-gray-500 px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border border-gray-100 active:scale-95 transition-all flex items-center gap-1.5"
             >
               ID: {profile.match_flow_id}
               {idCopied ? <Check className="w-2.5 h-2.5 text-green-500" /> : <Copy className="w-2.5 h-2.5" />}

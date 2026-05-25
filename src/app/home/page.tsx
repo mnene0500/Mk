@@ -42,22 +42,17 @@ export default function HomePage() {
   const [initialLoading, setInitialLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'Recommend' | 'Nearby'>('Recommend')
   const [profile, setProfile] = useState<any>(null)
-  const [page, setPage] = useState(0)
-  const [hasMore, setHasMore] = useState(true)
   
-  const isFetched = useRef(false)
-  const tabRef = useRef(activeTab)
+  const hasFetched = useRef(false)
+  const currentUserId = useRef<string | null>(null)
 
-  const fetchUsers = useCallback(async (pageNum = 0, isManual = false) => {
+  const fetchUsers = useCallback(async (isManual = false) => {
     if (!profile) return;
     
     if (isManual) setIsRefreshing(true);
-    if (pageNum === 0 && !isManual) setInitialLoading(true);
+    if (!isManual) setInitialLoading(true);
 
     try {
-      const from = pageNum * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-      
       const oppositeGender = profile.gender === 'male' ? 'female' : profile.gender === 'female' ? 'male' : null;
 
       const query = supabase
@@ -66,17 +61,14 @@ export default function HomePage() {
         .eq('onboarding_complete', true)
         .is('is_deleted', false)
         .order('updated_at', { ascending: false })
-        .range(from, to);
+        .limit(PAGE_SIZE);
 
       if (oppositeGender) query.eq('gender', oppositeGender);
-      if (tabRef.current === 'Nearby' && profile.country) query.eq('country', profile.country);
+      if (activeTab === 'Nearby' && profile.country) query.eq('country', profile.country);
 
       const { data } = await query;
       if (data) {
-        const filtered = data.filter(u => u.uid !== currentUser?.id);
-        if (pageNum === 0) setUsers(filtered);
-        else setUsers(prev => [...prev, ...filtered]);
-        setHasMore(data.length === PAGE_SIZE);
+        setUsers(data.filter(u => u.uid !== currentUser?.id));
       }
     } catch (err) {
       console.error("Fetch Users Error:", err);
@@ -84,8 +76,9 @@ export default function HomePage() {
       setIsRefreshing(false);
       setInitialLoading(false);
     }
-  }, [currentUser?.id, profile]);
+  }, [currentUser?.id, profile, activeTab]);
 
+  // Handle Onboarding Redirect & Profile State
   useEffect(() => {
     if (isInitialized && currentUser && !profile) {
       supabase.from('users').select('uid, gender, country, onboarding_complete').eq('uid', currentUser.id).single()
@@ -99,19 +92,18 @@ export default function HomePage() {
     }
   }, [isInitialized, currentUser, router, profile, authLoading]);
 
+  // Stabilized Fetch Trigger
   useEffect(() => {
-    if (profile && !isFetched.current) {
-      fetchUsers(0);
-      isFetched.current = true;
+    if (profile && !hasFetched.current) {
+      fetchUsers();
+      hasFetched.current = true;
     }
   }, [profile, fetchUsers]);
 
   const handleTabChange = (tab: 'Recommend' | 'Nearby') => {
     if (activeTab === tab) return
     setActiveTab(tab)
-    tabRef.current = tab
-    setPage(0)
-    fetchUsers(0)
+    hasFetched.current = false // Allow one fetch for new tab
   }
 
   if (authLoading || !isInitialized) return (
@@ -147,7 +139,7 @@ export default function HomePage() {
               </button>
             ))}
           </div>
-          <button onClick={() => fetchUsers(0, true)} className={cn("p-2 text-white active:scale-90 transition-transform", isRefreshing && "animate-spin")}>
+          <button onClick={() => fetchUsers(true)} className={cn("p-2 text-white active:scale-90 transition-transform", isRefreshing && "animate-spin")}>
             <RotateCw className="w-4 h-4" />
           </button>
         </div>

@@ -10,8 +10,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
 /**
- * @fileOverview Agora Call Page with Hardened Lifecycle.
- * Prevents race conditions during initialization and ensures proper cleanup.
+ * @fileOverview Hardened Agora Call Page.
+ * Implements a strict singleton lifecycle to prevent race-condition crashes.
  */
 
 export default function CallPage({ params }: { params: Promise<{ chatId: string }> }) {
@@ -47,10 +47,14 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   const billingTimer = useRef<NodeJS.Timeout | null>(null)
   const ringTimeout = useRef<NodeJS.Timeout | null>(null)
   const joining = useRef(false)
+  const mounted = useRef(true)
 
   useEffect(() => {
     if (!partnerId) return
-    supabase.from('users').select('uid, name, photo_url').eq('uid', partnerId).single().then(({ data }) => setPartnerProfile(data))
+    supabase.from('users').select('uid, name, photo_url').eq('uid', partnerId).single().then(({ data }) => {
+      if (mounted.current) setPartnerProfile(data)
+    })
+    return () => { mounted.current = false }
   }, [partnerId])
 
   useEffect(() => {
@@ -65,26 +69,32 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     return () => { supabase.removeChannel(channel) }
   }, [callId])
 
+  // Ringing timeout
   useEffect(() => {
     if (joined && isRinging) {
       ringTimeout.current = setTimeout(() => {
-        if (!remoteUser) {
+        if (!remoteUser && mounted.current) {
           handleEndCall(true)
         }
-      }, 40000)
+      }, 45000)
     }
     return () => { if (ringTimeout.current) clearTimeout(ringTimeout.current) }
   }, [joined, isRinging, remoteUser])
 
+  // Billing interval
   useEffect(() => {
     if (joined && remoteUser && user?.id && partnerId) {
       billingTimer.current = setInterval(async () => {
+        if (!mounted.current) return;
+        
         setDuration(prev => {
           const next = prev + 1
+          // Logic: 11th second is first minute. Then every 60s.
           const isDeductionPoint = next === 11 || (next > 11 && (next - 11) % 60 === 0);
+          
           if (isDeductionPoint) {
             deductCallCoinsAction(user.id, type, partnerId).then(res => {
-              if (!res.success) handleEndCall(true)
+              if (!res.success && mounted.current) handleEndCall(true)
             })
           }
           return next
@@ -92,14 +102,12 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
       }, 1000)
     }
     return () => { if (billingTimer.current) clearInterval(billingTimer.current) }
-  }, [joined, remoteUser, user?.id, partnerId, type])
+  }, [joined, !!remoteUser, user?.id, partnerId, type])
 
   useEffect(() => {
-    let mounted = true;
-
     const init = async () => {
       if (typeof window === 'undefined' || !user?.id || !chatId || joining.current) return
-      joining.current = true;
+      joining.current = true
       
       try {
         const AgoraRTC = (await import('agora-rtc-sdk-ng')).default
@@ -108,28 +116,32 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         rtc.current.client = client
 
         client.on("user-published", async (user, mediaType) => {
-          if (!mounted) return;
+          if (!mounted.current) return
           await client.subscribe(user, mediaType)
+          
           if (mediaType === "video") {
             setRemoteUser(user)
             setIsRinging(false)
+            // Wait for ref to be available
             setTimeout(() => {
-              if (remoteVideoRef.current) user.videoTrack?.play(remoteVideoRef.current)
-            }, 200)
+              if (remoteVideoRef.current && user.videoTrack) {
+                user.videoTrack.play(remoteVideoRef.current)
+              }
+            }, 300)
           }
           if (mediaType === "audio") {
             user.audioTrack?.play()
             setIsRinging(false)
-            setRemoteUser(prev => prev || user)
+            setRemoteUser((prev: any) => prev || user)
           }
         })
 
         client.on("user-left", () => {
-          if (mounted) handleEndCall(false)
+          if (mounted.current) handleEndCall(false)
         })
 
         const tokenData = await generateAgoraTokenAction(chatId, user.id)
-        if (!mounted) return;
+        if (!mounted.current) throw new Error("Unmounted")
 
         await client.join(tokenData.appId, tokenData.channelName, tokenData.token, tokenData.uid)
         
@@ -142,11 +154,11 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
           rtc.current.localVideoTrack = videoTrack
         }
 
-        if (!mounted) {
-          if (audioTrack) { audioTrack.stop(); audioTrack.close(); }
+        if (!mounted.current) {
+          audioTrack.stop(); audioTrack.close();
           if (videoTrack) { videoTrack.stop(); videoTrack.close(); }
-          await client.leave().catch(() => {});
-          return;
+          await client.leave()
+          return
         }
 
         if (localVideoRef.current && videoTrack) {
@@ -156,40 +168,39 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         await client.publish(videoTrack ? [audioTrack, videoTrack] : [audioTrack])
         setJoined(true)
       } catch (err) {
-        console.error("Agora Init Error:", err)
-        if (mounted) router.replace('/home')
+        console.error("Call Initialization Failed:", err)
+        if (mounted.current) router.replace('/home')
       } finally {
-        joining.current = false;
+        joining.current = false
       }
     }
 
     init()
     
     return () => { 
-      mounted = false;
-      const { client, localAudioTrack, localVideoTrack } = rtc.current;
-      if (localAudioTrack) { localAudioTrack.stop(); localAudioTrack.close(); }
-      if (localVideoTrack) { localVideoTrack.stop(); localVideoTrack.close(); }
-      if (client) client.leave().catch(() => {});
+      mounted.current = false
+      shutdownAgora()
     }
   }, [chatId, user?.id])
 
-  const handleEndCall = async (manual = true) => {
-    const { client, localAudioTrack, localVideoTrack } = rtc.current;
-    
+  const shutdownAgora = async () => {
+    const { client, localAudioTrack, localVideoTrack } = rtc.current
     if (localAudioTrack) { localAudioTrack.stop(); localAudioTrack.close(); rtc.current.localAudioTrack = null; }
     if (localVideoTrack) { localVideoTrack.stop(); localVideoTrack.close(); rtc.current.localVideoTrack = null; }
-    
-    if (client) { 
-      try { await client.leave() } catch (e) {} 
-      rtc.current.client = null;
+    if (client) {
+      try { await client.leave() } catch (e) {}
+      rtc.current.client = null
     }
+  }
 
+  const handleEndCall = async (manual = true) => {
+    await shutdownAgora()
     if (manual && callId) { 
       await endCallAction(callId) 
     }
-
-    router.replace(`/chats?startWith=${partnerId}`)
+    if (mounted.current) {
+      router.replace(`/chats?startWith=${partnerId}`)
+    }
   }
 
   const toggleMute = () => {
