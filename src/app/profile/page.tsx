@@ -18,7 +18,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 
 /**
  * @fileOverview Refined Profile (Me) Screen.
- * Fixed Owner account crashes and added the Identity Verification button.
+ * Removed borders and shadows from avatar for a cleaner look.
  */
 export default function MePage() {
   const router = useRouter()
@@ -124,7 +124,6 @@ export default function MePage() {
   const isAgencyMember = profile?.agency_status === 'approved'
   const isVerified = profile?.is_verified === true
   
-  // Safe Image URL with fallback for manually created accounts
   const displayPhoto = profile?.photo_url || "https://picsum.photos/seed/qivo/400/400"
   const cacheBust = profile?.updated_at ? new Date(profile.updated_at).getTime() : Date.now()
 
@@ -135,7 +134,8 @@ export default function MePage() {
       <div className="relative z-10">
         <header className="pt-12 pb-10 px-6 flex flex-col items-center text-center">
           <div className="relative mb-4">
-            <div className="relative w-28 h-28 rounded-full shadow-2xl overflow-hidden bg-white border-4 border-white/20">
+            {/* REMOVED BORDER AND SHADOW PER REQUEST */}
+            <div className="relative w-28 h-28 rounded-full overflow-hidden bg-white">
               <Image 
                 src={`${displayPhoto}?t=${cacheBust}`} 
                 alt={profile?.name || "Me"} 
@@ -144,7 +144,7 @@ export default function MePage() {
                 sizes="112px" 
               />
             </div>
-            <button className="absolute bottom-1 right-1 bg-white p-2.5 rounded-full shadow-xl border border-blue-50 active:scale-90 transition-transform" onClick={() => router.push('/edit-profile')}>
+            <button className="absolute bottom-1 right-1 bg-white p-2.5 rounded-full shadow-lg border border-blue-50 active:scale-90 transition-transform" onClick={() => router.push('/edit-profile')}>
               <Pencil className="w-4 h-4 text-[#00A2FF]" />
             </button>
           </div>
@@ -169,7 +169,6 @@ export default function MePage() {
             </Button>
           </div>
 
-          {/* VERIFICATION SECTION */}
           {!isVerified && (
             <section className="space-y-3">
               <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Trust & Verification</h3>

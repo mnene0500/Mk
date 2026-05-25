@@ -63,6 +63,7 @@ function ChatsContent() {
   const { user: currentUser, loading: authLoading, isInitialized } = useUser()
   const { coins } = useBalance()
   const startWithId = searchParams.get("startWith")
+  const autoMsgType = searchParams.get("autoMsg")
   
   const [chatId, setChatId] = useState<string | null>(null)
   const [newMessage, setNewMessage] = useState("")
@@ -77,6 +78,7 @@ function ChatsContent() {
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null)
   const longPressTimer = useRef<NodeJS.Timeout | null>(null)
   const isLongPress = useRef(false)
+  const autoMsgSent = useRef(false)
 
   const fetchSummaries = useCallback(async () => {
     if (!currentUser?.id) return
@@ -101,7 +103,6 @@ function ChatsContent() {
       if (!pId || blockedUids.has(pId)) return false;
 
       const myClearedAt = (c.cleared_at as Record<string, number>)?.[currentUser.id] || 0;
-      // ONLY HIDE IF: The last message timestamp is older than or equal to the time I cleared it
       return (c.last_message_at > myClearedAt);
     });
 
@@ -168,6 +169,32 @@ function ChatsContent() {
     }
   }, [currentUser?.id, startWithId])
 
+  const handleSendMessage = useCallback(async (customText?: string) => {
+    const text = customText || newMessage.trim()
+    if (!text || !chatId || !currentUser?.id || !startWithId) return
+    
+    const timestamp = Date.now()
+    const optimisticMsg: Message = { id: `temp-${timestamp}`, text, sender_id: currentUser.id, timestamp, is_optimistic: true }
+    
+    setMessages(prev => [optimisticMsg, ...prev])
+    if (!customText) setNewMessage("")
+
+    const res = await sendMessageAction({ chatId, senderId: currentUser.id, recipientId: startWithId, text });
+
+    if (!res.success) {
+      setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
+      toast({ variant: "destructive", title: "Error", description: res.error || "Failed to send." })
+    }
+  }, [chatId, currentUser?.id, newMessage, startWithId, toast]);
+
+  // Handle Auto-Messages (e.g. from Coin Sellers)
+  useEffect(() => {
+    if (isInitialized && chatId && autoMsgType === 'buy_coins' && !autoMsgSent.current) {
+      autoMsgSent.current = true;
+      handleSendMessage("I want to buy coins.");
+    }
+  }, [isInitialized, chatId, autoMsgType, handleSendMessage])
+
   useEffect(() => {
     if (!chatId) return
     const fetchMessages = async () => {
@@ -190,24 +217,6 @@ function ChatsContent() {
       }).subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [chatId, activeChatClearedAt])
-
-  const handleSendMessage = async (customText?: string) => {
-    const text = customText || newMessage.trim()
-    if (!text || !chatId || !currentUser?.id || !startWithId) return
-    
-    const timestamp = Date.now()
-    const optimisticMsg: Message = { id: `temp-${timestamp}`, text, sender_id: currentUser.id, timestamp, is_optimistic: true }
-    
-    setMessages(prev => [optimisticMsg, ...prev])
-    if (!customText) setNewMessage("")
-
-    const res = await sendMessageAction({ chatId, senderId: currentUser.id, recipientId: startWithId, text });
-
-    if (!res.success) {
-      setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
-      toast({ variant: "destructive", title: "Error", description: res.error || "Failed to send." })
-    }
-  }
 
   const handleClearChat = async (id?: string) => {
     const targetId = id || chatId

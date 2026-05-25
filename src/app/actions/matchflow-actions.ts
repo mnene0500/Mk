@@ -333,7 +333,55 @@ export async function sendMysteryNoteAction(userId: string, message: string, rec
   const supabase = getSupabaseAdmin();
   try {
     const cost = recipients * 10;
+    const { data: sender } = await supabase.from('users').select('gender, name').eq('uid', userId).single();
+    
+    // 1. Check Balance
+    const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', userId).single();
+    if ((Number(bal?.coins) || 0) < cost) throw new Error("Insufficient coins.");
+
+    // 2. Find Recipients (Opposite gender or mixed if none found)
+    const oppositeGender = sender?.gender === 'male' ? 'female' : 'male';
+    const { data: targets } = await supabase
+      .from('users')
+      .select('uid')
+      .eq('gender', oppositeGender)
+      .eq('onboarding_complete', true)
+      .neq('uid', userId)
+      .limit(recipients);
+
+    if (!targets || targets.length === 0) throw new Error("No recipients found currently.");
+
+    // 3. Deduct Coins
     await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: -cost });
+    await supabase.from("coin_history").insert({
+      user_id: userId,
+      amount: -cost,
+      type: "mystery_note",
+      description: `Note Blast to ${targets.length} users`,
+      timestamp: Date.now()
+    });
+
+    // 4. Send Messages to each target
+    const ts = Date.now();
+    for (const target of targets) {
+      const ids = [userId, target.uid].sort();
+      const chatId = `direct_${ids[0]}_${ids[1]}`;
+      
+      await supabase.from('chats').upsert({
+        id: chatId,
+        participant_ids: [userId, target.uid],
+        last_message: message.slice(0, 100),
+        last_message_at: ts
+      }, { onConflict: 'id' });
+
+      await supabase.from('messages').insert({
+        chat_id: chatId,
+        sender_id: userId,
+        text: message,
+        timestamp: ts
+      });
+    }
+
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
