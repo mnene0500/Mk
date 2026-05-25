@@ -79,34 +79,50 @@ export async function completeOnboardingAction(payload: {
   uid: string; email: string; name: string; gender: string; dob: string; country: string; looking_for: string; photo_url?: string;
 }) {
   const supabase = getSupabaseAdmin();
-  const headersList = await headers();
-  const ip = headersList.get('x-forwarded-for')?.split(',')[0] || '127.0.0.1';
-
+  
   try {
-    const { count } = await supabase.from('users').select('uid', { count: 'exact', head: true }).eq('last_ip', ip);
-    if (count !== null && count >= 3) return { success: false, error: "Account limit reached." };
-
-    let initialCoins = (payload.gender === 'male' && count !== null && count < 2) ? 500 : 0;
-    const initialDiamonds = payload.gender === 'female' ? 150 : 0;
+    // Robust Reward Logic: Male users get 500 bonus coins on their first successful setup
+    let initialCoins = (payload.gender === 'male') ? 500 : 0;
+    const initialDiamonds = (payload.gender === 'female') ? 150 : 0;
     const qId = Math.floor(1000000 + Math.random() * 900000000).toString();
     const timestamp = Date.now();
 
     const { error: profileErr } = await supabase.from('users').upsert({
-      uid: payload.uid, email: payload.email, name: payload.name, gender: payload.gender, dob: payload.dob,
-      country: payload.country, looking_for: payload.looking_for, onboarding_complete: true,
-      match_flow_id: qId, photo_url: payload.photo_url, last_ip: ip, updated_at: new Date().toISOString()
+      uid: payload.uid, 
+      email: payload.email, 
+      name: payload.name, 
+      gender: payload.gender, 
+      dob: payload.dob,
+      country: payload.country, 
+      looking_for: payload.looking_for, 
+      onboarding_complete: true,
+      match_flow_id: qId, 
+      photo_url: payload.photo_url, 
+      updated_at: new Date().toISOString()
     });
 
     if (profileErr) throw profileErr;
 
-    await supabase.from('balances').upsert({ user_id: payload.uid, coins: initialCoins, diamonds: initialDiamonds });
+    // Initialize Balance
+    await supabase.from('balances').upsert({ 
+      user_id: payload.uid, 
+      coins: initialCoins, 
+      diamonds: initialDiamonds 
+    });
 
     if (initialCoins > 0) {
-      await supabase.from('coin_history').insert({ user_id: payload.uid, amount: initialCoins, type: 'bonus', description: 'Welcome Bonus', timestamp });
+      await supabase.from('coin_history').insert({ 
+        user_id: payload.uid, 
+        amount: initialCoins, 
+        type: 'bonus', 
+        description: 'Welcome Bonus', 
+        timestamp 
+      });
     }
 
     return { success: true, bonus: initialCoins };
   } catch (err: any) {
+    console.error("[Onboarding Error]:", err.message);
     return { success: false, error: err.message };
   }
 }
@@ -114,25 +130,29 @@ export async function completeOnboardingAction(payload: {
 export async function deleteUserCompletelyAction(uid: string) {
   const supabase = getSupabaseAdmin();
   try {
-    // 1. Manually clear dependent relations to prevent foreign key errors
+    // 1. Manually clear dependent relations to prevent foreign key errors (Postgres Hard Delete)
     await Promise.all([
       supabase.from('reports').delete().or(`reporter_id.eq.${uid},reported_id.eq.${uid}`),
       supabase.from('calls').delete().or(`caller_id.eq.${uid},receiver_id.eq.${uid}`),
-      supabase.from('chats').delete().contains('participant_ids', [uid]),
-      supabase.from('withdrawals').delete().eq('user_id', uid)
+      supabase.from('messages').delete().eq('sender_id', uid),
+      supabase.from('withdrawals').delete().eq('user_id', uid),
+      supabase.from('coin_history').delete().eq('user_id', uid),
+      supabase.from('diamond_history').delete().eq('user_id', uid),
+      supabase.from('balances').delete().eq('user_id', uid)
     ]);
 
-    // 2. If user is an agent, handle agency cleanup references
-    const { data: userRow } = await supabase.from('users').select('is_agent, agency_id').eq('uid', uid).single();
-    if (userRow?.agency_id) {
-       await supabase.from('users').update({ agency_id: null, agency_status: null }).eq('agency_id', userRow.agency_id);
+    // 2. Clear from Chat participants (Manual cleanup for array values)
+    const { data: userChats } = await supabase.from('chats').select('id').contains('participant_ids', [uid]);
+    if (userChats?.length) {
+      for (const chat of userChats) {
+        await supabase.from('chats').delete().eq('id', chat.id);
+      }
     }
-    
+
     // 3. Explicitly delete the profile from public.users
-    // This triggers ON DELETE CASCADE for balances, history tables
     await supabase.from('users').delete().eq('uid', uid);
     
-    // 4. Delete the actual Auth account
+    // 4. Delete the Auth account
     const { error } = await supabase.auth.admin.deleteUser(uid);
     if (error) throw error;
     
@@ -270,6 +290,10 @@ export async function createAgencyAction(agentUid: string, name: string) {
 export async function joinAgencyAction(userUid: string, code: string) {
   const supabase = getSupabaseAdmin();
   try {
+    // SECURITY: Verify only female users can join an agency
+    const { data: user } = await supabase.from('users').select('gender').eq('uid', userUid).single();
+    if (user?.gender !== 'female') throw new Error("Agency access restricted.");
+
     const { data: agency } = await supabase.from('agencies').select('code').eq('code', code).maybeSingle();
     if (!agency) throw new Error("Invalid Agency Code.");
     await supabase.from('users').update({ agency_id: code, agency_status: 'pending' }).eq('uid', userUid);
@@ -293,11 +317,9 @@ export async function reviewRecruitmentAction(applicantUid: string, status: 'app
   const supabase = getSupabaseAdmin();
   try {
     if (status === 'rejected') {
-      const { error } = await supabase.from('users').update({ agency_id: null, agency_status: null }).eq('uid', applicantUid);
-      if (error) throw error;
+      await supabase.from('users').update({ agency_id: null, agency_status: null }).eq('uid', applicantUid);
     } else {
-      const { error } = await supabase.from('users').update({ agency_status: status }).eq('uid', applicantUid);
-      if (error) throw error;
+      await supabase.from('users').update({ agency_status: status }).eq('uid', applicantUid);
     }
     return { success: true };
   } catch (err: any) {

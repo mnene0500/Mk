@@ -131,34 +131,18 @@ export default function HomePage() {
     setupProfile();
   }, [isInitialized, currentUser, authLoading, router])
 
-  // STRICT MANUAL REFRESH / INITIAL LOAD ONLY
+  // Initial load once profile is ready
   useEffect(() => {
     if (statusChecked && profile && users.length === 0) {
       fetchUsers(0);
     }
   }, [statusChecked, profile, activeTab, fetchUsers, users.length]);
 
-  // INFINITE SCROLL (Only at absolute bottom)
-  useEffect(() => {
-    const handleScroll = () => {
-      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 50) {
-        if (!isLoadingMore && hasMore && users.length > 0) {
-          const nextPage = page + 1;
-          setPage(nextPage);
-          fetchUsers(nextPage);
-        }
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [isLoadingMore, hasMore, page, fetchUsers, users.length]);
-
   const handleManualRefresh = () => {
     setPage(0);
     fetchUsers(0, true);
   };
 
-  // Only show full splash on true first load
   if (!statusChecked && isFirstLoad.current) {
     return (
       <div className="fixed inset-0 bg-white flex items-center justify-center animate-in fade-in duration-500">

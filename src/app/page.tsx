@@ -22,27 +22,20 @@ export default function RootPage() {
       return
     }
 
-    // Secure check for onboarding completion
     const checkOnboarding = async () => {
       try {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('users')
           .select('onboarding_complete')
           .eq('uid', user.id)
           .maybeSingle()
         
-        if (error) throw error;
-
-        // Explicitly check for data presence
-        if (data && data.onboarding_complete) {
+        if (data?.onboarding_complete) {
           router.replace("/home")
         } else {
-          // If no row exists or onboarding is false, send to onboarding
           router.replace("/fastonboard")
         }
       } catch (err) {
-        console.error("[Root Logic Error]:", err)
-        // Fallback to onboarding if profile check fails (likely a new user)
         router.replace("/fastonboard")
       }
     }
