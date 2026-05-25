@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useMemo, useState, useEffect, useCallback } from "react"
+import { useMemo, useState, useEffect, useCallback, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
@@ -25,7 +25,7 @@ interface UserProfile {
   updated_at: string
 }
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 12;
 
 function calculateAge(dob: string) {
   if (!dob) return 18
@@ -51,48 +51,12 @@ export default function HomePage() {
   const [hasMore, setHasMore] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
 
-  // Scroll Preservation
-  useEffect(() => {
-    const savedScroll = sessionStorage.getItem('home_scroll_pos');
-    if (savedScroll && !initialLoading) {
-      window.scrollTo(0, parseInt(savedScroll));
-    }
-    
-    const handleScroll = () => {
-      sessionStorage.setItem('home_scroll_pos', window.scrollY.toString());
-      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 800 && !isLoadingMore && hasMore) {
-        loadMore();
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [initialLoading, isLoadingMore, hasMore]);
-
-  useEffect(() => {
-    if (!isInitialized || authLoading) return;
-    if (!currentUser) { router.replace("/welcome"); return; }
-
-    const setupProfile = async () => {
-      const { data } = await supabase
-        .from('users')
-        .select('uid, gender, country, onboarding_complete, blocking, blocked_by')
-        .eq('uid', currentUser.id)
-        .maybeSingle();
-      
-      if (!data || !data.onboarding_complete) { 
-        router.replace("/fastonboard"); 
-        return; 
-      }
-      setProfile(data as any);
-      setStatusChecked(true);
-    };
-
-    setupProfile();
-  }, [isInitialized, currentUser, authLoading, router])
+  // Avoid "Splash Blink" on internal navigation
+  const isFirstLoad = useRef(true);
 
   const fetchUsers = useCallback(async (pageNum = 0, isManual = false) => {
     if (!profile?.gender) return;
+    
     if (isManual) {
       setIsRefreshing(true);
       setPage(0);
@@ -107,6 +71,7 @@ export default function HomePage() {
       const from = pageNum * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
+      // Online priority: updated_at DESC
       const query = supabase
         .from('users')
         .select('uid, name, photo_url, country, dob, is_verified, updated_at')
@@ -140,33 +105,64 @@ export default function HomePage() {
       setIsRefreshing(false);
       setInitialLoading(false);
       setIsLoadingMore(false);
+      isFirstLoad.current = false;
     }
   }, [currentUser?.id, profile, activeTab]);
 
+  useEffect(() => {
+    if (!isInitialized || authLoading) return;
+    if (!currentUser) { router.replace("/welcome"); return; }
+
+    const setupProfile = async () => {
+      const { data } = await supabase
+        .from('users')
+        .select('uid, gender, country, onboarding_complete, blocking, blocked_by')
+        .eq('uid', currentUser.id)
+        .maybeSingle();
+      
+      if (!data || !data.onboarding_complete) { 
+        router.replace("/fastonboard"); 
+        return; 
+      }
+      setProfile(data as any);
+      setStatusChecked(true);
+    };
+
+    setupProfile();
+  }, [isInitialized, currentUser, authLoading, router])
+
+  // STRICT MANUAL REFRESH / INITIAL LOAD ONLY
   useEffect(() => {
     if (statusChecked && profile && users.length === 0) {
       fetchUsers(0);
     }
   }, [statusChecked, profile, activeTab, fetchUsers, users.length]);
 
-  const loadMore = () => {
-    if (isLoadingMore || !hasMore) return;
-    const nextPage = page + 1;
-    setPage(nextPage);
-    fetchUsers(nextPage);
-  };
+  // INFINITE SCROLL (Only at absolute bottom)
+  useEffect(() => {
+    const handleScroll = () => {
+      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 50) {
+        if (!isLoadingMore && hasMore && users.length > 0) {
+          const nextPage = page + 1;
+          setPage(nextPage);
+          fetchUsers(nextPage);
+        }
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isLoadingMore, hasMore, page, fetchUsers, users.length]);
 
   const handleManualRefresh = () => {
     setPage(0);
     fetchUsers(0, true);
   };
 
-  if (!statusChecked) {
+  // Only show full splash on true first load
+  if (!statusChecked && isFirstLoad.current) {
     return (
       <div className="fixed inset-0 bg-white flex items-center justify-center animate-in fade-in duration-500">
-         <h1 className="text-7xl font-logo font-black text-[#00A2FF] tracking-tight">
-           QIVO
-         </h1>
+         <h1 className="text-7xl font-logo font-black text-[#00A2FF] tracking-tight">QIVO</h1>
       </div>
     )
   }
@@ -199,8 +195,8 @@ export default function HomePage() {
       </div>
 
       <main className="px-4 pt-4 space-y-4 bg-white min-h-[60vh]">
-        {initialLoading ? (
-          <div className="grid grid-cols-2 gap-2.5">{[...Array(4)].map((_, i) => <div key={i} className="aspect-[1/1.25] rounded-[1.2rem] bg-gray-100 animate-pulse" />)}</div>
+        {initialLoading && users.length === 0 ? (
+          <div className="grid grid-cols-2 gap-2.5">{[...Array(6)].map((_, i) => <div key={i} className="aspect-[1/1.3] rounded-[1.2rem] bg-gray-100 animate-pulse" />)}</div>
         ) : (
           <div className="grid grid-cols-2 gap-2.5 pb-10">
             {users.map((u) => (

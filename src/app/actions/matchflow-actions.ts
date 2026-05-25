@@ -1,3 +1,4 @@
+
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -258,11 +259,40 @@ export async function joinAgencyAction(userUid: string, code: string) {
   }
 }
 
+export async function leaveAgencyAction(userUid: string) {
+  const supabase = getSupabaseAdmin();
+  try {
+    await supabase.from('users').update({ agency_id: null, agency_status: null }).eq('uid', userUid);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteAgencyAction(agentUid: string, agencyCode: string) {
+  const supabase = getSupabaseAdmin();
+  try {
+    // 1. Clear everyone who was in this agency
+    await supabase.from('users').update({ agency_id: null, agency_status: null }).eq('agency_id', agencyCode);
+    
+    // 2. Delete the agency record itself
+    const { error } = await supabase.from('agencies').delete().eq('code', agencyCode).eq('agent_uid', agentUid);
+    
+    if (error) throw error;
+
+    // 3. Demote the agent
+    await supabase.from('users').update({ is_agent: false, agency_id: null, agency_status: null }).eq('uid', agentUid);
+    
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function reviewRecruitmentAction(applicantUid: string, status: 'approved' | 'rejected') {
   const supabase = getSupabaseAdmin();
   try {
     if (status === 'rejected') {
-      // CLEAR agency ID so they can apply again
       await supabase.from('users').update({ agency_id: null, agency_status: null }).eq('uid', applicantUid);
     } else {
       await supabase.from('users').update({ agency_status: status }).eq('uid', applicantUid);

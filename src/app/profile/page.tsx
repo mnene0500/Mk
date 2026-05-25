@@ -1,18 +1,20 @@
+
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Settings, ChevronRight, Copy, Check, BadgeCheck, Headphones, Pencil, Gem, Loader2, Trophy, Users, Briefcase, UserPlus, Wallet, Shield, User, Flag, PlusCircle, History, Zap, Award } from "lucide-react"
+import { Settings, ChevronRight, Copy, Check, BadgeCheck, Headphones, Pencil, Gem, Loader2, Award, Briefcase, UserPlus, Wallet, Shield, PlusCircle, History, Trash2, LogOut } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 import { useUser } from "@/firebase/auth/use-user"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { createAgencyAction, joinAgencyAction } from "@/app/actions/matchflow-actions"
+import { createAgencyAction, joinAgencyAction, leaveAgencyAction, deleteAgencyAction } from "@/app/actions/matchflow-actions"
 import { useBalance } from "@/lib/providers/BalanceProvider"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
 export default function MePage() {
   const router = useRouter()
@@ -27,6 +29,7 @@ export default function MePage() {
   const [agencyCode, setAgencyCode] = useState("")
   const [agencyName, setAgencyName] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
 
   const fetchProfile = useCallback(async () => {
     if (!user?.id) return
@@ -50,6 +53,34 @@ export default function MePage() {
     const res = await joinAgencyAction(user.id, agencyCode)
     if (res.success) {
       toast({ title: "Request Sent", description: "Waiting for agent approval." })
+      fetchProfile()
+    } else {
+      toast({ variant: "destructive", title: "Error", description: res.error })
+    }
+    setIsProcessing(false)
+  }
+
+  const handleLeaveAgency = async () => {
+    if (!user) return
+    setIsProcessing(true)
+    const res = await leaveAgencyAction(user.id)
+    if (res.success) {
+      toast({ title: "Left Agency" })
+      fetchProfile()
+    } else {
+      toast({ variant: "destructive", title: "Error", description: res.error })
+    }
+    setIsProcessing(false)
+  }
+
+  const handleDeleteAgency = async () => {
+    if (!user || !profile?.agency_id) return
+    if (deleteConfirmText.toUpperCase() !== "AGENCY DELETE") return
+
+    setIsProcessing(true)
+    const res = await deleteAgencyAction(user.id, profile.agency_id)
+    if (res.success) {
+      toast({ title: "Agency Deleted Permanently" })
       fetchProfile()
     } else {
       toast({ variant: "destructive", title: "Error", description: res.error })
@@ -174,11 +205,9 @@ export default function MePage() {
                         </div>
                         <Button onClick={handleJoinAgency} disabled={isProcessing || !agencyCode} className="w-full h-12 rounded-full bg-[#00A2FF]">Join Now</Button>
                         
-                        {isAgent && (
+                        {isAgent && !profile?.agency_id && (
                           <div className="pt-4 border-t mt-4 space-y-4">
-                            <div className="text-center">
-                              <span className="text-[8px] font-bold uppercase text-gray-400">Initialize Your Agency</span>
-                            </div>
+                            <div className="text-center"><span className="text-[8px] font-bold uppercase text-gray-400">Initialize Your Agency</span></div>
                             <div className="space-y-2">
                               <label className="text-[10px] font-black uppercase text-gray-400">Agency Name</label>
                               <Input placeholder="Enter agency name" value={agencyName} onChange={(e) => setAgencyName(e.target.value)} className="rounded-2xl h-12" />
@@ -190,27 +219,38 @@ export default function MePage() {
                     </DialogContent>
                   </Dialog>
                 ) : (
-                  <div className="h-16 flex items-center justify-between px-5">
-                     <div className="flex items-center gap-4">
-                       <div className="bg-blue-50 p-2.5 rounded-xl"><Briefcase className="w-5 h-5 text-blue-600" /></div>
-                       <div className="flex flex-col">
-                          <span className="font-semibold text-xs text-black">Member Status</span>
-                          <span className="text-[9px] font-bold text-[#00A2FF] uppercase">{profile.agency_status}</span>
+                  <div className="flex flex-col">
+                    <div className="h-16 flex items-center justify-between px-5">
+                       <div className="flex items-center gap-4">
+                         <div className="bg-blue-50 p-2.5 rounded-xl"><Briefcase className="w-5 h-5 text-blue-600" /></div>
+                         <div className="flex flex-col">
+                            <span className="font-semibold text-xs text-black">{isAgent ? "Agency Leader" : "Member Status"}</span>
+                            <span className="text-[9px] font-bold text-[#00A2FF] uppercase">{profile.agency_status}</span>
+                         </div>
                        </div>
-                     </div>
-                     {isAgent ? (
-                       <button 
-                         onClick={() => copyToClipboard(profile.agency_id, setAgencyCopied)}
-                         className="flex items-center gap-1.5 px-3 py-1 bg-gray-50 rounded-full border hover:bg-gray-100 transition-colors"
-                       >
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Code: {profile.agency_id}</span>
-                          {agencyCopied ? <Check className="w-2.5 h-2.5 text-green-500" /> : <Copy className="w-2.5 h-2.5 text-gray-300" />}
-                       </button>
-                     ) : (
-                       <div className="px-3 py-1 bg-gray-50 rounded-full border">
-                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Linked</span>
-                       </div>
-                     )}
+                       {isAgent ? (
+                         <button onClick={() => copyToClipboard(profile.agency_id, setAgencyCopied)} className="flex items-center gap-1.5 px-3 py-1 bg-gray-50 rounded-full border hover:bg-gray-100 transition-colors">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Code: {profile.agency_id}</span>
+                            {agencyCopied ? <Check className="w-2.5 h-2.5 text-green-500" /> : <Copy className="w-2.5 h-2.5 text-gray-300" />}
+                         </button>
+                       ) : (
+                         <AlertDialog>
+                            <AlertDialogTrigger asChild><Button variant="ghost" size="sm" className="h-8 rounded-full text-red-500 text-[9px] font-black uppercase tracking-widest bg-red-50">Leave</Button></AlertDialogTrigger>
+                            <AlertDialogContent className="rounded-[2rem] p-8 border-none"><AlertDialogHeader><AlertDialogTitle>Leave Agency?</AlertDialogTitle><AlertDialogDescription className="text-xs uppercase tracking-widest font-bold">You will lose access to diamond withdrawals until you join another agency.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter className="gap-3 mt-6"><AlertDialogCancel className="h-12 rounded-full">Cancel</AlertDialogCancel><AlertDialogAction onClick={handleLeaveAgency} className="h-12 rounded-full bg-red-500 text-white">Yes, Leave</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+                         </AlertDialog>
+                       )}
+                    </div>
+                    {isAgent && (
+                      <div className="px-5 pb-4">
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild><Button variant="ghost" className="w-full h-10 rounded-2xl bg-red-50 text-red-500 text-[8px] font-black uppercase tracking-[0.2em] gap-2"><Trash2 className="w-3.5 h-3.5" /> Delete Agency</Button></AlertDialogTrigger>
+                          <AlertDialogContent className="rounded-[2.5rem] p-8 border-none"><AlertDialogHeader><AlertDialogTitle className="text-red-600">Danger Zone</AlertDialogTitle><AlertDialogDescription className="text-xs font-bold uppercase tracking-tight">This will permanently delete your agency and remove all members. Type <span className="text-black font-black">AGENCY DELETE</span> to confirm:</AlertDialogDescription></AlertDialogHeader>
+                            <div className="py-4"><Input placeholder="Type AGENCY DELETE" value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)} className="h-12 rounded-xl text-center font-black uppercase" /></div>
+                            <AlertDialogFooter className="gap-3"><AlertDialogCancel className="h-12 rounded-full">Cancel</AlertDialogCancel><AlertDialogAction disabled={deleteConfirmText.toUpperCase() !== "AGENCY DELETE"} onClick={handleDeleteAgency} className="h-12 rounded-full bg-red-600 text-white">Confirm Deletion</AlertDialogAction></AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -221,24 +261,8 @@ export default function MePage() {
             <section className="space-y-3">
               <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Admin Console</h3>
               <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">
-                <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
-                  <Link href="/manage-roles">
-                    <div className="flex items-center gap-4">
-                      <div className="bg-indigo-50 p-2.5 rounded-xl"><Shield className="w-5 h-5 text-indigo-600" /></div>
-                      <span className="font-semibold text-xs text-black">Authority Manager</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-300" />
-                  </Link>
-                </Button>
-                <Button variant="ghost" className="h-16 justify-between px-5 rounded-none" asChild>
-                  <Link href="/manage-reports">
-                    <div className="flex items-center gap-4">
-                      <div className="bg-red-50 p-2.5 rounded-xl"><Flag className="w-5 h-5 text-red-600" /></div>
-                      <span className="font-semibold text-xs text-black">Report Queue</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-300" />
-                  </Link>
-                </Button>
+                <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild><Link href="/manage-roles"><div className="flex items-center gap-4"><div className="bg-indigo-50 p-2.5 rounded-xl"><Shield className="w-5 h-5 text-indigo-600" /></div><span className="font-semibold text-xs text-black">Authority Manager</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link></Button>
+                <Button variant="ghost" className="h-16 justify-between px-5 rounded-none" asChild><Link href="/manage-reports"><div className="flex items-center gap-4"><div className="bg-red-50 p-2.5 rounded-xl"><Flag className="w-5 h-5 text-red-600" /></div><span className="font-semibold text-xs text-black">Report Queue</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link></Button>
               </div>
             </section>
           )}
@@ -246,12 +270,8 @@ export default function MePage() {
           <section className="space-y-3">
             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Account & Support</h3>
             <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex flex-col overflow-hidden">
-              <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild>
-                <Link href="/support"><div className="flex items-center gap-4"><div className="bg-blue-50 p-2.5 rounded-xl"><Headphones className="w-5 h-5 text-blue-600" /></div><span className="font-semibold text-xs text-black">Support Center</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link>
-              </Button>
-              <Button variant="ghost" className="h-16 justify-between px-5 rounded-none" asChild>
-                <Link href="/settings"><div className="flex items-center gap-4"><div className="bg-gray-50 p-2.5 rounded-xl"><Settings className="w-5 h-5 text-gray-600" /></div><span className="font-semibold text-xs text-black">Settings</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link>
-              </Button>
+              <Button variant="ghost" className="h-16 justify-between px-5 rounded-none border-b border-gray-50" asChild><Link href="/support"><div className="flex items-center gap-4"><div className="bg-blue-50 p-2.5 rounded-xl"><Headphones className="w-5 h-5 text-blue-600" /></div><span className="font-semibold text-xs text-black">Support Center</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link></Button>
+              <Button variant="ghost" className="h-16 justify-between px-5 rounded-none" asChild><Link href="/settings"><div className="flex items-center gap-4"><div className="bg-gray-50 p-2.5 rounded-xl"><Settings className="w-5 h-5 text-gray-600" /></div><span className="font-semibold text-xs text-black">Settings</span></div><ChevronRight className="w-4 h-4 text-gray-300" /></Link></Button>
             </div>
           </section>
         </main>
