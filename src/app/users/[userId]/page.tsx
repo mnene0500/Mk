@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, use, useState, useEffect, useRef } from "react"
@@ -185,10 +186,12 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
   const isTargetAdmin = profile.is_admin;
 
   return (
-    <div className="flex-1 bg-[#F9FAFB] flex flex-col min-h-screen pb-40 select-none overflow-x-hidden">
+    <div className="flex-1 bg-white flex flex-col min-h-screen pb-40 select-none overflow-x-hidden">
+      {/* HEADER PHOTO */}
       <div className="relative h-[55vh] w-full cursor-pointer overflow-hidden group" onClick={() => { setSelectedPhoto(profile.photo_url); setIsPhotoOpen(true); }}>
         <Image src={profile.photo_url || ""} alt={profile.name} fill className="object-cover animate-in fade-in zoom-in-105 duration-1000" priority sizes="100vw" />
-        <div className="absolute inset-0 bg-gradient-to-t from-transparent via-transparent to-black/30" />
+        
+        {/* ACTION BAR OVER PHOTO */}
         <div className="absolute top-12 inset-x-0 px-6 flex justify-between items-center z-20" onClick={(e) => e.stopPropagation()}>
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full bg-white/10 backdrop-blur-xl text-white w-10 h-10 border border-white/20 shadow-2xl active:scale-90 transition-all hover:bg-white/20"><ChevronLeft className="w-6 h-6" /></Button>
           {!isTargetAdmin && (
@@ -203,42 +206,54 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
             </div>
           )}
         </div>
+
+        {/* PRESENCE BADGE */}
         {presence?.state === 'online' && (
-          <div className="absolute bottom-8 left-8 bg-green-500/90 backdrop-blur-md text-white px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] shadow-xl flex items-center gap-2 animate-in slide-in-from-left-4 duration-500"><div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />Live Online</div>
+          <div className="absolute bottom-6 left-6 bg-green-500/90 backdrop-blur-md text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-[0.2em] shadow-xl flex items-center gap-1.5 animate-in slide-in-from-left-4 duration-500"><div className="w-1 h-1 bg-white rounded-full animate-pulse" />Live Online</div>
         )}
       </div>
 
-      <div className="relative z-10 bg-white px-6 pt-8 space-y-8 rounded-none shadow-[0_-15px_40px_rgba(0,0,0,0.05)] pb-10">
+      {/* CONTENT: STRAIGHT EDGES, SMALLER SIZES */}
+      <div className="relative z-10 bg-white px-6 pt-8 space-y-6 rounded-none pb-10">
         <div className="space-y-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-black text-black tracking-tighter leading-none">{profile.name}</h1>
-              {profile.is_verified && <div className="bg-[#00A2FF]/10 p-1 rounded-full"><BadgeCheck className="w-4 h-4 text-[#00A2FF] fill-white" /></div>}
+              <h1 className="text-xl font-black text-black tracking-tight leading-none">{profile.name}</h1>
+              {profile.is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-blue-50" />}
             </div>
-            <div className="flex items-center gap-2 text-gray-400"><div className="flex items-center gap-1 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100"><MapPin className="w-2.5 h-2.5 text-[#00A2FF]" /><span className="text-[8px] font-black uppercase tracking-widest">{profile.country || "GLOBAL"}</span></div></div>
+            <div className="flex items-center gap-2 text-gray-400">
+               <div className="flex items-center gap-1 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">
+                 <MapPin className="w-2 h-2 text-[#00A2FF]" />
+                 <span className="text-[7px] font-black uppercase tracking-widest">{profile.country || "GLOBAL"}</span>
+               </div>
+            </div>
           </div>
+
           <div className="flex flex-wrap items-center gap-2">
-            <div className="bg-black text-white px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center gap-2"><span>{profile.gender === 'female' ? '♀' : '♂'}</span><span>{age} Years</span></div>
-            <button onClick={handleCopyId} className="bg-gray-50 hover:bg-gray-100 text-gray-500 px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border border-gray-100 flex items-center gap-2 active:scale-95 transition-all">ID: {profile.match_flow_id || "---"}{copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3 opacity-40" />}</button>
+            <div className="bg-black text-white px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-md flex items-center gap-2"><span>{profile.gender === 'female' ? '♀' : '♂'}</span><span>{age} Years</span></div>
+            <button onClick={handleCopyId} className="bg-gray-50 hover:bg-gray-100 text-gray-400 px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border border-gray-100 flex items-center gap-1.5 active:scale-95 transition-all">ID: {profile.match_flow_id || "---"}{copied ? <Check className="w-2 h-2 text-green-500" /> : <Copy className="w-2 h-2 opacity-30" />}</button>
           </div>
         </div>
+
         {profile.interests && (
-          <section className="space-y-3">
-             <div className="flex items-center gap-2 text-gray-900"><Quote className="w-3 h-3 text-[#00A2FF] rotate-180" /><span className="text-[9px] font-black uppercase tracking-[0.2em]">Bio & Interests</span></div>
-             <div className="bg-gray-50/70 p-6 rounded-2xl border border-black/5 relative overflow-hidden"><Quote className="absolute -right-3 -bottom-3 w-16 h-16 text-black/5 pointer-events-none" /><p className="text-sm font-medium text-gray-700 leading-relaxed italic relative z-10 select-text">"{profile.interests}"</p></div>
+          <section className="space-y-2">
+             <div className="flex items-center gap-1.5 text-gray-900"><Quote className="w-2.5 h-2.5 text-[#00A2FF] rotate-180" /><span className="text-[8px] font-black uppercase tracking-[0.2em]">Bio & Interests</span></div>
+             <div className="bg-gray-50/50 p-4 rounded-xl border border-black/5 relative overflow-hidden"><Quote className="absolute -right-2 -bottom-2 w-10 h-10 text-black/5 pointer-events-none" /><p className="text-xs font-medium text-gray-600 leading-relaxed italic relative z-10 select-text">"{profile.interests}"</p></div>
           </section>
         )}
+
         {allPhotos.length > 1 && (
-          <section className="space-y-3">
-            <div className="flex items-center justify-between px-1"><div className="flex items-center gap-2 text-gray-900"><LayoutGrid className="w-3 h-3 text-[#00A2FF]" /><span className="text-[9px] font-black uppercase tracking-[0.2em]">Visual Gallery</span></div><span className="text-[8px] font-bold text-gray-300 uppercase tracking-widest">{allPhotos.length} Photos</span></div>
+          <section className="space-y-2">
+            <div className="flex items-center justify-between px-1"><div className="flex items-center gap-1.5 text-gray-900"><LayoutGrid className="w-2.5 h-2.5 text-[#00A2FF]" /><span className="text-[8px] font-black uppercase tracking-[0.2em]">Visual Gallery</span></div><span className="text-[7px] font-bold text-gray-300 uppercase tracking-widest">{allPhotos.length} Photos</span></div>
             <div className="grid grid-cols-4 gap-2">
               {allPhotos.map((url, i) => (
-                <div key={url} className="relative aspect-square rounded-xl overflow-hidden cursor-pointer border border-gray-100 shadow-sm active:scale-95 transition-all" onClick={() => { setSelectedPhoto(url); setIsPhotoOpen(true); }}><Image src={url} alt={`Photo ${i}`} fill className="object-cover" sizes="25vw" /></div>
+                <div key={url} className="relative aspect-square rounded-lg overflow-hidden cursor-pointer border border-gray-50 shadow-sm active:scale-95 transition-all" onClick={() => { setSelectedPhoto(url); setIsPhotoOpen(true); }}><Image src={url} alt={`Photo ${i}`} fill className="object-cover" sizes="20vw" /></div>
               ))}
             </div>
           </section>
         )}
-        <div className="grid grid-cols-1 gap-3 pb-8">
+
+        <div className="grid grid-cols-1 gap-2 pb-6">
           <DetailItem icon={Globe} label="Region" value={profile.country || "Not specified"} color="bg-emerald-50 text-emerald-600" />
           <DetailItem icon={GraduationCap} label="Academic" value={profile.education_level || "Not specified"} color="bg-purple-50 text-purple-600" />
           <DetailItem icon={Heart} label="Intentions" value={profile.looking_for || "Exploring"} color="bg-rose-50 text-rose-600" />
@@ -246,7 +261,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
       </div>
 
       {isPhotoOpen && selectedPhoto && (
-        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center animate-in fade-in duration-300" onClick={() => setIsPhotoOpen(false)}><Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setIsPhotoOpen(false); }} className="absolute top-12 right-6 rounded-full bg-white/10 text-white w-12 h-12 z-[110] hover:bg-white/20 transition-all"><X className="w-6 h-6 stroke-[3]" /></Button><div className="relative w-full h-full p-4 flex items-center justify-center"><Image src={selectedPhoto} alt="Full screen" fill className="object-contain" priority sizes="100vw" /></div></div>
+        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center animate-in fade-in duration-300" onClick={() => setIsPhotoOpen(false)}><Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setIsPhotoOpen(false); }} className="absolute top-12 right-6 rounded-full bg-white/10 text-white w-10 h-10 z-[110] hover:bg-white/20 transition-all"><X className="w-5 h-5 stroke-[3]" /></Button><div className="relative w-full h-full p-4 flex items-center justify-center"><Image src={selectedPhoto} alt="Full screen" fill className="object-contain" priority sizes="100vw" /></div></div>
       )}
 
       <Dialog open={reportOpen} onOpenChange={setReportOpen}>
@@ -271,8 +286,9 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
         </DialogContent>
       </Dialog>
 
-      <div className="fixed bottom-0 inset-x-0 p-8 bg-gradient-to-t from-white via-white/95 to-transparent z-50">
-        <Button className="w-full h-16 rounded-2xl bg-[#00A2FF] hover:bg-[#0081CC] text-white text-sm font-black flex items-center justify-center gap-3 shadow-[0_20px_50px_rgba(0,162,255,0.2)] uppercase tracking-[0.2em] active:scale-95 transition-all border-none" onClick={() => router.push(`/chats?startWith=${profile.uid}`)}><MessageSquare className="w-5 h-5 fill-white" />Send Message</Button>
+      {/* FOOTER ACTION */}
+      <div className="fixed bottom-0 inset-x-0 p-6 bg-gradient-to-t from-white via-white/95 to-transparent z-50">
+        <Button className="w-full h-14 rounded-xl bg-[#00A2FF] hover:bg-[#0081CC] text-white text-xs font-black flex items-center justify-center gap-2.5 shadow-xl uppercase tracking-[0.2em] active:scale-95 transition-all border-none" onClick={() => router.push(`/chats?startWith=${profile.uid}`)}><MessageSquare className="w-4 h-4 fill-white" />Send Message</Button>
       </div>
     </div>
   )
@@ -280,9 +296,9 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
 
 function DetailItem({ icon: Icon, label, value, color }: { icon: any, label: string, value: string, color: string }) {
   return (
-    <div className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-black/[0.03] shadow-sm hover:shadow-md transition-shadow">
-      <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-inner", color)}><Icon className="w-5 h-5" /></div>
-      <div className="min-w-0"><p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mb-0.5">{label}</p><p className="text-[13px] font-black text-black truncate tracking-tight">{value}</p></div>
+    <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-black/[0.03] shadow-sm">
+      <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0 shadow-inner", color)}><Icon className="w-4 h-4" /></div>
+      <div className="min-w-0"><p className="text-[7px] font-black text-gray-400 uppercase tracking-[0.2em] mb-0.5">{label}</p><p className="text-[11px] font-black text-black truncate tracking-tight">{value}</p></div>
     </div>
   )
 }

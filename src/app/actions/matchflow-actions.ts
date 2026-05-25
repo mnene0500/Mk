@@ -114,21 +114,32 @@ export async function completeOnboardingAction(payload: {
 export async function deleteUserCompletelyAction(uid: string) {
   const supabase = getSupabaseAdmin();
   try {
-    // 1. Delete chats this user was part of
-    await supabase.from('chats').delete().contains('participant_ids', [uid]);
+    // 1. Manually clear blocking relations and reports to prevent foreign key errors
+    await Promise.all([
+      supabase.from('reports').delete().or(`reporter_id.eq.${uid},reported_id.eq.${uid}`),
+      supabase.from('chats').delete().contains('participant_ids', [uid]),
+      supabase.from('withdrawals').delete().eq('user_id', uid)
+    ]);
+
+    // 2. If user is an agent, handle agency cleanup
+    const { data: userRow } = await supabase.from('users').select('is_agent, agency_id').eq('uid', uid).single();
+    if (userRow?.is_agent && userRow?.agency_id) {
+       await supabase.from('users').update({ agency_id: null, agency_status: null }).eq('agency_id', userRow.agency_id);
+       await supabase.from('agencies').delete().eq('code', userRow.agency_id);
+    }
     
-    // 2. Explicitly delete the profile from public.users
-    // This triggers ON DELETE CASCADE for balances, coin_history, diamond_history, etc.
+    // 3. Explicitly delete the profile from public.users
+    // This triggers ON DELETE CASCADE for balances, coin_history, diamond_history
     await supabase.from('users').delete().eq('uid', uid);
     
-    // 3. Delete the actual Auth account
+    // 4. Delete the actual Auth account
     const { error } = await supabase.auth.admin.deleteUser(uid);
     if (error) throw error;
     
     return { success: true };
   } catch (err: any) {
     console.error("[Delete User Error]:", err.message);
-    return { success: false, error: err.message };
+    return { success: false, error: err.message || "Database synchronization error." };
   }
 }
 
@@ -410,7 +421,7 @@ export async function sendMysteryNoteAction(user_id: string, message: string, re
       await supabase.from('messages').insert({ chat_id: chatId, sender_id: user_id, text: message, timestamp: ts });
     }
     
-    await supabase.from('coin_history').insert({ user_id, amount: -cost, type: 'mystery_note', description: `Blast to ${targets.length} users`, timestamp: ts });
+    await supabase.from('coin_history').insert({ user_id: amount: -cost, type: 'mystery_note', description: `Blast to ${targets.length} users`, timestamp: ts });
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
