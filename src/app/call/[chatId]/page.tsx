@@ -11,8 +11,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
 /**
- * @fileOverview Hardened Agora Call Page with Status Monitoring.
- * Automatically exits if the other side rejects or ends the call.
+ * @fileOverview Overhauled Agora Call Page for reliable Real-time AV communication.
+ * Fixed: Remote user visibility, audio connectivity, and UI cleanup on exit.
  */
 
 export default function CallPage({ params }: { params: Promise<{ chatId: string }> }) {
@@ -59,7 +59,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     return () => { mounted.current = false }
   }, [partnerId])
 
-  // HARDENED STATUS MONITORING
+  // CALL STATUS MONITORING
   useEffect(() => {
     if (!callId) return
     const channel = supabase.channel(`call-status-monitor-${callId}`)
@@ -69,7 +69,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         table: 'calls', 
         filter: `id=eq.${callId}` 
       }, (payload) => {
-        // If call was rejected or ended by the other side
         if (payload.new.status === 'ended' && mounted.current) {
           handleEndCall(false)
         }
@@ -78,6 +77,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     return () => { supabase.removeChannel(channel) }
   }, [callId])
 
+  // BILLING TIMER
   useEffect(() => {
     if (joined && remoteUser && user?.id && partnerId) {
       billingTimer.current = setInterval(async () => {
@@ -104,8 +104,37 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
       
       try {
         const AgoraRTC = (await import('agora-rtc-sdk-ng')).default
-        
-        // PHASE 1: CAMERA PREVIEW (Access camera first during ringing)
+        const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
+        rtc.current.client = client
+
+        // Handle remote users joining/publishing
+        client.on("user-published", async (remote, mediaType) => {
+          await client.subscribe(remote, mediaType)
+          
+          if (mediaType === "video") {
+            setRemoteUser(remote)
+            setIsRinging(false)
+            if (mounted.current) {
+              setTimeout(() => {
+                if (remoteVideoRef.current && remote.videoTrack) {
+                  remote.videoTrack.play(remoteVideoRef.current)
+                }
+              }, 300)
+            }
+          }
+          
+          if (mediaType === "audio") {
+            remote.audioTrack?.play()
+            setIsRinging(false)
+            setRemoteUser((prev: any) => prev || remote)
+          }
+        })
+
+        client.on("user-left", () => {
+          if (mounted.current) handleEndCall(false)
+        })
+
+        // PRE-JOIN MEDIA (Camera Preview)
         if (type === 'video') {
           try {
             const videoTrack = await AgoraRTC.createCameraVideoTrack({
@@ -118,65 +147,22 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
             }
           } catch (vErr) {
             console.error("Camera access denied:", vErr)
-            setPermissionError("Please allow camera access to start the video call.")
+            setPermissionError("Camera access required for video call.")
             return
           }
         }
 
-        const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
-        rtc.current.client = client
-
-        client.on("user-published", async (remote, mediaType) => {
-          if (!mounted.current) return
-          await client.subscribe(remote, mediaType)
-          
-          if (mediaType === "video") {
-            setRemoteUser(remote)
-            setIsRinging(false)
-            setTimeout(() => {
-              if (remoteVideoRef.current && remote.videoTrack && mounted.current) {
-                remote.videoTrack.play(remoteVideoRef.current)
-              }
-            }, 500)
-          }
-          
-          if (mediaType === "audio") {
-            remote.audioTrack?.play()
-            setIsRinging(false)
-            setRemoteUser((prev: any) => prev || remote)
-          }
-
-          // PHASE 2: ACTIVATE MIC ONCE CONNECTED
-          if (!rtc.current.localAudioTrack) {
-             try {
-                const audioTrack = await AgoraRTC.createMicrophoneAudioTrack()
-                rtc.current.localAudioTrack = audioTrack
-                if (mounted.current && rtc.current.client) {
-                    await rtc.current.client.publish(audioTrack)
-                }
-             } catch (aErr) {
-                console.error("Mic access denied on connection:", aErr)
-             }
-          }
-        })
-
-        client.on("user-left", () => {
-          if (mounted.current) handleEndCall(false)
-        })
-
+        // JOIN AND PUBLISH
         const tokenData = await generateAgoraTokenAction(chatId, user.id)
-        if (!mounted.current) throw new Error("Unmounted")
-
         await client.join(tokenData.appId, tokenData.channelName, tokenData.token, tokenData.uid)
         
-        if (rtc.current.localVideoTrack) {
-          await client.publish(rtc.current.localVideoTrack)
-        } else if (type === 'voice') {
-           const audioTrack = await AgoraRTC.createMicrophoneAudioTrack()
-           rtc.current.localAudioTrack = audioTrack
-           await client.publish(audioTrack)
-        }
-
+        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack()
+        rtc.current.localAudioTrack = audioTrack
+        
+        const tracksToPublish = [audioTrack]
+        if (rtc.current.localVideoTrack) tracksToPublish.push(rtc.current.localVideoTrack)
+        
+        await client.publish(tracksToPublish)
         setJoined(true)
       } catch (err: any) {
         console.error("Call Init Error:", err)
@@ -195,11 +181,10 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   }, [chatId, user?.id])
 
   const shutdownAgora = async () => {
-    const { client, localAudioTrack, localVideoTrack } = rtc.current
-    if (localAudioTrack) { localAudioTrack.stop(); localAudioTrack.close(); rtc.current.localAudioTrack = null; }
-    if (localVideoTrack) { localVideoTrack.stop(); localVideoTrack.close(); rtc.current.localVideoTrack = null; }
-    if (client) {
-      try { await client.leave() } catch (e) {}
+    if (rtc.current.localAudioTrack) { rtc.current.localAudioTrack.stop(); rtc.current.localAudioTrack.close(); rtc.current.localAudioTrack = null; }
+    if (rtc.current.localVideoTrack) { rtc.current.localVideoTrack.stop(); rtc.current.localVideoTrack.close(); rtc.current.localVideoTrack = null; }
+    if (rtc.current.client) {
+      try { await rtc.current.client.leave() } catch (e) {}
       rtc.current.client = null
     }
   }
@@ -275,7 +260,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
       <div className="fixed inset-0 bg-zinc-900 z-[100] flex flex-col items-center justify-center p-10 text-center">
         <AlertCircle className="w-16 h-16 text-red-500 mb-6" />
         <h2 className="text-white text-xl font-bold mb-2">Permission Required</h2>
-        <p className="text-zinc-400 text-sm mb-8 leading-relaxed">{permissionError}</p>
+        <p className="text-zinc-400 text-sm mb-8">{permissionError}</p>
         <Button onClick={() => router.back()} className="w-full h-14 rounded-full bg-white text-black font-bold">Go Back</Button>
       </div>
     )
@@ -283,6 +268,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
 
   return (
     <div className="fixed inset-0 bg-black z-[100] flex flex-col items-center justify-center select-none overflow-hidden">
+      {/* REMOTE VIDEO / PLACEHOLDER */}
       <div className="absolute inset-0 z-0">
         {type === 'video' && remoteUser ? (
           <div ref={remoteVideoRef} className="w-full h-full bg-black" />
@@ -298,7 +284,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
              <h2 className="text-white text-2xl font-black mt-6 tracking-tight">{partnerProfile?.name || 'Connecting...'}</h2>
              <div className="flex flex-col items-center gap-2 mt-4">
                 <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.3em]">
-                  {joined ? (remoteUser ? formatDuration(duration) : 'Ringing...') : 'Initializing Media...'}
+                  {joined ? (remoteUser ? formatDuration(duration) : 'Ringing...') : 'Connecting Media...'}
                 </p>
                 {remoteUser && duration < 11 && (
                   <div className="px-4 py-1.5 bg-green-500/20 text-green-400 rounded-full border border-green-500/30">
@@ -310,6 +296,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         )}
       </div>
 
+      {/* LOCAL VIDEO PREVIEW */}
       {type === 'video' && (
         <div className={cn(
           "absolute transition-all duration-500 overflow-hidden border-2 border-white/20 shadow-2xl z-20",
@@ -326,6 +313,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         </div>
       )}
 
+      {/* CONTROLS */}
       <div className="absolute bottom-12 inset-x-0 px-8 flex items-center justify-center gap-4 z-50">
         <button onClick={toggleMute} className={cn("w-14 h-14 rounded-full backdrop-blur-xl border border-white/10 shadow-2xl transition-all active:scale-90 flex items-center justify-center", muted ? "bg-red-500 text-white" : "bg-white/10 text-white")}>
           {muted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}

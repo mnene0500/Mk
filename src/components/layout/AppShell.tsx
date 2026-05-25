@@ -14,7 +14,7 @@ import { useRouter } from "next/navigation"
 
 /**
  * @fileOverview Signaling Shell for incoming calls.
- * Hardened signaling listener for reliable ringing.
+ * Optimized signaling for reliable two-way connection.
  */
 function ShellContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -35,7 +35,6 @@ function ShellContent({ children }: { children: React.ReactNode }) {
         table: 'calls', 
         filter: `receiver_id=eq.${user.id}` 
       }, async (payload) => {
-        // If a new call record is created with status 'calling'
         if (payload.new.status === 'calling') {
           const { data } = await supabase.from('users').select('*').eq('uid', payload.new.caller_id).single()
           setCallerProfile(data)
@@ -48,7 +47,6 @@ function ShellContent({ children }: { children: React.ReactNode }) {
         table: 'calls',
         filter: `receiver_id=eq.${user.id}`
       }, (payload) => {
-        // If caller cancels or receiver rejects (updates status to 'ended')
         if (payload.new.status === 'ended') {
           setIncomingCall(null)
           setCallerProfile(null)
@@ -66,7 +64,7 @@ function ShellContent({ children }: { children: React.ReactNode }) {
     if (!incomingCall) return
     const call = incomingCall
     setIncomingCall(null)
-    router.push(`/call/${call.chat_id}?type=${call.type}&partnerId=${call.caller_id}&callId=${call.id}`)
+    router.replace(`/call/${call.chat_id}?type=${call.type}&partnerId=${call.caller_id}&callId=${call.id}`)
   }
 
   const handleReject = async () => {
