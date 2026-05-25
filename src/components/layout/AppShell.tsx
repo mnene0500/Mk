@@ -1,3 +1,4 @@
+
 "use client"
 
 import { usePathname, useSearchParams } from "next/navigation"
@@ -23,7 +24,7 @@ function ShellContent({ children }: { children: React.ReactNode }) {
   const [incomingCall, setIncomingCall] = useState<any>(null)
   const [callerProfile, setCallerProfile] = useState<any>(null)
 
-  // Listen for incoming calls
+  // Listen for incoming calls via the 'calls' table
   useEffect(() => {
     if (!user?.id) return
 
@@ -34,6 +35,7 @@ function ShellContent({ children }: { children: React.ReactNode }) {
         filter: `receiver_id=eq.${user.id}` 
       }, async (payload) => {
         if (payload.new.status === 'calling') {
+          // Fetch caller profile
           const { data } = await supabase.from('users').select('*').eq('uid', payload.new.caller_id).single()
           setCallerProfile(data)
           setIncomingCall(payload.new)

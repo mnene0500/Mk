@@ -1,6 +1,7 @@
+
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
@@ -44,6 +45,7 @@ export default function HomePage() {
   const [profile, setProfile] = useState<any>(null)
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
+  const isFetched = useRef(false)
 
   const fetchUsers = useCallback(async (pageNum = 0, isManual = false) => {
     if (!profile) return;
@@ -84,21 +86,31 @@ export default function HomePage() {
   }, [currentUser?.id, profile, activeTab]);
 
   useEffect(() => {
-    if (isInitialized && currentUser) {
+    if (isInitialized && currentUser && !profile) {
       supabase.from('users').select('uid, gender, country, onboarding_complete').eq('uid', currentUser.id).single()
         .then(({ data }) => {
           if (data?.onboarding_complete) {
             setProfile(data);
-          } else if (!data) {
+          } else if (!data && !authLoading) {
              router.replace("/fastonboard");
           }
         });
     }
-  }, [isInitialized, currentUser, router]);
+  }, [isInitialized, currentUser, router, profile, authLoading]);
 
   useEffect(() => {
-    if (profile) fetchUsers(0);
-  }, [profile, activeTab, fetchUsers]);
+    if (profile && !isFetched.current) {
+      fetchUsers(0);
+      isFetched.current = true;
+    }
+  }, [profile, fetchUsers]);
+
+  // Handle tab switching stabilization
+  useEffect(() => {
+    if (profile) {
+      fetchUsers(0);
+    }
+  }, [activeTab]);
 
   if (authLoading || !isInitialized) return (
     <div className="fixed inset-0 bg-white flex items-center justify-center select-none z-[9999]">

@@ -81,7 +81,6 @@ function ChatsContent() {
   const fetchSummaries = useCallback(async () => {
     if (!currentUser?.id) return
     
-    // 1. Fetch raw chat records
     const { data: chatsData } = await supabase
       .from('chats')
       .select('id, participant_ids, last_message, last_message_at, cleared_at, last_seen_at')
@@ -94,17 +93,15 @@ function ChatsContent() {
       return
     }
 
-    // 2. Fetch block status to filter them out entirely
     const { data: userData } = await supabase.from('users').select('blocking, blocked_by').eq('uid', currentUser.id).single();
     const blockedUids = new Set([...(userData?.blocking || []), ...(userData?.blocked_by || [])]);
 
-    // 3. Filter chats that are NOT cleared and NOT blocked
     const validChats = chatsData.filter(c => {
       const pId = c.participant_ids.find((id: string) => id !== currentUser.id)
       if (!pId || blockedUids.has(pId)) return false;
 
       const myClearedAt = (c.cleared_at as Record<string, number>)?.[currentUser.id] || 0;
-      // Strict filter: If the last message is older than or equal to the clear timestamp, don't show
+      // ONLY HIDE IF: The last message timestamp is older than or equal to the time I cleared it
       return (c.last_message_at > myClearedAt);
     });
 
@@ -114,7 +111,6 @@ function ChatsContent() {
       return
     }
 
-    // 4. Batch fetch all partner profiles in ONE query to avoid flickering
     const partnerIds = validChats.map(c => c.participant_ids.find((id: string) => id !== currentUser.id));
     const { data: profiles } = await supabase
       .from('users')
@@ -123,7 +119,6 @@ function ChatsContent() {
 
     const profileMap = new Map(profiles?.map(p => [p.uid, p]));
 
-    // 5. Combine data into final summaries
     const enhanced: ChatSummary[] = validChats.map(c => {
       const pId = c.participant_ids.find((id: string) => id !== currentUser.id);
       const p = profileMap.get(pId);
@@ -151,8 +146,7 @@ function ChatsContent() {
     if (currentUser?.id && !startWithId) {
       fetchSummaries()
       const channel = supabase.channel('chats_realtime_summaries')
-        .on('postgres_changes', { event: 'UPDATE', table: 'chats', schema: 'public' }, () => fetchSummaries())
-        .on('postgres_changes', { event: 'INSERT', table: 'chats', schema: 'public' }, () => fetchSummaries())
+        .on('postgres_changes', { event: '*', table: 'chats' }, () => fetchSummaries())
         .subscribe()
       return () => { supabase.removeChannel(channel) }
     }
@@ -189,7 +183,7 @@ function ChatsContent() {
     fetchMessages()
     
     const channel = supabase.channel(`messages:${chatId}`)
-      .on('postgres_changes', { event: 'INSERT', table: 'messages', schema: 'public', filter: `chat_id=eq.${chatId}` }, (payload) => {
+      .on('postgres_changes', { event: 'INSERT', table: 'messages', filter: `chat_id=eq.${chatId}` }, (payload) => {
         const newMsg = payload.new as Message
         if (newMsg.timestamp <= activeChatClearedAt) return
         setMessages(prev => [newMsg, ...prev.filter(m => m.id !== `temp-${newMsg.timestamp}`)]);
@@ -219,7 +213,6 @@ function ChatsContent() {
     const targetId = id || chatId
     if (!currentUser || !targetId) return
 
-    // 1. Optimistic Update: Hide the chat instantly
     setChatSummaries(prev => prev.filter(s => s.id !== targetId))
     
     const res = await clearChatAction(currentUser.id, targetId)
@@ -230,9 +223,24 @@ function ChatsContent() {
         if (startWithId) router.push("/chats") 
       }
     } else {
-      // If error, bring it back
       fetchSummaries()
       toast({ variant: "destructive", title: "Could not delete chat" })
+    }
+  }
+
+  const handleCall = async (type: 'video' | 'voice') => {
+    if (!currentUser || !startWithId || !chatId) return
+    const res = await checkCallBalanceAction(currentUser.id, type)
+    if (!res.success) {
+      toast({ variant: "destructive", title: "Balance Low", description: res.error })
+      router.push('/recharge')
+      return
+    }
+    const startRes = await startCallAction(chatId, currentUser.id, startWithId, type)
+    if (startRes.success) {
+      router.push(`/call/${chatId}?type=${type}&partnerId=${startWithId}&callId=${startRes.callId}`)
+    } else {
+      toast({ variant: "destructive", title: "Call Failed", description: startRes.error })
     }
   }
 
@@ -337,6 +345,8 @@ function ChatsContent() {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <Button size="icon" variant="ghost" onClick={() => handleCall('video')} className="rounded-full text-[#00A2FF]"><Video className="w-5 h-5" /></Button>
+          <Button size="icon" variant="ghost" onClick={() => handleCall('voice')} className="rounded-full text-[#00A2FF]"><Phone className="w-5 h-5" /></Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="rounded-full text-gray-400"><MoreVertical className="w-5 h-5" /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="rounded-2xl min-w-[160px]">
