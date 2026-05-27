@@ -16,8 +16,7 @@ import { useBalance } from "@/lib/providers/BalanceProvider"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
 /**
- * @fileOverview Me Page with Special User support.
- * Only shows public MatchFlow ID, no internal UUIDs.
+ * @fileOverview Me Page with Fetch Guards to prevent flickering and redundant reloads.
  */
 export default function MePage() {
   const router = useRouter()
@@ -31,28 +30,37 @@ export default function MePage() {
   const [agencyCode, setAgencyCode] = useState("")
   const [agencyName, setAgencyName] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
+  
+  // FETCH GUARD: Prevents fetching if data is already loaded in the current session
   const fetchGuard = useRef(false)
 
   const fetchProfile = useCallback(async () => {
     if (!user?.id) return
+    if (fetchGuard.current && profile) {
+      setIsReady(true)
+      return
+    }
+    
     try {
       const { data } = await supabase.from('users').select('*').eq('uid', user.id).maybeSingle();
-      if (data) setProfile(data)
+      if (data) {
+        setProfile(data)
+        fetchGuard.current = true
+      }
     } catch (e) {
       console.error("Profile load error")
     } finally {
       setIsReady(true)
     }
-  }, [user?.id])
+  }, [user?.id, profile])
 
   useEffect(() => {
     if (isInitialized && !authLoading && !user) {
         router.replace("/welcome")
         return
     }
-    if (user?.id && !fetchGuard.current) {
+    if (user?.id) {
         fetchProfile()
-        fetchGuard.current = true
     }
   }, [user, isInitialized, authLoading, fetchProfile, router])
 
@@ -69,7 +77,9 @@ export default function MePage() {
     setIsProcessing(true)
     const res = await joinAgencyAction(user.id, agencyCode)
     if (res.success) {
-      toast({ title: "Request Sent" }); fetchProfile()
+      toast({ title: "Request Sent" });
+      fetchGuard.current = false; // Allow re-fetch
+      fetchProfile()
     } else {
       toast({ variant: "destructive", title: "Error", description: res.error })
     }
@@ -81,7 +91,9 @@ export default function MePage() {
     setIsProcessing(true)
     const res = await leaveAgencyAction(user.id)
     if (res.success) {
-      toast({ title: "Left Agency" }); fetchProfile()
+      toast({ title: "Left Agency" });
+      fetchGuard.current = false;
+      fetchProfile()
     } else {
       toast({ variant: "destructive", title: "Error", description: res.error })
     }
@@ -93,7 +105,9 @@ export default function MePage() {
     setIsProcessing(true)
     const res = await createAgencyAction(user.id, agencyName)
     if (res.success) {
-      toast({ title: "Agency Created!" }); fetchProfile()
+      toast({ title: "Agency Created!" });
+      fetchGuard.current = false;
+      fetchProfile()
     } else {
       toast({ variant: "destructive", title: "Error", description: res.error })
     }

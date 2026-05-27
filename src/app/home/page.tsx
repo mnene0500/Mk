@@ -34,7 +34,7 @@ function calculateAge(dob: string) {
 }
 
 /**
- * @fileOverview Home feed with Fetch Guards and Independent Buttons.
+ * @fileOverview Home feed with Fetch Guards to prevent redundant loading and flickering.
  */
 export default function HomePage() {
   const router = useRouter()
@@ -46,14 +46,20 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<'Recommend' | 'Nearby'>('Recommend')
   const [profile, setProfile] = useState<any>(null)
   
+  // SESSION CACHE GUARDS
   const hasFetched = useRef(false)
   const fetchGuard = useRef(false)
 
   const fetchUsers = useCallback(async (isManual = false) => {
-    if (!profile || (fetchGuard.current && !isManual)) return;
+    if (!profile) return;
+    // Don't auto-fetch if we already have data, unless it's a manual refresh
+    if (fetchGuard.current && !isManual) {
+      setInitialLoading(false);
+      return;
+    }
     
     if (isManual) setIsRefreshing(true);
-    if (!isManual) setInitialLoading(true);
+    if (!isManual && users.length === 0) setInitialLoading(true);
     fetchGuard.current = true;
 
     try {
@@ -80,7 +86,7 @@ export default function HomePage() {
       setIsRefreshing(false);
       setInitialLoading(false);
     }
-  }, [currentUser?.id, profile, activeTab]);
+  }, [currentUser?.id, profile, activeTab, users.length]);
 
   useEffect(() => {
     if (isInitialized && currentUser && !profile) {
@@ -105,6 +111,7 @@ export default function HomePage() {
   const handleTabChange = (tab: 'Recommend' | 'Nearby') => {
     if (activeTab === tab) return
     setActiveTab(tab)
+    // When switching tabs, we allow one new fetch
     fetchGuard.current = false 
     hasFetched.current = false 
   }

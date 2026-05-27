@@ -156,13 +156,14 @@ function ChatsContent() {
       const ids = [currentUser.id, startWithId].sort()
       const cId = `direct_${ids[0]}_${ids[1]}`
       
-      // IMMEDIATE RESET to prevent "blink"
+      // IMMEDIATE RESET to prevent "blink" of old state
       setMessages([])
       setChatId(cId)
+      setPartnerProfile(null)
       
       markChatAsReadAction(currentUser.id, cId);
       
-      supabase.from('users').select('uid, name, photo_url, is_verified, blocking, blocked_by').eq('uid', startWithId).maybeSingle().then(({ data }) => setPartnerProfile(data))
+      supabase.from('users').select('uid, name, photo_url, is_verified, blocking, blocked_by, is_owner, is_special_user').eq('uid', startWithId).maybeSingle().then(({ data }) => setPartnerProfile(data))
       
       supabase.from('chats').select('cleared_at').eq('id', cId).maybeSingle().then(({ data }) => {
         const cleared = (data?.cleared_at as Record<string, number>)?.[currentUser.id] || 0
@@ -185,17 +186,27 @@ function ChatsContent() {
 
     if (!res.success) {
       setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
-      toast({ variant: "destructive", title: "Error", description: res.error || "Failed to send." })
+      toast({ variant: "destructive", title: "Error", description: res.error === 'insufficient_funds' ? "Insufficient coins." : "Failed to send." })
     }
   }, [chatId, currentUser?.id, newMessage, startWithId, toast]);
 
   const handleSendGift = async (gift: typeof GIFTS[0]) => {
     if (!currentUser?.id || !startWithId || !chatId) return;
+
+    // PRE-EMPTIVE COIN CHECK to prevent jumping UI
+    const { data: profile } = await supabase.from('users').select('is_owner, is_special_user').eq('uid', currentUser.id).single();
+    const isFree = profile?.is_owner || profile?.is_special_user;
+
+    if (!isFree && coins < gift.price) {
+      toast({ variant: "destructive", title: "Insufficient Coins", description: `You need ${gift.price} coins.` });
+      return;
+    }
     
     setIsGifting(true);
     const ts = Date.now();
     const giftMsg = `[Gift: ${gift.name}]`;
-    // OPTIMISTIC UPDATE: No animation here to prevent "jumping"
+    
+    // OPTIMISTIC UPDATE
     const optimistic: Message = { id: `gift-${ts}`, text: giftMsg, sender_id: currentUser.id, timestamp: ts, is_gift: true, is_optimistic: true };
     
     setMessages(prev => [optimistic, ...prev]);
@@ -237,17 +248,15 @@ function ChatsContent() {
         const newMsg = payload.new as Message
         if (newMsg.timestamp <= activeChatClearedAt) return
         
-        // BETTER DEDUPLICATION: Check for optimistic message and replace
         setMessages(prev => {
           const isFromMe = newMsg.sender_id === currentUser?.id;
           if (isFromMe) {
-            // Find temp message that matches approximately (within 5s)
+            // Replace temp message with actual database message
             const matched = prev.find(m => m.is_optimistic && Math.abs(m.timestamp - newMsg.timestamp) < 5000);
             if (matched) {
                return [newMsg, ...prev.filter(m => m.id !== matched.id)];
             }
           }
-          // If not from me or no match, just append if not already there
           if (prev.some(m => m.id === newMsg.id)) return prev;
           return [newMsg, ...prev];
         });
@@ -276,7 +285,6 @@ function ChatsContent() {
 
   const handleTouchStart = (id: string) => {
     isLongPress.current = false
-    // FASTER POPUP: 400ms instead of 700ms
     longPressTimer.current = setTimeout(() => {
       isLongPress.current = true
       setDeletingChatId(id)

@@ -40,7 +40,6 @@ export const BalanceProvider = ({ children }: { children: React.ReactNode }) => 
       }
 
       // 2. Realtime Listener (Filtered to this user only)
-      // Listen for ALL events to catch the first-time welcome bonus (INSERT)
       balanceChannel = supabase
         .channel(`bal-realtime-${user.id}`)
         .on(
