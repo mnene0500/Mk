@@ -54,6 +54,9 @@ const GIFTS = [
   { name: "Galaxy", icon: "🌌", price: 50000 },
 ]
 
+// GLOBAL CACHE
+let cachedSummaries: ChatSummary[] = [];
+
 function ChatsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -66,8 +69,7 @@ function ChatsContent() {
   const [chatId, setChatId] = useState<string | null>(null)
   const [newMessage, setNewMessage] = useState("")
   const [messages, setMessages] = useState<Message[]>([])
-  const [chatSummaries, setChatSummaries] = useState<ChatSummary[]>([])
-  const [loading, setLoading] = useState(true)
+  const [chatSummaries, setChatSummaries] = useState<ChatSummary[]>(cachedSummaries)
   const [partnerProfile, setPartnerProfile] = useState<any>(null)
   const [activeChatClearedAt, setActiveChatClearedAt] = useState<number>(0)
   const [isGifting, setIsGifting] = useState(false)
@@ -88,10 +90,7 @@ function ChatsContent() {
       .order('last_message_at', { ascending: false })
       .limit(30);
 
-    if (!chatsData) {
-      setLoading(false)
-      return
-    }
+    if (!chatsData) return
 
     const { data: userData } = await supabase.from('users').select('blocking, blocked_by').eq('uid', currentUser.id).single();
     const blockedUids = new Set([...(userData?.blocking || []), ...(userData?.blocked_by || [])]);
@@ -106,7 +105,7 @@ function ChatsContent() {
 
     if (validChats.length === 0) {
       setChatSummaries([])
-      setLoading(false)
+      cachedSummaries = []
       return
     }
 
@@ -138,7 +137,7 @@ function ChatsContent() {
     });
 
     setChatSummaries(enhanced)
-    setLoading(false)
+    cachedSummaries = enhanced
   }, [currentUser?.id])
 
   useEffect(() => {
@@ -192,6 +191,7 @@ function ChatsContent() {
   const handleSendGift = async (gift: typeof GIFTS[0]) => {
     if (!currentUser?.id || !startWithId || !chatId) return;
 
+    // PRE-CHECK BALANCE
     const { data: profile } = await supabase.from('users').select('is_owner, is_special_user').eq('uid', currentUser.id).single();
     const isFree = profile?.is_owner || profile?.is_special_user;
 
@@ -312,7 +312,7 @@ function ChatsContent() {
         <h1 className="text-3xl font-logo text-[#00A2FF]">Chats</h1>
       </header>
       <main className="flex flex-col">
-        {chatSummaries.length === 0 && !loading ? (
+        {chatSummaries.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-40 opacity-40 px-12 text-center text-gray-300">
             <User className="w-12 h-12 mb-4" />
             <p className="font-bold text-xs uppercase tracking-widest">No conversations</p>

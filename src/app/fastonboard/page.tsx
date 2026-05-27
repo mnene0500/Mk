@@ -22,10 +22,6 @@ const LOOKING_FOR_OPTIONS = [
   "Serious partner", "Casual friendship", "Networking", "Dating", "Travel buddy"
 ]
 
-/**
- * @fileOverview High-speed, high-visibility single-page onboarding.
- * Designed to show all key buttons and fields without excessive scrolling.
- */
 export default function FastOnboardingPage() {
   const [gender, setGender] = useState("")
   const [country, setCountry] = useState("")
