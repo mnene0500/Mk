@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo, useRef } from "react"
@@ -128,7 +129,7 @@ export default function FastOnboardingPage() {
           <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.2em]">Tap the icon to upload</p>
         </main>
 
-        <footer className="p-6 bg-white border-t shrink-0">
+        <footer className="p-6 bg-white border-t shrink-0 pb-[env(safe-area-inset-bottom)]">
           <Button 
             disabled={!uploadedPhoto || loading}
             onClick={handleComplete}
@@ -142,7 +143,7 @@ export default function FastOnboardingPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-white min-h-screen relative animate-in fade-in duration-500 overflow-hidden">
+    <div className="flex-1 flex flex-col bg-white min-h-screen relative animate-in fade-in duration-300 overflow-hidden">
       <header className="px-6 pt-10 pb-4 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center shadow-sm">
@@ -152,7 +153,7 @@ export default function FastOnboardingPage() {
         </div>
       </header>
 
-      <main className="flex-1 px-6 pt-2 pb-10 space-y-5 overflow-y-auto no-scrollbar">
+      <main className="flex-1 px-6 pt-2 pb-10 space-y-4 overflow-y-auto no-scrollbar">
         <div className="space-y-4">
           <div className="space-y-2">
             <Label className="text-[9px] font-black uppercase text-gray-400 ml-1 flex items-center gap-1.5"><User className="w-3 h-3"/> I am a</Label>
@@ -210,7 +211,7 @@ export default function FastOnboardingPage() {
         </div>
       </main>
 
-      <footer className="p-6 bg-white border-t shrink-0">
+      <footer className="p-6 bg-white border-t shrink-0 pb-[env(safe-area-inset-bottom)]">
         <Button 
           disabled={!canContinue() || loading}
           onClick={handleComplete}

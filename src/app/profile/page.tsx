@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useCallback, useRef } from "react"
@@ -15,7 +16,7 @@ import { createAgencyAction, joinAgencyAction, leaveAgencyAction } from "@/app/a
 import { useBalance } from "@/lib/providers/BalanceProvider"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
-// GLOBAL CACHE
+// GLOBAL CACHE to survive tab switches
 let cachedProfile: any = null;
 
 export default function MePage() {
@@ -115,12 +116,13 @@ export default function MePage() {
   const cacheBust = profile?.updated_at ? new Date(profile.updated_at).getTime() : Date.now()
 
   return (
-    <div className="flex-1 pb-24 bg-white min-h-screen relative select-none animate-in fade-in duration-300">
+    <div className="flex-1 pb-24 bg-white min-h-screen relative select-none animate-in fade-in duration-200">
       <div className="absolute top-0 left-0 w-full h-[280px] bg-[#00A2FF]" />
       <div className="relative z-10">
         <header className="pt-12 pb-10 px-6 flex flex-col items-center text-center">
           <div className="relative mb-4">
-            <div className="relative w-28 h-28 rounded-full overflow-hidden bg-gray-100 shadow-none border-none">
+            {/* FLAT DESIGN: NO BORDERS, NO SHADOWS */}
+            <div className="relative w-28 h-28 rounded-full overflow-hidden bg-gray-100">
               <Image src={`${displayPhoto}?t=${cacheBust}`} alt={profile?.name || "Me"} fill className="object-cover" sizes="112px" priority />
             </div>
             <button className="absolute bottom-1 right-1 bg-white p-2.5 rounded-full shadow-xl active:scale-90 transition-transform" onClick={() => router.push('/edit-profile')}>
