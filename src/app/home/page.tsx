@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
@@ -23,6 +24,7 @@ interface UserProfile {
 
 const PAGE_SIZE = 12;
 
+// GLOBAL CACHE to survive tab switches and navigation
 let cachedUsers: UserProfile[] = [];
 let cachedTab: 'Recommend' | 'Nearby' = 'Recommend';
 let cachedPage = 0;
@@ -51,8 +53,11 @@ export default function HomePage() {
   
   const hasFetched = useRef(false)
 
-  const fetchUsers = useCallback(async (pageNum = 0, isManual = false) => {
+  // fetchUsers overhauled to accept tab directly to prevent race conditions
+  const fetchUsers = useCallback(async (pageNum = 0, isManual = false, targetTab?: 'Recommend' | 'Nearby') => {
     if (!profile) return;
+    
+    const currentTab = targetTab || activeTab;
     if (pageNum === 0 && isManual) setIsRefreshing(true);
     if (pageNum > 0) setIsLoadingMore(true);
 
@@ -61,7 +66,7 @@ export default function HomePage() {
       const to = from + PAGE_SIZE - 1;
       const oppositeGender = profile.gender === 'male' ? 'female' : profile.gender === 'female' ? 'male' : null;
 
-      const query = supabase
+      let query = supabase
         .from('users')
         .select('uid, name, photo_url, country, dob, is_verified, updated_at')
         .eq('onboarding_complete', true)
@@ -69,10 +74,20 @@ export default function HomePage() {
         .order('updated_at', { ascending: false })
         .range(from, to);
 
-      if (oppositeGender) query.eq('gender', oppositeGender);
-      if (activeTab === 'Nearby' && profile.country) query.eq('country', profile.country);
+      if (oppositeGender) {
+        query = query.eq('gender', oppositeGender);
+      }
+      
+      // RECOMMEND: No country filter
+      // NEARBY: Strict country filter
+      if (currentTab === 'Nearby' && profile.country) {
+        query = query.eq('country', profile.country);
+      }
 
-      const { data } = await query;
+      const { data, error } = await query;
+      
+      if (error) throw error;
+
       if (data) {
         const filtered = (data as any[]).filter(u => u.uid !== currentUser?.id);
         
@@ -100,6 +115,7 @@ export default function HomePage() {
     }
   }, [currentUser?.id, profile, activeTab]);
 
+  // Handle Profile Load
   useEffect(() => {
     if (isInitialized && currentUser && !profile) {
       supabase.from('users').select('uid, gender, country, onboarding_complete').eq('uid', currentUser.id).single()
@@ -113,22 +129,24 @@ export default function HomePage() {
     }
   }, [isInitialized, currentUser, router, profile, authLoading]);
 
+  // Initial Data Fetch
   useEffect(() => {
     if (profile && !hasFetched.current) {
       if (cachedUsers.length === 0) {
-        fetchUsers(0);
+        fetchUsers(0, true, activeTab);
       }
       hasFetched.current = true;
     }
-  }, [profile, fetchUsers]);
+  }, [profile, fetchUsers, activeTab]);
 
   const handleTabChange = (tab: 'Recommend' | 'Nearby') => {
-    if (activeTab === tab) return
-    setActiveTab(tab)
-    cachedTab = tab
+    if (activeTab === tab) return;
+    setActiveTab(tab);
+    cachedTab = tab;
     setPage(0);
     cachedPage = 0;
-    fetchUsers(0, true);
+    // Pass tab directly to bypass async state update lag
+    fetchUsers(0, true, tab);
   }
 
   const handleLoadMore = () => {
@@ -152,13 +170,13 @@ export default function HomePage() {
         </button>
       </div>
 
-      {/* STICKY TAB BAR */}
+      {/* STICKY TAB BAR - FIXED AT TOP OF SCROLL */}
       <div className="sticky top-0 z-50 bg-[#00A2FF] px-6 py-4 flex items-center justify-between border-b border-white/10 shadow-md">
         <div className="flex items-center gap-8">
           {(['Recommend', 'Nearby'] as const).map((tab) => (
             <button key={tab} onClick={() => handleTabChange(tab)} className={cn("text-sm font-black transition-all relative pb-1 uppercase tracking-widest", activeTab === tab ? "text-white" : "text-white/40")}>
               {tab}
-              {activeTab === tab && <div className="absolute -bottom-1 left-0 right-0 h-1 bg-white rounded-full" />}
+              {activeTab === tab && <div className="absolute -bottom-1 left-0 right-0 h-1 bg-white rounded-full animate-in fade-in" />}
             </button>
           ))}
         </div>
@@ -209,9 +227,11 @@ export default function HomePage() {
           </>
         ) : (
           !isRefreshing && (
-            <div className="flex flex-col items-center justify-center py-40 opacity-20">
+            <div className="flex flex-col items-center justify-center py-40 opacity-20 text-center px-10">
               <Target className="w-12 h-12 mb-4 text-gray-400" />
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">No users here</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                {activeTab === 'Nearby' ? "No users found in your country" : "No users here"}
+              </p>
             </div>
           )
         )}
