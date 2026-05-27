@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, Suspense, useCallback, useRef } from "react"
@@ -173,7 +172,7 @@ function ChatsContent() {
   }, [currentUser?.id, startWithId, fetchSummaries])
 
   // --------------------------------------------------------------------------
-  // CONVERSATION LOGIC (PAGINATED)
+  // CONVERSATION LOGIC (PAGINATED ON SCROLL)
   // --------------------------------------------------------------------------
   const fetchMessagesBatch = useCallback(async (isLoadMore = false) => {
     if (!chatId || activeChatClearedAt === -1 || loadingMessages) return;
@@ -310,8 +309,8 @@ function ChatsContent() {
   // RENDER CHAT LIST
   // --------------------------------------------------------------------------
   if (!startWithId) return (
-    <div className="flex-1 bg-white min-h-screen relative select-none animate-in fade-in duration-200">
-      <header className="px-6 h-16 flex items-center border-b sticky top-0 bg-white/90 backdrop-blur-md z-[100]">
+    <div className="flex-1 bg-white min-h-screen relative select-none">
+      <header className="px-6 h-16 flex items-center border-b sticky top-0 bg-white/90 backdrop-blur-md z-[50]">
         <h1 className="text-3xl font-logo text-[#00A2FF]">Chats</h1>
       </header>
       <main className="flex flex-col pb-32">
@@ -364,7 +363,7 @@ function ChatsContent() {
   // --------------------------------------------------------------------------
   return (
     <div className="flex flex-col h-screen bg-white select-none overflow-hidden">
-      <header className="h-16 border-b flex items-center px-4 gap-4 bg-white z-[100] sticky top-0">
+      <header className="h-16 border-b flex items-center px-4 gap-4 bg-white z-[50] sticky top-0">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
         <div className="flex items-center gap-3 flex-1 cursor-pointer active:opacity-70 transition-opacity min-w-0" onClick={() => router.push(`/users/${startWithId}`)}>
           <Avatar className="w-10 h-10 border shrink-0"><AvatarImage src={partnerProfile?.photo_url} className="object-cover" /><AvatarFallback>{partnerProfile?.name?.[0]}</AvatarFallback></Avatar>
@@ -396,15 +395,15 @@ function ChatsContent() {
         })}
 
         {hasMoreMessages && (
-          <div className="py-8 flex justify-center">
-             <Button variant="ghost" onClick={() => fetchMessagesBatch(true)} disabled={loadingMessages} className="text-[9px] font-black uppercase tracking-widest text-gray-400">
+          <div className="py-10 flex justify-center">
+             <Button variant="ghost" onClick={() => fetchMessagesBatch(true)} disabled={loadingMessages} className="text-[10px] font-black uppercase tracking-widest text-gray-400">
                {loadingMessages ? <Loader2 className="animate-spin w-4 h-4" /> : "Load older messages"}
              </Button>
           </div>
         )}
       </main>
 
-      <footer className="p-4 border-t bg-white pb-[env(safe-area-inset-bottom)] z-[100] sticky bottom-0">
+      <footer className="p-4 border-t bg-white pb-[env(safe-area-inset-bottom)] z-[50] sticky bottom-0">
         <div className="flex items-center gap-2">
           <Dialog open={giftDialogOpen} onOpenChange={setGiftDialogOpen}>
             <DialogTrigger asChild><Button size="icon" variant="ghost" className="rounded-full h-12 w-12 text-pink-500"><Gift className="w-6 h-6" /></Button></DialogTrigger>

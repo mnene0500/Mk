@@ -3,10 +3,11 @@
 import { usePathname, useSearchParams } from "next/navigation"
 import { BottomNav } from "./BottomNav"
 import { Suspense } from "react"
+import { cn } from "@/lib/utils"
 
 /**
  * @fileOverview Signaling Shell.
- * Calling features removed.
+ * Optimized for native feel and fixed navigation.
  */
 function ShellContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -16,11 +17,20 @@ function ShellContent({ children }: { children: React.ReactNode }) {
   const isVisible = ['/home', '/chats', '/profile'].includes(pathname || "") && !isChatDetail
 
   return (
-    <div className="flex-1 flex flex-col relative min-h-screen overflow-x-hidden">
-      <main className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col relative min-h-screen overflow-x-hidden bg-white">
+      {/* WRAP CHILDREN IN TRANSITION CONTAINER INDEPENDENT OF FIXED NAV */}
+      <main className={cn(
+        "flex-1 flex flex-col relative z-0",
+        "native-page-transition"
+      )}>
         {children}
       </main>
-      {isVisible && <BottomNav />}
+      
+      {isVisible && (
+        <div className="relative z-[100]">
+          <BottomNav />
+        </div>
+      )}
     </div>
   )
 }

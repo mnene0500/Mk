@@ -1,4 +1,3 @@
-
 "use client"
 
 import Link from "next/link"
@@ -11,7 +10,7 @@ import { useUser } from "@/firebase/auth/use-user"
 
 /**
  * @fileOverview High-fidelity Fixed Bottom Navigation.
- * Truly fixed at the bottom with high z-index.
+ * Truly fixed at the bottom with high z-index and optimized layering.
  */
 export function BottomNav() {
   const pathname = usePathname()
@@ -53,7 +52,7 @@ export function BottomNav() {
   ]
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-white border-t h-16 flex items-center justify-around px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_30px_rgba(0,0,0,0.08)]">
+    <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-white/95 backdrop-blur-xl border-t h-16 flex items-center justify-around px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgba(0,0,0,0.06)]">
       {navItems.map((item) => {
         const isActive = pathname === item.href || (item.href === '/chats' && pathname === '/chats')
         
@@ -72,7 +71,7 @@ export function BottomNav() {
             )}>
               <item.icon className={cn("w-6 h-6", isActive ? "text-[#00A2FF] fill-current" : "text-gray-400")} />
               {item.badge !== undefined && item.badge > 0 && (
-                <div className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-in zoom-in">
+                <div className="absolute top-0 right-0 bg-red-500 text-white text-[8px] font-black min-w-[16px] h-4 rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-in zoom-in">
                   {item.badge > 9 ? '9+' : item.badge}
                 </div>
               )}
