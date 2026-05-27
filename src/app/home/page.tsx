@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
-import { RotateCw, BadgeCheck, Loader2, FileText, Target, MessageSquare } from "lucide-react"
+import { RotateCw, BadgeCheck, FileText, Target, MessageSquare } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
@@ -33,33 +33,23 @@ function calculateAge(dob: string) {
   return age
 }
 
-/**
- * @fileOverview Home feed with Fetch Guards to prevent redundant loading and flickering.
- */
 export default function HomePage() {
   const router = useRouter()
   const { user: currentUser, loading: authLoading, isInitialized } = useUser()
   
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [users, setUsers] = useState<UserProfile[]>([])
-  const [initialLoading, setInitialLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'Recommend' | 'Nearby'>('Recommend')
   const [profile, setProfile] = useState<any>(null)
   
-  // SESSION CACHE GUARDS
   const hasFetched = useRef(false)
   const fetchGuard = useRef(false)
 
   const fetchUsers = useCallback(async (isManual = false) => {
     if (!profile) return;
-    // Don't auto-fetch if we already have data, unless it's a manual refresh
-    if (fetchGuard.current && !isManual) {
-      setInitialLoading(false);
-      return;
-    }
+    if (fetchGuard.current && !isManual) return;
     
     if (isManual) setIsRefreshing(true);
-    if (!isManual && users.length === 0) setInitialLoading(true);
     fetchGuard.current = true;
 
     try {
@@ -84,9 +74,8 @@ export default function HomePage() {
       console.error("Fetch Users Error:", err);
     } finally {
       setIsRefreshing(false);
-      setInitialLoading(false);
     }
-  }, [currentUser?.id, profile, activeTab, users.length]);
+  }, [currentUser?.id, profile, activeTab]);
 
   useEffect(() => {
     if (isInitialized && currentUser && !profile) {
@@ -111,18 +100,11 @@ export default function HomePage() {
   const handleTabChange = (tab: 'Recommend' | 'Nearby') => {
     if (activeTab === tab) return
     setActiveTab(tab)
-    // When switching tabs, we allow one new fetch
     fetchGuard.current = false 
     hasFetched.current = false 
   }
 
-  if (authLoading || !isInitialized) return (
-    <div className="fixed inset-0 bg-white flex items-center justify-center select-none z-[9999]">
-       <h1 className="text-7xl font-logo font-black text-[#00A2FF] tracking-tight animate-pulse">
-         QIVO
-       </h1>
-    </div>
-  );
+  if (authLoading || !isInitialized) return null;
 
   return (
     <div className="flex-1 pb-24 bg-white min-h-screen relative select-none">
@@ -141,7 +123,7 @@ export default function HomePage() {
             {(['Recommend', 'Nearby'] as const).map((tab) => (
               <button key={tab} onClick={() => handleTabChange(tab)} className={cn("text-sm font-black transition-all relative pb-2", activeTab === tab ? "text-white" : "text-white/40")}>
                 {tab}
-                {activeTab === tab && <div className="absolute -bottom-1 left-0 right-0 h-1 bg-white rounded-full animate-in zoom-in" />}
+                {activeTab === tab && <div className="absolute -bottom-1 left-0 right-0 h-1 bg-white rounded-full" />}
               </button>
             ))}
           </div>
@@ -152,33 +134,29 @@ export default function HomePage() {
       </div>
 
       <main className="px-4 pt-4 space-y-4">
-        {initialLoading ? (
-          <div className="grid grid-cols-2 gap-2.5">{[...Array(6)].map((_, i) => <div key={i} className="aspect-[1/1.3] rounded-[1.2rem] bg-gray-100 animate-pulse" />)}</div>
-        ) : (
-          <div className="grid grid-cols-2 gap-2.5 pb-10">
-            {users.map((u) => (
-              <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.3] rounded-[1.2rem] shadow-sm bg-gray-50 active:scale-95 transition-all cursor-pointer group" onClick={() => router.push(`/users/${u.uid}`)}>
-                <Image src={`${u.photo_url}?t=${u.updated_at}`} alt={u.name} fill className="object-cover" sizes="50vw" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                <div className="absolute inset-x-0 bottom-0 p-3 text-white flex flex-col gap-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1 mb-0.5">
-                      <h4 className="font-black text-sm truncate tracking-tight">{u.name}</h4>
-                      {u.is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-white shrink-0" />}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="bg-[#00B200] text-white font-black text-[7px] px-1.5 py-0.5 rounded-sm">{calculateAge(u.dob)}</span>
-                      <span className="text-[7px] font-bold uppercase truncate opacity-70">{u.country}</span>
-                    </div>
+        <div className="grid grid-cols-2 gap-2.5 pb-10">
+          {users.map((u) => (
+            <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.3] rounded-[1.2rem] shadow-sm bg-gray-50 active:scale-95 transition-all cursor-pointer group" onClick={() => router.push(`/users/${u.uid}`)}>
+              <Image src={`${u.photo_url}?t=${u.updated_at}`} alt={u.name} fill className="object-cover" sizes="50vw" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 p-3 text-white flex flex-col gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <h4 className="font-black text-sm truncate tracking-tight">{u.name}</h4>
+                    {u.is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-white shrink-0" />}
                   </div>
-                  <Button size="sm" className="w-full h-8 rounded-lg bg-[#00A2FF] hover:bg-[#0081CC] text-white font-black text-[10px] uppercase tracking-widest gap-2 shadow-lg z-10" onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }}>
-                    <MessageSquare className="w-3 h-3" />CHAT
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <span className="bg-[#00B200] text-white font-black text-[7px] px-1.5 py-0.5 rounded-sm">{calculateAge(u.dob)}</span>
+                    <span className="text-[7px] font-bold uppercase truncate opacity-70">{u.country}</span>
+                  </div>
                 </div>
-              </Card>
-            ))}
-          </div>
-        )}
+                <Button size="sm" className="w-full h-8 rounded-lg bg-[#00A2FF] hover:bg-[#0081CC] text-white font-black text-[10px] uppercase tracking-widest gap-2 shadow-lg z-10" onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }}>
+                  <MessageSquare className="w-3 h-3" />CHAT
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
       </main>
     </div>
   )

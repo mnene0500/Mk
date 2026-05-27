@@ -6,8 +6,8 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
 
 /**
- * Root Redirector / Splash Screen.
- * Displays the cinematic QIVO brand while verifying authentication and onboarding status.
+ * Root Redirector.
+ * Optimized for instant redirection without splash screens.
  */
 export default function RootPage() {
   const router = useRouter()
@@ -42,11 +42,6 @@ export default function RootPage() {
     checkOnboarding()
   }, [user, isInitialized, authLoading, router])
 
-  return (
-    <div className="fixed inset-0 bg-white flex items-center justify-center select-none animate-in fade-in duration-700">
-       <h1 className="text-7xl font-logo font-black text-[#00A2FF] tracking-tight">
-         QIVO
-       </h1>
-    </div>
-  )
+  // Returns nothing to ensure zero flash of content before redirect
+  return null
 }

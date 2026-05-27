@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Settings, ChevronRight, Copy, Check, BadgeCheck, Headphones, Pencil, Gem, Award, Briefcase, UserPlus, Wallet, Shield, PlusCircle, UserCheck, Loader2, Flag, Star } from "lucide-react"
+import { Settings, ChevronRight, Copy, Check, BadgeCheck, Headphones, Pencil, Gem, Award, Briefcase, UserPlus, Wallet, Shield, PlusCircle, UserCheck, Flag, Star } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
@@ -15,9 +15,6 @@ import { createAgencyAction, joinAgencyAction, leaveAgencyAction } from "@/app/a
 import { useBalance } from "@/lib/providers/BalanceProvider"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
-/**
- * @fileOverview Me Page with Fetch Guards to prevent flickering and redundant reloads.
- */
 export default function MePage() {
   const router = useRouter()
   const { user, loading: authLoading, isInitialized } = useUser()
@@ -31,7 +28,6 @@ export default function MePage() {
   const [agencyName, setAgencyName] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   
-  // FETCH GUARD: Prevents fetching if data is already loaded in the current session
   const fetchGuard = useRef(false)
 
   const fetchProfile = useCallback(async () => {
@@ -78,7 +74,7 @@ export default function MePage() {
     const res = await joinAgencyAction(user.id, agencyCode)
     if (res.success) {
       toast({ title: "Request Sent" });
-      fetchGuard.current = false; // Allow re-fetch
+      fetchGuard.current = false;
       fetchProfile()
     } else {
       toast({ variant: "destructive", title: "Error", description: res.error })
@@ -114,11 +110,7 @@ export default function MePage() {
     setIsProcessing(false)
   }
 
-  if (!isReady || authLoading) return (
-    <div className="fixed inset-0 bg-white flex items-center justify-center select-none z-[9999]">
-       <h1 className="text-7xl font-logo font-black text-[#00A2FF] tracking-tight animate-pulse">QIVO</h1>
-    </div>
-  );
+  if (!isReady || authLoading) return null;
 
   const isOwner = !!(profile?.is_owner || profile?.is_admin)
   const isSpecial = !!profile?.is_special_user
@@ -132,7 +124,7 @@ export default function MePage() {
   const cacheBust = profile?.updated_at ? new Date(profile.updated_at).getTime() : Date.now()
 
   return (
-    <div className="flex-1 pb-24 bg-[#F8F9FA] min-h-screen relative animate-in fade-in duration-300 select-none">
+    <div className="flex-1 pb-24 bg-[#F8F9FA] min-h-screen relative select-none">
       <div className="absolute top-0 left-0 w-full h-[280px] bg-[#00A2FF]" />
       <div className="relative z-10">
         <header className="pt-12 pb-10 px-6 flex flex-col items-center text-center">

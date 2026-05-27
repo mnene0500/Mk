@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Send, ChevronLeft, Loader2, User, Gift, Trash2, MoreVertical, BadgeCheck } from "lucide-react"
+import { Send, ChevronLeft, User, Gift, Trash2, MoreVertical, BadgeCheck } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
@@ -156,7 +156,6 @@ function ChatsContent() {
       const ids = [currentUser.id, startWithId].sort()
       const cId = `direct_${ids[0]}_${ids[1]}`
       
-      // IMMEDIATE RESET to prevent "blink" of old state
       setMessages([])
       setChatId(cId)
       setPartnerProfile(null)
@@ -193,7 +192,6 @@ function ChatsContent() {
   const handleSendGift = async (gift: typeof GIFTS[0]) => {
     if (!currentUser?.id || !startWithId || !chatId) return;
 
-    // PRE-EMPTIVE COIN CHECK to prevent jumping UI
     const { data: profile } = await supabase.from('users').select('is_owner, is_special_user').eq('uid', currentUser.id).single();
     const isFree = profile?.is_owner || profile?.is_special_user;
 
@@ -206,7 +204,6 @@ function ChatsContent() {
     const ts = Date.now();
     const giftMsg = `[Gift: ${gift.name}]`;
     
-    // OPTIMISTIC UPDATE
     const optimistic: Message = { id: `gift-${ts}`, text: giftMsg, sender_id: currentUser.id, timestamp: ts, is_gift: true, is_optimistic: true };
     
     setMessages(prev => [optimistic, ...prev]);
@@ -251,7 +248,6 @@ function ChatsContent() {
         setMessages(prev => {
           const isFromMe = newMsg.sender_id === currentUser?.id;
           if (isFromMe) {
-            // Replace temp message with actual database message
             const matched = prev.find(m => m.is_optimistic && Math.abs(m.timestamp - newMsg.timestamp) < 5000);
             if (matched) {
                return [newMsg, ...prev.filter(m => m.id !== matched.id)];
@@ -308,7 +304,7 @@ function ChatsContent() {
     }
   }
 
-  if (authLoading || !isInitialized) return <div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
+  if (authLoading || !isInitialized) return null;
 
   if (!startWithId) return (
     <div className="flex-1 bg-white min-h-screen pb-20 select-none">
@@ -316,7 +312,7 @@ function ChatsContent() {
         <h1 className="text-3xl font-logo text-[#00A2FF]">Chats</h1>
       </header>
       <main className="flex flex-col">
-        {loading ? (<div className="py-20 flex justify-center"><Loader2 className="animate-spin text-[#00A2FF]" /></div>) : chatSummaries.length === 0 ? (
+        {chatSummaries.length === 0 && !loading ? (
           <div className="flex flex-col items-center justify-center py-40 opacity-40 px-12 text-center text-gray-300">
             <User className="w-12 h-12 mb-4" />
             <p className="font-bold text-xs uppercase tracking-widest">No conversations</p>
@@ -445,4 +441,4 @@ function ChatsContent() {
   )
 }
 
-export default function ChatsPage() { return <Suspense fallback={<div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>}><ChatsContent /></Suspense> }
+export default function ChatsPage() { return <Suspense fallback={null}><ChatsContent /></Suspense> }
