@@ -71,8 +71,8 @@ export default function HomePage() {
         .select('uid, name, photo_url, country, dob, is_verified, updated_at')
         .eq('onboarding_complete', true)
         .is('is_deleted', false)
-        .not('uid', 'in', `(${[currentUser?.id, ...blockedList].join(',')})`)
-        .order('updated_at', { ascending: false }) // Prioritize recent activity
+        .not('uid', 'in', `(${[currentUser?.id, ...blockedList].filter(Boolean).join(',')})`)
+        .order('updated_at', { ascending: false }) 
         .range(from, to);
 
       if (oppositeGender) {
@@ -88,31 +88,33 @@ export default function HomePage() {
       if (error) throw error;
 
       if (data) {
-        let filtered = (data as any[]).filter(u => u.uid !== currentUser?.id);
+        let results = data as any[];
         
-        // Manual Shuffle logic for "Recommend" to feel fresh
         if (isManual && currentTab === 'Recommend') {
-          filtered = [...filtered].sort(() => Math.random() - 0.5);
+          results = [...results].sort(() => Math.random() - 0.5);
         }
 
         if (pageNum === 0) {
-          setUsers(filtered);
-          cachedUsers = filtered;
+          setUsers(results);
+          cachedUsers = results;
         } else {
           setUsers(prev => {
              const existingIds = new Set(prev.map(u => u.uid));
-             const uniqueNew = filtered.filter(u => !existingIds.has(u.uid));
+             const uniqueNew = results.filter(u => !existingIds.has(u.uid));
              return [...prev, ...uniqueNew];
           });
-          cachedUsers = [...cachedUsers, ...filtered.filter(u => !new Set(cachedUsers.map(x => u.uid)).has(u.uid))];
+          cachedUsers = [...cachedUsers, ...results.filter(u => !new Set(cachedUsers.map(x => u.uid)).has(u.uid))];
         }
         
-        setHasMore(data.length === PAGE_SIZE);
+        setHasMore(results.length === PAGE_SIZE);
         setPage(pageNum);
         cachedPage = pageNum;
+      } else {
+        setHasMore(false);
       }
     } catch (err) {
       console.error("Fetch Users Error:", err);
+      setHasMore(false);
     } finally {
       setIsRefreshing(false);
       setIsLoadingMore(false);
@@ -156,16 +158,6 @@ export default function HomePage() {
     return () => observer.disconnect();
   }, [hasMore, isLoadingMore, isRefreshing, page, fetchUsers, profile]);
 
-  useEffect(() => {
-    const handleRefresh = (e: any) => {
-      if (e.detail.path === '/home') {
-        fetchUsers(0, true);
-      }
-    }
-    window.addEventListener('qivo-nav-refresh', handleRefresh);
-    return () => window.removeEventListener('qivo-nav-refresh', handleRefresh);
-  }, [fetchUsers])
-
   const handleTabChange = (tab: 'Recommend' | 'Nearby') => {
     if (activeTab === tab) return;
     setActiveTab(tab);
@@ -186,7 +178,7 @@ export default function HomePage() {
           onClick={() => router.push('/mystery-note')} 
           className="h-28 bg-gradient-to-br from-purple-500/80 to-purple-700/90 border border-white/20 rounded-2xl p-6 flex flex-col items-start justify-center gap-1 active:scale-95 transition-all text-white shadow-xl relative overflow-hidden group backdrop-blur-sm"
         >
-          <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-2xl group-active:scale-150 transition-transform" />
+          <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-2xl transition-transform" />
           <FileText className="w-6 h-6 mb-1 text-purple-100" />
           <div className="text-left">
             <p className="text-[13px] font-black tracking-tight leading-none mb-1">Message Blast</p>
@@ -198,7 +190,7 @@ export default function HomePage() {
           onClick={() => router.push('/tasks')} 
           className="h-28 bg-gradient-to-br from-blue-600/80 to-indigo-800/90 border border-white/20 rounded-2xl p-6 flex flex-col items-start justify-center gap-1 active:scale-95 transition-all text-white shadow-xl relative overflow-hidden group backdrop-blur-sm"
         >
-          <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-2xl group-active:scale-150 transition-transform" />
+          <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-2xl transition-transform" />
           <Target className="w-6 h-6 mb-1 text-blue-100" />
           <div className="text-left">
             <p className="text-[13px] font-black tracking-tight leading-none mb-1">Task Center</p>
@@ -216,7 +208,7 @@ export default function HomePage() {
             </button>
           ))}
         </div>
-        <button onClick={() => fetchUsers(0, true)} className={cn("p-2 text-white active:scale-90 transition-transform", isRefreshing && "animate-spin")}>
+        <button onClick={() => fetchUsers(0, true)} className={cn("p-2 text-white active:opacity-70 transition-opacity", isRefreshing && "animate-spin")}>
           <RotateCw className="w-4 h-4" />
         </button>
       </div>
@@ -226,11 +218,10 @@ export default function HomePage() {
           <>
             <div className="grid grid-cols-2 gap-2.5">
               {users.map((u) => {
-                // Determine if user was active recently (last 5 mins)
                 const isRecentlyActive = (Date.now() - new Date(u.updated_at).getTime()) < 300000;
                 
                 return (
-                  <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.25] rounded-lg shadow-lg bg-gray-50 active:scale-95 transition-all cursor-pointer" onClick={() => router.push(`/users/${u.uid}`)}>
+                  <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.25] rounded-lg shadow-lg bg-gray-50 cursor-pointer" onClick={() => router.push(`/users/${u.uid}`)}>
                     <Image src={`${u.photo_url}?t=${u.updated_at}`} alt={u.name} fill className="object-cover" sizes="50vw" priority />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                     
@@ -242,7 +233,7 @@ export default function HomePage() {
                     )}
 
                     <Button 
-                      className="absolute top-2 right-2 rounded-full h-7 px-4 bg-[#00A2FF]/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest shadow-xl z-20 active:scale-90 border border-white/20" 
+                      className="absolute top-2 right-2 rounded-full h-7 px-4 bg-[#00A2FF]/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest shadow-xl z-20 active:opacity-80 border border-white/20" 
                       onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }}
                     >
                       Chat
@@ -265,14 +256,14 @@ export default function HomePage() {
               })}
             </div>
             
-            <div ref={observerTarget} className="h-20 flex items-center justify-center py-10">
-              {hasMore && (
+            {hasMore && (
+              <div ref={observerTarget} className="h-24 flex items-center justify-center py-10">
                 <div className="flex items-center gap-2 text-gray-400">
                   <Loader2 className="w-4 h-4 animate-spin text-[#00A2FF]" />
                   <span className="text-[10px] font-bold tracking-widest uppercase">Searching...</span>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </>
         ) : (
           !isRefreshing && (

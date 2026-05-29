@@ -105,7 +105,12 @@ function ChatsContent() {
       .order('last_message_at', { ascending: false })
       .range(from, to);
 
-    if (!chatsData) {
+    if (!chatsData || chatsData.length === 0) {
+      if (pageNum === 0) {
+        setChatSummaries([]);
+        cachedSummaries = [];
+      }
+      setHasMoreSummaries(false);
       setLoadingSummaries(false);
       return;
     }
@@ -208,13 +213,14 @@ function ChatsContent() {
         setMessages(data);
       }
       setHasMoreMessages(data.length === MESSAGE_PAGE_SIZE);
+    } else {
+      setHasMoreMessages(false);
     }
     setLoadingMessages(false);
   }, [chatId, activeChatClearedAt, messages, hasMoreMessages, loadingMessages]);
 
   const handleDeleteChat = async (id: string) => {
     if (!currentUser) return
-    // Immediate UI update
     setChatSummaries(prev => prev.filter(s => s.id !== id))
     setDeletingChatId(null)
     const res = await clearChatAction(currentUser.id, id)
@@ -345,7 +351,7 @@ function ChatsContent() {
               <div key={s.id} onPointerDown={() => handleTouchStart(s.id)} onPointerUp={() => handleTouchEnd(s.partner_id)} className="p-4 flex items-center gap-4 active:bg-gray-50 border-b border-gray-50 transition-colors cursor-pointer touch-none">
                 <div className="relative">
                   <Avatar 
-                    className="w-14 h-14 border cursor-pointer active:scale-95 transition-transform" 
+                    className="w-14 h-14 border cursor-pointer active:opacity-80 transition-opacity" 
                     onClick={(e) => { e.stopPropagation(); router.push(`/users/${s.partner_id}`); }}
                   >
                     <AvatarImage src={s.partner_photo} className="object-cover" />
@@ -362,9 +368,11 @@ function ChatsContent() {
                 </div>
               </div>
             ))}
-            <div ref={observerTarget} className="h-20 flex items-center justify-center">
-              {hasMoreSummaries && <Loader2 className="w-4 h-4 animate-spin text-[#00A2FF]" />}
-            </div>
+            {hasMoreSummaries && (
+              <div ref={observerTarget} className="h-20 flex items-center justify-center">
+                <Loader2 className="w-4 h-4 animate-spin text-[#00A2FF]" />
+              </div>
+            )}
           </>
         )}
       </main>
@@ -427,7 +435,7 @@ function ChatsContent() {
         <div className="flex items-center gap-3 max-w-5xl mx-auto w-full">
           <Dialog open={giftDialogOpen} onOpenChange={(open) => { setGiftDialogOpen(open); if(!open) setSelectedGift(null); }}>
             <DialogTrigger asChild>
-              <Button size="icon" variant="ghost" className="rounded-full h-12 w-12 bg-pink-50 text-pink-500 shrink-0 shadow-sm border border-pink-100 active:scale-90 transition-transform">
+              <Button size="icon" variant="ghost" className="rounded-full h-12 w-12 bg-pink-50 text-pink-500 shrink-0 shadow-sm border border-pink-100 active:opacity-80 transition-opacity">
                 <Gift className="w-6 h-6 fill-current" />
               </Button>
             </DialogTrigger>
@@ -453,7 +461,7 @@ function ChatsContent() {
                     key={gift.name} 
                     onClick={() => setSelectedGift(gift)}
                     className={cn(
-                      "flex flex-col items-center p-3 rounded-xl active:scale-95 transition-all border-2",
+                      "flex flex-col items-center p-3 rounded-xl transition-all border-2",
                       selectedGift?.name === gift.name 
                         ? "bg-pink-500/20 border-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.3)]" 
                         : "bg-white/5 border-transparent hover:bg-white/10"
@@ -500,7 +508,7 @@ function ChatsContent() {
             size="icon" 
             disabled={!newMessage.trim()}
             className={cn(
-              "rounded-full h-12 w-12 shrink-0 shadow-xl transition-all active:scale-90",
+              "rounded-full h-12 w-12 shrink-0 shadow-xl transition-all active:opacity-80",
               newMessage.trim() ? "bg-[#00A2FF] text-white shadow-blue-200" : "bg-gray-100 text-gray-400 shadow-none"
             )}
           >

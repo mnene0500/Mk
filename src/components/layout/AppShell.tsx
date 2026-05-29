@@ -1,4 +1,3 @@
-
 "use client"
 
 import { usePathname, useSearchParams } from "next/navigation"
@@ -8,11 +7,9 @@ import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 
 /**
- * @fileOverview Viewport-Centric App Shell.
- * Optimized for hydration safety and scroll persistence.
+ * @fileOverview Viewport-Centric App Shell with Scroll Persistence.
+ * Fix: Uses sessionStorage to persist scroll across sessions/reloads.
  */
-
-let scrollCache: Record<string, number> = {};
 
 function ShellContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -20,7 +17,6 @@ function ShellContent({ children }: { children: React.ReactNode }) {
   const { user } = useUser()
   const mainRef = useRef<HTMLElement>(null)
   
-  // HYDRATION SAFETY FLAG
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
     setMounted(true)
@@ -39,42 +35,43 @@ function ShellContent({ children }: { children: React.ReactNode }) {
     return navRoutes.includes(pathname || "") && !isChatDetail && !isCall && !isWelcome && !isAuth && !isSplash && !isFastOnboard;
   }, [mounted, user, pathname, isChatDetail, isCall, isWelcome, isAuth, isSplash, isFastOnboard]);
 
-  // RESTORE SCROLL
+  // SCROLL PERSISTENCE ENGINE
   useEffect(() => {
-    if (mainRef.current && mounted) {
-      const savedPosition = scrollCache[pathname || ''] || 0;
-      mainRef.current.scrollTop = savedPosition;
+    if (mainRef.current && mounted && pathname) {
+      const saved = sessionStorage.getItem(`scroll_${pathname}`);
+      if (saved) {
+        // Delay scroll restoration to allow data to render
+        setTimeout(() => {
+          if (mainRef.current) mainRef.current.scrollTop = parseInt(saved);
+        }, 50);
+      }
     }
   }, [pathname, mounted])
 
-  // SAVE SCROLL ON LEAVE
   useEffect(() => {
     const currentMain = mainRef.current;
     if (!currentMain || !pathname) return;
 
     const handleScroll = () => {
-      scrollCache[pathname] = currentMain.scrollTop;
+      sessionStorage.setItem(`scroll_${pathname}`, currentMain.scrollTop.toString());
     }
 
-    currentMain.addEventListener('scroll', handleScroll);
-    return () => {
-      currentMain.removeEventListener('scroll', handleScroll);
-    }
+    currentMain.addEventListener('scroll', handleScroll, { passive: true });
+    return () => currentMain.removeEventListener('scroll', handleScroll);
   }, [pathname])
 
-  // LISTEN FOR GLOBAL REFRESH EVENT (Scroll to Top)
+  // GLOBAL REFRESH -> SCROLL TO TOP
   useEffect(() => {
     const handleRefresh = (e: any) => {
       if (e.detail.path === pathname && mainRef.current) {
         mainRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-        scrollCache[pathname] = 0;
+        sessionStorage.setItem(`scroll_${pathname}`, '0');
       }
     }
     window.addEventListener('qivo-nav-refresh', handleRefresh);
     return () => window.removeEventListener('qivo-nav-refresh', handleRefresh);
   }, [pathname])
 
-  // STABLE CONTAINER: Keep classes consistent between server/client to prevent hydration mismatches
   return (
     <div className="flex flex-col h-screen w-full overflow-hidden bg-white relative">
       <main 
