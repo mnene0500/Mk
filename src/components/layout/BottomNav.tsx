@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { Home, MessageSquare, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useEffect, useState } from "react"
@@ -16,9 +16,14 @@ export function BottomNav() {
   const pathname = usePathname()
   const { user } = useUser()
   const [totalUnread, setTotalUnread] = useState(0)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    if (!user?.id) return
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!user?.id || !mounted) return
     
     const fetchUnread = async () => {
       const { data } = await supabase
@@ -43,7 +48,7 @@ export function BottomNav() {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [user?.id])
+  }, [user?.id, mounted])
 
   const handleNavClick = (e: React.MouseEvent, href: string) => {
     if (pathname === href) {
@@ -58,6 +63,8 @@ export function BottomNav() {
     { label: "Chat", icon: MessageSquare, href: "/chats", badge: totalUnread },
     { label: "Me", icon: User, href: "/profile" },
   ]
+
+  if (!mounted) return null
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-white/95 backdrop-blur-xl border-t h-16 flex items-center justify-around px-2 pb-[env(safe-area-inset-bottom,4px)] shadow-[0_-10px_30px_rgba(0,0,0,0.06)]">

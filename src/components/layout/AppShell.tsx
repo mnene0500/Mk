@@ -2,7 +2,7 @@
 
 import { usePathname, useSearchParams } from "next/navigation"
 import { BottomNav } from "./BottomNav"
-import { Suspense, useRef, useEffect, useMemo } from "react"
+import { Suspense, useRef, useEffect, useMemo, useState } from "react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 
@@ -10,6 +10,7 @@ import { useUser } from "@/firebase/auth/use-user"
  * @fileOverview Viewport-Centric App Shell.
  * Ensures persistent UI (BottomNav) stays fixed while content scrolls independently.
  * Implements Scroll Persistence and single-click scroll-to-top logic.
+ * Optimized for hydration safety.
  */
 
 let scrollCache: Record<string, number> = {};
@@ -17,8 +18,9 @@ let scrollCache: Record<string, number> = {};
 function ShellContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const { user, isInitialized } = useUser()
+  const { user } = useUser()
   const mainRef = useRef<HTMLElement>(null)
+  const [mounted, setMounted] = useState(false)
   
   const isChatDetail = pathname === '/chats' && searchParams.has('startWith')
   const isCall = pathname?.startsWith('/call/')
@@ -26,19 +28,24 @@ function ShellContent({ children }: { children: React.ReactNode }) {
   const isAuth = pathname === '/auth'
   const isSplash = pathname === '/'
   
+  // Hydration safety: ensure mounted state
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   const showNav = useMemo(() => {
+    if (!mounted) return false;
     const navRoutes = ['/home', '/chats', '/profile'];
-    // Re-evaluate whenever user OR pathname changes
     return !!user && navRoutes.includes(pathname || "") && !isChatDetail && !isCall && !isWelcome && !isAuth && !isSplash;
-  }, [user, pathname, isChatDetail, isCall, isWelcome, isAuth, isSplash]);
+  }, [mounted, user, pathname, isChatDetail, isCall, isWelcome, isAuth, isSplash]);
 
   // RESTORE SCROLL
   useEffect(() => {
-    if (mainRef.current) {
+    if (mainRef.current && mounted) {
       const savedPosition = scrollCache[pathname || ''] || 0;
       mainRef.current.scrollTop = savedPosition;
     }
-  }, [pathname])
+  }, [pathname, mounted])
 
   // SAVE SCROLL ON LEAVE
   useEffect(() => {

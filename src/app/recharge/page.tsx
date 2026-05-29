@@ -121,7 +121,6 @@ export default function RechargePage() {
 
   return (
     <div className="flex flex-col min-h-full bg-white select-none relative">
-      {/* HEADER: STICKY LOCK */}
       <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-[60]">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full text-black">
@@ -164,7 +163,6 @@ export default function RechargePage() {
         </Button>
       </header>
 
-      {/* SCROLLABLE CONTENT */}
       <main className="flex-1 p-5 space-y-8">
         <div className="flex flex-col items-center gap-2 pt-4">
             <div className="bg-yellow-50 px-6 py-3 rounded-full flex items-center gap-3 border border-yellow-100 shadow-sm">
@@ -230,7 +228,7 @@ export default function RechargePage() {
                 <MessageSquare className="w-4 h-4 text-yellow-400 fill-current" />
               </div>
               <div className="text-left">
-                <span className="block text-[11px] font-black uppercase tracking-widest leading-none">Find Merchant</span>
+                <span className="block text-[11px] font-black uppercase tracking-widest leading-none">Find Coinsellers</span>
                 <span className="text-[8px] opacity-60 font-bold">Manual Transfer & Escrow</span>
               </div>
             </div>
@@ -246,7 +244,6 @@ export default function RechargePage() {
         </div>
       </main>
 
-      {/* FOOTER: STICKY LOCK */}
       <footer className="sticky bottom-0 inset-x-0 p-6 bg-white/95 backdrop-blur-xl border-t border-black/5 z-[60] flex flex-col gap-4 pb-[env(safe-area-inset-bottom,24px)] shadow-[0_-10px_30px_rgba(0,0,0,0.04)]">
         <Button 
           onClick={handleRecharge}
@@ -257,7 +254,7 @@ export default function RechargePage() {
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 fill-current text-yellow-300" />
               {!isPesaPalCountry 
-                ? (selectedPackage ? `Contact Merchant (${formatPrice(selectedPackage.priceKes)})` : "Select a Package")
+                ? (selectedPackage ? `Contact Coinseller (${formatPrice(selectedPackage.priceKes)})` : "Select a Package")
                 : (selectedPackage ? `Recharge Now (${formatPrice(selectedPackage.priceKes)})` : "Select a Package")
               }
             </div>
