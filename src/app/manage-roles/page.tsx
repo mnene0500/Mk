@@ -1,18 +1,33 @@
+
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ChevronLeft, Users, Loader2, UserPlus, UserMinus, Search, ShieldCheck, Briefcase, Coins, Crown, Star } from "lucide-react"
+import { ChevronLeft, Users, Loader2, UserPlus, UserMinus, Search, ShieldCheck, Briefcase, Coins, Crown, Star, Trash2, AlertCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { toggleUserRoleAction } from "@/app/actions/matchflow-actions"
+import { toggleUserRoleAction, deleteUserCompletelyAction } from "@/app/actions/matchflow-actions"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { cn } from "@/lib/utils"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface TargetUser {
   uid: string
   name: string
+  photo_url: string
   match_flow_id: string
   gender: string
   is_coin_seller: boolean
@@ -25,10 +40,14 @@ export default function ManageRolesPage() {
   const router = useRouter()
   const { user } = useUser()
   const { toast } = useToast()
+  
+  const [activeTab, setActiveTab] = useState<'search' | 'merchants' | 'agents' | 'special' | 'owners'>('search')
   const [targetId, setTargetId] = useState("")
   const [targetUser, setTargetUser] = useState<TargetUser | null>(null)
+  const [roleUsers, setRoleUsers] = useState<TargetUser[]>([])
   const [loading, setLoading] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [deletingUid, setDeletingUid] = useState<string | null>(null)
 
   const handleSearch = async () => {
     if (!targetId.trim()) return
@@ -36,7 +55,7 @@ export default function ManageRolesPage() {
     try {
       const { data, error } = await supabase
         .from("users")
-        .select('uid, name, match_flow_id, gender, is_coin_seller, is_agent, is_owner, is_special_user')
+        .select('*')
         .eq("match_flow_id", targetId.trim())
         .maybeSingle()
       
@@ -53,23 +72,41 @@ export default function ManageRolesPage() {
     }
   }
 
-  const handleRoleUpdate = async (role: 'is_coin_seller' | 'is_agent' | 'is_owner' | 'is_special_user', value: boolean) => {
-    if (!user || !targetUser) return
+  const fetchRoleUsers = async () => {
+    if (activeTab === 'search') return
+    setLoading(true)
+    let column = ''
+    if (activeTab === 'merchants') column = 'is_coin_seller'
+    if (activeTab === 'agents') column = 'is_agent'
+    if (activeTab === 'special') column = 'is_special_user'
+    if (activeTab === 'owners') column = 'is_owner'
+
+    const { data } = await supabase.from('users').select('*').eq(column, true).limit(50)
+    setRoleUsers(data as any || [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    fetchRoleUsers()
+  }, [activeTab])
+
+  const handleRoleUpdate = async (role: 'is_coin_seller' | 'is_agent' | 'is_owner' | 'is_special_user', value: boolean, userToUpdate?: TargetUser) => {
+    if (!user) return
+    const target = userToUpdate || targetUser
+    if (!target) return
     
-    // Enforcement: Only females can be agents per policy
-    if (role === 'is_agent' && value === true && targetUser.gender !== 'female') {
+    if (role === 'is_agent' && value === true && target.gender !== 'female') {
       toast({ variant: "destructive", title: "Policy Restriction", description: "Only female users can be appointed as agents." })
       return
     }
 
     setLoading(true)
     try {
-      const result = await toggleUserRoleAction(user.id, targetUser.match_flow_id, role, value)
+      const result = await toggleUserRoleAction(user.id, target.match_flow_id, role, value)
       if (result.success) {
-        toast({ title: "Authority Updated", description: result.message })
-        setTargetUser(prev => prev ? { ...prev, [role]: value } : null)
-      } else {
-        toast({ variant: "destructive", title: "Update Failed", description: result.error })
+        toast({ title: "Authority Updated" })
+        if (userToUpdate) fetchRoleUsers()
+        else setTargetUser(prev => prev ? { ...prev, [role]: value } : null)
       }
     } catch (err: any) {
       toast({ variant: "destructive", title: "Error", description: err.message })
@@ -78,122 +115,135 @@ export default function ManageRolesPage() {
     }
   }
 
+  const handleRemoveAccount = async (uid: string) => {
+    setLoading(true)
+    try {
+      const res = await deleteUserCompletelyAction(uid)
+      if (res.success) {
+        toast({ title: "Account Removed" })
+        if (targetUser?.uid === uid) setTargetUser(null)
+        fetchRoleUsers()
+      }
+    } catch (e) {
+      toast({ variant: "destructive", title: "Action Failed" })
+    } finally {
+      setLoading(false)
+      setDeletingUid(null)
+    }
+  }
+
   return (
     <div className="flex-1 bg-white min-h-screen flex flex-col select-none">
       <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-50">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
-        <h1 className="text-sm font-black text-black uppercase tracking-widest">Authority Manager</h1>
+        <h1 className="text-sm font-black text-black uppercase tracking-widest">Master Console</h1>
         <div className="w-10" />
       </header>
 
-      <main className="flex-1 p-8 flex flex-col items-center space-y-10">
-        <div className="text-center space-y-4">
-          <div className="w-20 h-20 bg-indigo-50 rounded-[2.5rem] flex items-center justify-center mx-auto">
-            <ShieldCheck className="w-10 h-10 text-indigo-600" />
-          </div>
-          <div className="space-y-1">
-            <h2 className="text-2xl font-black text-black tracking-tight uppercase">Master Console</h2>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Manage User Authority Levels</p>
-          </div>
-        </div>
+      <div className="flex border-b sticky top-16 bg-white z-40 overflow-x-auto no-scrollbar">
+        {[
+          { id: 'search', label: 'Search' },
+          { id: 'merchants', label: 'Merchants' },
+          { id: 'agents', label: 'Agents' },
+          { id: 'special', label: 'Special' },
+          { id: 'owners', label: 'Owners' }
+        ].map((tab) => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={cn("px-6 py-4 flex flex-col items-center gap-1 border-b-2 transition-all shrink-0", activeTab === tab.id ? "border-[#00A2FF] text-[#00A2FF]" : "border-transparent text-gray-400")}>
+            <span className="text-[10px] font-black uppercase tracking-tighter">{tab.label}</span>
+          </button>
+        ))}
+      </div>
 
-        <div className="w-full max-w-sm space-y-6">
-          <div className="flex gap-2">
-            <Input 
-              placeholder="QIVO Numeric ID" 
-              value={targetId} 
-              onChange={(e) => setTargetId(e.target.value)} 
-              className="rounded-2xl h-14 border-gray-100 bg-gray-50 font-bold" 
-            />
-            <Button onClick={handleSearch} disabled={searching} className="h-14 w-14 rounded-2xl bg-black">
-              {searching ? <Loader2 className="animate-spin text-white" /> : <Search className="w-5 h-5 text-white" />}
-            </Button>
-          </div>
-
-          {targetUser && (
-            <div className="space-y-8 animate-in fade-in duration-300">
-              <div className="p-5 bg-gray-50 border rounded-3xl text-center space-y-1">
-                <div className="flex items-center justify-center gap-2 mb-1">
-                  <span className="text-xs font-black text-black">{targetUser.name}</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${targetUser.gender === 'female' ? 'bg-pink-100 text-pink-600' : 'bg-blue-100 text-blue-600'}`}>
-                    {targetUser.gender}
-                  </span>
-                </div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">ID: {targetUser.match_flow_id}</p>
-              </div>
-              
-              <div className="space-y-4">
-                {/* SPECIAL USER ROLE */}
-                <div className="p-4 bg-white rounded-2xl border flex items-center justify-between">
-                   <div className="flex items-center gap-3">
-                     <Star className="w-5 h-5 text-yellow-500 fill-current" />
-                     <span className="text-[10px] font-black uppercase text-gray-500">Special User</span>
-                   </div>
-                   <Button 
-                    onClick={() => handleRoleUpdate('is_special_user', !targetUser.is_special_user)} 
-                    disabled={loading}
-                    variant={targetUser.is_special_user ? "destructive" : "outline"}
-                    className="h-9 px-6 rounded-full text-[9px] font-black uppercase tracking-widest"
-                   >
-                     {targetUser.is_special_user ? "Revoke" : "Appoint"}
-                   </Button>
-                </div>
-
-                {/* OWNER ROLE */}
-                <div className="p-4 bg-white rounded-2xl border flex items-center justify-between">
-                   <div className="flex items-center gap-3">
-                     <Crown className="w-5 h-5 text-indigo-600" />
-                     <span className="text-[10px] font-black uppercase text-gray-500">System Owner</span>
-                   </div>
-                   <Button 
-                    onClick={() => handleRoleUpdate('is_owner', !targetUser.is_owner)} 
-                    disabled={loading}
-                    variant={targetUser.is_owner ? "destructive" : "outline"}
-                    className="h-9 px-6 rounded-full text-[9px] font-black uppercase tracking-widest"
-                   >
-                     {targetUser.is_owner ? "Revoke" : "Appoint"}
-                   </Button>
-                </div>
-
-                {/* MERCHANT ROLE */}
-                <div className="p-4 bg-white rounded-2xl border flex items-center justify-between">
-                   <div className="flex items-center gap-3">
-                     <Coins className="w-5 h-5 text-yellow-500" />
-                     <span className="text-[10px] font-black uppercase text-gray-500">Certified Merchant</span>
-                   </div>
-                   <Button 
-                    onClick={() => handleRoleUpdate('is_coin_seller', !targetUser.is_coin_seller)} 
-                    disabled={loading}
-                    variant={targetUser.is_coin_seller ? "destructive" : "outline"}
-                    className="h-9 px-6 rounded-full text-[9px] font-black uppercase tracking-widest"
-                   >
-                     {targetUser.is_coin_seller ? "Revoke" : "Appoint"}
-                   </Button>
-                </div>
-
-                {/* AGENT ROLE - Policy: Female Only */}
-                <div className={`p-4 rounded-2xl border flex items-center justify-between ${targetUser.gender !== 'female' ? 'bg-gray-50 opacity-60' : 'bg-white'}`}>
-                   <div className="flex items-center gap-3">
-                     <Briefcase className="w-5 h-5 text-purple-600" />
-                     <div className="flex flex-col">
-                        <span className="text-[10px] font-black uppercase text-gray-500">Agency Leader</span>
-                        {targetUser.gender !== 'female' && <span className="text-[7px] font-bold text-red-400 uppercase tracking-tighter">Female Users Only</span>}
-                     </div>
-                   </div>
-                   <Button 
-                    onClick={() => handleRoleUpdate('is_agent', !targetUser.is_agent)} 
-                    disabled={loading || targetUser.gender !== 'female'}
-                    variant={targetUser.is_agent ? "destructive" : "outline"}
-                    className="h-9 px-6 rounded-full text-[9px] font-black uppercase tracking-widest"
-                   >
-                     {targetUser.is_agent ? "Revoke" : "Appoint"}
-                   </Button>
-                </div>
-              </div>
+      <main className="flex-1 p-6 space-y-8">
+        {activeTab === 'search' ? (
+          <div className="space-y-6">
+            <div className="flex gap-2">
+              <Input placeholder="QIVO Numeric ID" value={targetId} onChange={(e) => setTargetId(e.target.value)} className="rounded-2xl h-14 border-gray-100 bg-gray-50 font-bold" />
+              <Button onClick={handleSearch} disabled={searching} className="h-14 w-14 rounded-2xl bg-black">
+                {searching ? <Loader2 className="animate-spin text-white" /> : <Search className="w-5 h-5 text-white" />}
+              </Button>
             </div>
-          )}
-        </div>
+
+            {targetUser && (
+              <div className="space-y-8 animate-in fade-in duration-300">
+                <div className="p-6 bg-gray-50 border rounded-[2.5rem] flex flex-col items-center space-y-4">
+                  <Avatar className="w-20 h-20 border-4 border-white shadow-xl">
+                    <AvatarImage src={targetUser.photo_url} className="object-cover" />
+                    <AvatarFallback><Users /></AvatarFallback>
+                  </Avatar>
+                  <div className="text-center">
+                    <p className="text-sm font-black text-black">{targetUser.name}</p>
+                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">ID: {targetUser.match_flow_id}</p>
+                  </div>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" className="h-9 px-6 rounded-full text-red-500 bg-red-50 text-[9px] font-black uppercase tracking-widest">Remove Acc</Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="rounded-3xl p-8 border-none shadow-2xl">
+                      <AlertDialogHeader className="items-center"><AlertCircle className="w-12 h-12 text-red-500 mb-2" /><AlertDialogTitle className="font-black uppercase text-center">Confirm Removal</AlertDialogTitle><AlertDialogDescription className="text-center text-[10px] font-bold uppercase tracking-widest text-gray-400 leading-relaxed">This will permanently delete this account and all associated history. This action is irreversible.</AlertDialogDescription></AlertDialogHeader>
+                      <AlertDialogFooter className="gap-3 mt-6"><AlertDialogCancel className="h-12 rounded-xl font-black text-[10px] uppercase">Keep</AlertDialogCancel><AlertDialogAction onClick={() => handleRemoveAccount(targetUser.uid)} className="h-12 rounded-xl bg-red-500 font-black text-[10px] uppercase">Delete Forever</AlertDialogAction></AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+                
+                <div className="space-y-4">
+                  <RoleToggle label="Special User" active={targetUser.is_special_user} icon={Star} color="text-yellow-500" onToggle={() => handleRoleUpdate('is_special_user', !targetUser.is_special_user)} disabled={loading} />
+                  <RoleToggle label="System Owner" active={targetUser.is_owner} icon={Crown} color="text-indigo-600" onToggle={() => handleRoleUpdate('is_owner', !targetUser.is_owner)} disabled={loading} />
+                  <RoleToggle label="Certified Merchant" active={targetUser.is_coin_seller} icon={Coins} color="text-yellow-600" onToggle={() => handleRoleUpdate('is_coin_seller', !targetUser.is_coin_seller)} disabled={loading} />
+                  <RoleToggle label="Agency Leader" active={targetUser.is_agent} icon={Briefcase} color="text-purple-600" onToggle={() => handleRoleUpdate('is_agent', !targetUser.is_agent)} disabled={loading || targetUser.gender !== 'female'} />
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {loading ? <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#00A2FF]" /></div> : roleUsers.length === 0 ? (
+              <div className="py-40 text-center opacity-30 px-12"><ShieldCheck className="w-12 h-12 mx-auto mb-4" /><p className="font-black text-xs uppercase tracking-widest">No users in this role</p></div>
+            ) : roleUsers.map(u => (
+              <div key={u.uid} className="p-4 bg-gray-50 border border-black/5 rounded-2xl flex items-center justify-between animate-in fade-in slide-in-from-bottom-2">
+                <div className="flex items-center gap-3">
+                  <Avatar className="w-10 h-10 border border-white"><AvatarImage src={u.photo_url} /><AvatarFallback><Users /></AvatarFallback></Avatar>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black truncate">{u.name}</p>
+                    <p className="text-[8px] font-bold text-gray-400 tracking-widest">ID: {u.match_flow_id}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="icon" onClick={() => handleRoleUpdate(activeTab === 'merchants' ? 'is_coin_seller' : activeTab === 'agents' ? 'is_agent' : activeTab === 'special' ? 'is_special_user' : 'is_owner', false, u)} className="h-9 w-9 rounded-full bg-white text-red-500 shadow-sm"><UserMinus className="w-4 h-4" /></Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full bg-white text-gray-400 shadow-sm"><Trash2 className="w-4 h-4" /></Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="rounded-3xl p-8 border-none shadow-2xl">
+                      <AlertDialogHeader><AlertDialogTitle className="font-black text-center uppercase">Delete Acc?</AlertDialogTitle></AlertDialogHeader>
+                      <AlertDialogFooter className="gap-3 mt-6"><AlertDialogCancel className="h-12 rounded-xl font-black text-[10px] uppercase">Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleRemoveAccount(u.uid)} className="h-12 rounded-xl bg-red-500 font-black text-[10px] uppercase">Delete</AlertDialogAction></AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </main>
+    </div>
+  )
+}
+
+function RoleToggle({ label, active, icon: Icon, color, onToggle, disabled }: any) {
+  return (
+    <div className="p-4 bg-white rounded-2xl border flex items-center justify-between shadow-sm">
+      <div className="flex items-center gap-3">
+        <Icon className={cn("w-5 h-5 fill-current", color)} />
+        <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest">{label}</span>
+      </div>
+      <Button 
+        onClick={onToggle} 
+        disabled={disabled}
+        variant={active ? "destructive" : "outline"}
+        className="h-9 px-6 rounded-full text-[9px] font-black uppercase tracking-widest"
+      >
+        {active ? "Revoke" : "Appoint"}
+      </Button>
     </div>
   )
 }

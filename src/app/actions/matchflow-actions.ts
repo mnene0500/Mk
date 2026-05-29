@@ -5,10 +5,6 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 
 /**
  * @fileOverview Hardened Server Actions for QIVO.
- * Updated: 
- * - Identity duplicate checks.
- * - Multi-layered Reporting System.
- * - Deep Blocking Logic.
  */
 
 export async function completeOnboardingAction(payload: {
@@ -142,9 +138,7 @@ export async function resolveReportAction(adminUid: string, reportId: string, re
 
     await supabase.from('reports').update({ status: 'resolved' }).eq('id', reportId);
     
-    // Notify reporter (Optional implementation: send message from System)
     const systemMsg = "System: Your recent report has been reviewed and resolved. Thank you for keeping QIVO safe.";
-    const ids = ['system', reporterUid].sort();
     const chatId = `system_${reporterUid}`;
     await supabase.from('messages').insert({ chat_id: chatId, sender_id: adminUid, text: systemMsg, timestamp: Date.now() });
 
@@ -341,13 +335,13 @@ export async function reviewRecruitmentAction(applicantUid: string, status: 'app
   }
 }
 
-export async function requestWithdrawalAction(userUid: string, diamonds: number, amount_kes: number, agencyId: string) {
+export async function requestWithdrawalAction(userUid: string, diamonds: number, amount_kes: number, agencyId: string, mpesaNumber: string) {
   const supabase = getSupabaseAdmin();
   try {
     const ts = Date.now();
     await supabase.rpc("increment_diamonds", { p_user_id: userUid, p_amount: -diamonds });
     await Promise.all([
-      supabase.from('withdrawals').insert({ user_id: userUid, agency_id: agencyId, diamonds, amount_kes, status: 'pending', timestamp: ts }),
+      supabase.from('withdrawals').insert({ user_id: userUid, agency_id: agencyId, diamonds, amount_kes, mpesa_number: mpesaNumber, status: 'pending', timestamp: ts }),
       supabase.from('diamond_history').insert({ user_id: userUid, amount: -diamonds, type: 'withdrawal', description: `Payout KES ${amount_kes}`, timestamp: ts })
     ]);
     return { success: true };

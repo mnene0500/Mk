@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   is_owner BOOLEAN DEFAULT FALSE,
   is_coin_seller BOOLEAN DEFAULT FALSE,
   is_agent BOOLEAN DEFAULT FALSE,
+  is_special_user BOOLEAN DEFAULT FALSE,
   is_verified BOOLEAN DEFAULT FALSE,
   is_deleted BOOLEAN DEFAULT FALSE,
   agency_id TEXT,
@@ -102,7 +103,8 @@ CREATE TABLE IF NOT EXISTS public.chats (
   last_message TEXT,
   last_message_at BIGINT,
   cleared_at JSONB DEFAULT '{}'::jsonb,
-  last_seen_at JSONB DEFAULT '{}'::jsonb
+  last_seen_at JSONB DEFAULT '{}'::jsonb,
+  last_sender_id UUID
 );
 
 CREATE TABLE IF NOT EXISTS public.messages (
@@ -127,6 +129,7 @@ CREATE TABLE IF NOT EXISTS public.withdrawals (
   agency_id TEXT REFERENCES public.agencies(code) ON DELETE CASCADE,
   diamonds NUMERIC,
   amount_kes NUMERIC,
+  mpesa_number TEXT,
   status TEXT DEFAULT 'pending',
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
@@ -148,6 +151,7 @@ ALTER TABLE public.users REPLICA IDENTITY FULL;
 ALTER TABLE public.calls REPLICA IDENTITY FULL;
 ALTER TABLE public.chats REPLICA IDENTITY FULL;
 ALTER TABLE public.messages REPLICA IDENTITY FULL;
+ALTER TABLE public.withdrawals REPLICA IDENTITY FULL;
 
 DO $$ 
 BEGIN 
@@ -171,6 +175,7 @@ ALTER TABLE public.balances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.calls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.withdrawals ENABLE ROW LEVEL SECURITY;
 
 -- 5. CREATE POLICIES
 DROP POLICY IF EXISTS "Users can manage own profile" ON public.users;
@@ -186,9 +191,12 @@ CREATE POLICY "Users view own balance" ON public.balances FOR SELECT USING (auth
 DROP POLICY IF EXISTS "Participants can view chats" ON public.chats;
 CREATE POLICY "Participants can view chats" ON public.chats FOR SELECT USING (auth.uid() = ANY(participant_ids));
 
-DROP POLICY IF EXISTS "Participants can manage their calls" ON public.calls;
-CREATE POLICY "Participants can manage their calls" ON public.calls 
-FOR ALL USING (auth.uid() = caller_id OR auth.uid() = receiver_id);
+DROP POLICY IF EXISTS "Withdrawals are visible to user and agency agent" ON public.withdrawals;
+CREATE POLICY "Withdrawals are visible to user and agency agent" ON public.withdrawals
+FOR SELECT USING (
+  auth.uid() = user_id OR 
+  auth.uid() IN (SELECT agent_uid FROM public.agencies WHERE code = agency_id)
+);
 
 -- 6. GRANT PERMISSIONS
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
