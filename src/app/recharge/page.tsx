@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -33,7 +32,7 @@ import {
 } from "@/components/ui/dialog"
 
 const PACKAGES = [
-  { id: "p1", label: "500", coins: 500, priceKes: 60 },
+  { id: "p1", label: "500", coins: 500, priceKes: 80 },
   { id: "p2", label: "1K", coins: 1000, priceKes: 120, popular: true },
   { id: "p3", label: "5K", coins: 5000, priceKes: 600 },
   { id: "p4", label: "7K", coins: 7000, priceKes: 800 },

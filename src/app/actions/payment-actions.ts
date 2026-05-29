@@ -1,4 +1,3 @@
-
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -91,7 +90,7 @@ export async function verifyPaymentAction(orderTrackingId: string, merchantRefer
       const amt = Number(pending.amount);
       
       // Tiered Coin Logic
-      if (amt === 60) coins = 500;
+      if (amt === 80) coins = 500;
       else if (amt === 120) coins = 1000;
       else if (amt === 600) coins = 5000;
       else if (amt === 800) coins = 7000;
