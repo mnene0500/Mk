@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -69,6 +70,9 @@ export default function SettingsPage() {
 
   const handleSignOut = async () => {
     try {
+      // Clear all local caches before signing out
+      localStorage.clear();
+      sessionStorage.clear();
       await supabase.auth.signOut()
       window.location.replace("/welcome")
     } catch (error) {
@@ -99,14 +103,16 @@ export default function SettingsPage() {
     try {
       const res = await deleteUserCompletelyAction(user.id);
       if (res.success) {
+        localStorage.clear();
+        sessionStorage.clear();
         await supabase.auth.signOut();
         window.location.replace("/welcome");
-        toast({ title: "Account Deleted", description: "All data and auth records have been removed." });
+        toast({ title: "Account Deleted", description: "All data has been permanently removed." });
       } else {
         throw new Error(res.error);
       }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Deletion failed", description: error.message });
+      toast({ variant: "destructive", title: "Deletion Failed", description: error.message });
       setIsDeleting(false);
     }
   }
@@ -123,7 +129,7 @@ export default function SettingsPage() {
 
       <main className="flex-1">
         <div className="flex flex-col mt-4">
-          <SettingItem label="Charge settings" href="/pricing" icon={<CreditCard className="w-5 h-5 text-blue-500" />} />
+          <SettingItem label="Charge Settings" href="/pricing" icon={<CreditCard className="w-5 h-5 text-blue-500" />} />
           <SettingItem label="Blocked List" href="/blocked-list" icon={<Ban className="w-5 h-5 text-red-400" />} />
           <SettingItem label="About QIVO" href="/about" icon={<Info className="w-5 h-5 text-gray-500" />} />
           <SettingItem label="Clear Cache" onClick={handleClearCache} icon={<RefreshCw className="w-5 h-5 text-orange-500" />} />
@@ -148,7 +154,7 @@ export default function SettingsPage() {
                   </div>
                   <AlertDialogTitle className="text-xl font-bold">Delete Everything?</AlertDialogTitle>
                   <AlertDialogDescription className="text-[10px] font-bold pt-2 uppercase tracking-widest leading-relaxed text-center text-gray-400">
-                    This will remove your Auth account, profile, chats, coins, and history from our systems. Type <span className="text-red-600 font-black">DELETE</span> to confirm:
+                    This will permanently remove your account, profile, chats, and history. Type <span className="text-red-600 font-black">DELETE</span> to confirm:
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <div className="py-4">
@@ -179,10 +185,11 @@ export default function SettingsPage() {
             <AlertDialogContent className="rounded-[2.5rem] max-w-[85vw] p-8 border-none select-none">
               <AlertDialogHeader className="items-center text-center">
                 <AlertDialogTitle className="text-xl font-bold">Sign Out?</AlertDialogTitle>
+                <AlertDialogDescription className="text-[10px] font-bold uppercase tracking-widest text-gray-400">You will need to login again.</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter className="flex flex-row items-center justify-center gap-4 mt-6">
-                <AlertDialogCancel className="flex-1 h-14 rounded-full border-gray-100 bg-gray-50 text-gray-400 font-black uppercase text-[10px] tracking-widest">No</AlertDialogCancel>
-                <AlertDialogAction onClick={handleSignOut} className="flex-1 h-14 rounded-full bg-black text-white font-black uppercase text-[10px] tracking-widest shadow-lg">Yes, Logout</AlertDialogAction>
+                <AlertDialogCancel className="flex-1 h-14 rounded-full border-gray-100 bg-gray-50 text-[10px] font-black uppercase tracking-widest">No</AlertDialogCancel>
+                <AlertDialogAction onClick={handleSignOut} className="flex-1 h-14 rounded-full bg-black text-white text-[10px] font-black uppercase tracking-widest shadow-lg">Yes, Logout</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>

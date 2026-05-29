@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
@@ -18,35 +18,67 @@ interface Transaction {
   timestamp: number
 }
 
-// HARD LIMIT TO 40 ITEMS TO SAVE SUPABASE COSTS
-const HARD_LIMIT = 40;
+const PAGE_SIZE = 20;
 
 export default function CoinHistoryPage() {
   const router = useRouter()
   const { user } = useUser()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  
+  const observerTarget = useRef<HTMLDivElement>(null)
 
-  const fetchHistory = useCallback(async () => {
+  const fetchHistory = useCallback(async (pageNum = 0) => {
     if (!user?.id) return
-    setLoading(true);
+    if (pageNum === 0) setLoading(true)
+    else setLoadingMore(true)
+
+    const from = pageNum * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
 
     const { data, error } = await supabase
       .from('coin_history')
       .select('id, amount, type, description, timestamp')
       .eq('user_id', user.id)
       .order('timestamp', { ascending: false })
-      .limit(HARD_LIMIT);
+      .range(from, to);
     
     if (!error && data) {
-      setTransactions(data);
+      if (pageNum === 0) {
+        setTransactions(data)
+      } else {
+        setTransactions(prev => [...prev, ...data])
+      }
+      setHasMore(data.length === PAGE_SIZE)
+      setPage(pageNum)
     }
-    setLoading(false);
+    setLoading(false)
+    setLoadingMore(false)
   }, [user?.id])
 
   useEffect(() => {
-    fetchHistory();
+    fetchHistory(0)
   }, [fetchHistory])
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          fetchHistory(page + 1)
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current)
+    }
+
+    return () => observer.disconnect()
+  }, [hasMore, loadingMore, loading, page, fetchHistory])
 
   return (
     <div className="flex-1 bg-white min-h-screen flex flex-col select-none">
@@ -94,8 +126,12 @@ export default function CoinHistoryPage() {
                 </div>
               )
             })}
-            <div className="p-10 text-center">
-              <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest">Showing last {HARD_LIMIT} transactions</p>
+            
+            <div ref={observerTarget} className="h-20 flex items-center justify-center">
+              {loadingMore && <Loader2 className="w-4 h-4 animate-spin text-[#00A2FF]" />}
+              {!hasMore && transactions.length > 0 && (
+                <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest">End of History</p>
+              )}
             </div>
           </div>
         )}

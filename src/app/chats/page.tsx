@@ -55,6 +55,7 @@ const GIFTS = [
   { name: "Galaxy", icon: "🌌", price: 50000 },
 ]
 
+// GLOBAL CACHE FOR INSTANT LOADING
 let cachedSummaries: ChatSummary[] = [];
 const SUMMARY_PAGE_SIZE = 15;
 const MESSAGE_PAGE_SIZE = 30;
@@ -68,6 +69,7 @@ function ChatsContent() {
   const startWithId = searchParams.get("startWith")
   const autoMsg = searchParams.get("autoMsg")
   
+  // Use cache immediately
   const [chatSummaries, setChatSummaries] = useState<ChatSummary[]>(cachedSummaries)
   const [loadingSummaries, setLoadingSummaries] = useState(false)
   const [summaryPage, setSummaryPage] = useState(0)
@@ -92,7 +94,9 @@ function ChatsContent() {
 
   const fetchSummaries = useCallback(async (pageNum = 0) => {
     if (!currentUser?.id || loadingSummaries) return
-    if (pageNum === 0) setLoadingSummaries(true)
+    
+    // Only show loading indicator if cache is empty
+    if (pageNum === 0 && chatSummaries.length === 0) setLoadingSummaries(true)
     
     const from = pageNum * SUMMARY_PAGE_SIZE;
     const to = from + SUMMARY_PAGE_SIZE - 1;
@@ -150,17 +154,20 @@ function ChatsContent() {
         const filtered = enhanced.filter(s => !ids.has(s.id));
         return [...prev, ...filtered];
       });
+      // Append to global cache
       cachedSummaries = [...cachedSummaries, ...enhanced.filter(s => !new Set(cachedSummaries.map(x => x.id)).has(s.id))];
     }
     
     setHasMoreSummaries(chatsData.length === SUMMARY_PAGE_SIZE);
     setSummaryPage(pageNum);
     setLoadingSummaries(false);
-  }, [currentUser?.id, loadingSummaries])
+  }, [currentUser?.id, loadingSummaries, chatSummaries.length])
 
   useEffect(() => {
     if (currentUser?.id && !startWithId) {
-      if (cachedSummaries.length === 0) fetchSummaries(0)
+      // Always refresh in background
+      fetchSummaries(0)
+      
       const channel = supabase.channel('chats_realtime_summaries')
         .on('postgres_changes', { event: '*', table: 'chats' }, () => fetchSummaries(0))
         .subscribe()
@@ -317,17 +324,19 @@ function ChatsContent() {
   if (!startWithId) return (
     <div className="flex-1 bg-white min-h-screen relative select-none">
       <header className="px-6 h-16 flex items-center border-b sticky top-0 bg-white/90 backdrop-blur-md z-[50]">
-        <h1 className="text-3xl font-logo text-[#00A2FF]">Chats</h1>
+        <h1 className="text-2xl font-black text-[#00A2FF] tracking-tight">Chats</h1>
       </header>
       <main className="flex flex-col">
-        {chatSummaries.length === 0 ? (
+        {chatSummaries.length === 0 && loadingSummaries ? (
+          <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
+        ) : chatSummaries.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-40 opacity-40 px-12 text-center text-gray-300">
-            <User className="w-12 h-12 mb-4" /><p className="font-bold text-xs uppercase tracking-widest">No conversations</p>
+            <User className="w-12 h-12 mb-4" /><p className="font-bold text-xs uppercase tracking-widest">No Conversations</p>
           </div>
         ) : (
           <>
             {chatSummaries.map(s => (
-              <div key={s.id} onPointerDown={() => handleTouchStart(s.id)} onPointerUp={() => handleTouchEnd(s.partner_id)} className="p-5 flex items-center gap-4 active:bg-gray-50 border-b border-gray-50 transition-colors cursor-pointer touch-none">
+              <div key={s.id} onPointerDown={() => handleTouchStart(s.id)} onPointerUp={() => handleTouchEnd(s.partner_id)} className="p-4 flex items-center gap-4 active:bg-gray-50 border-b border-gray-50 transition-colors cursor-pointer touch-none">
                 <div className="relative">
                   <Avatar className="w-14 h-14 border"><AvatarImage src={s.partner_photo} className="object-cover" /><AvatarFallback>{s.partner_name[0]}</AvatarFallback></Avatar>
                   {s.unread_count > 0 && <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-sm">{s.unread_count}</div>}
@@ -352,8 +361,8 @@ function ChatsContent() {
         <AlertDialogContent className="rounded-[2.5rem] max-w-[85vw] p-8 border-none shadow-2xl">
           <AlertDialogHeader className="items-center text-center"><AlertDialogTitle className="text-xl font-bold">Delete Conversation?</AlertDialogTitle><AlertDialogDescription className="text-[10px] uppercase font-bold tracking-widest text-gray-400">History will be cleared.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter className="flex flex-row items-center justify-center gap-4 mt-6">
-            <AlertDialogCancel className="flex-1 h-14 rounded-full bg-gray-50">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { if (deletingChatId) clearChatAction(currentUser!.id, deletingChatId); setDeletingChatId(null); fetchSummaries(0); }} className="flex-1 h-14 rounded-full bg-red-500">Delete</AlertDialogAction>
+            <AlertDialogCancel className="flex-1 h-14 rounded-full bg-gray-50 text-[10px] font-black uppercase">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (deletingChatId) clearChatAction(currentUser!.id, deletingChatId); setDeletingChatId(null); fetchSummaries(0); }} className="flex-1 h-14 rounded-full bg-red-500 text-[10px] font-black uppercase">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -373,7 +382,7 @@ function ChatsContent() {
           <DropdownMenuContent align="end" className="rounded-2xl min-w-[160px]">
             <AlertDialog>
               <AlertDialogTrigger asChild><DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-500 font-bold gap-2"><Trash2 className="w-4 h-4" /> Delete Chat</DropdownMenuItem></AlertDialogTrigger>
-              <AlertDialogContent className="rounded-[2.5rem] max-w-[85vw] p-8 border-none"><AlertDialogHeader className="items-center text-center"><AlertDialogTitle className="text-xl font-bold">Delete Chat?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter className="flex flex-row items-center justify-center gap-4 mt-6"><AlertDialogCancel className="flex-1 h-14 rounded-full bg-gray-50">Cancel</AlertDialogCancel><AlertDialogAction onClick={() => { clearChatAction(currentUser!.id, chatId!); router.push("/chats"); }} className="flex-1 h-14 rounded-full bg-red-500">Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+              <AlertDialogContent className="rounded-[2.5rem] max-w-[85vw] p-8 border-none"><AlertDialogHeader className="items-center text-center"><AlertDialogTitle className="text-xl font-bold">Delete Chat?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter className="flex flex-row items-center justify-center gap-4 mt-6"><AlertDialogCancel className="flex-1 h-14 rounded-full bg-gray-50 text-[10px] font-black uppercase">Cancel</AlertDialogCancel><AlertDialogAction onClick={() => { clearChatAction(currentUser!.id, chatId!); router.push("/chats"); }} className="flex-1 h-14 rounded-full bg-red-500 text-[10px] font-black uppercase">Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
             </AlertDialog>
           </DropdownMenuContent>
         </DropdownMenu>

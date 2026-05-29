@@ -24,6 +24,7 @@ interface UserProfile {
 
 const PAGE_SIZE = 12;
 
+// GLOBAL CACHE FOR INSTANT LOADING
 let cachedUsers: UserProfile[] = [];
 let cachedTab: 'Recommend' | 'Nearby' = 'Recommend';
 let cachedPage = 0;
@@ -44,6 +45,7 @@ export default function HomePage() {
   
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+  // Start with cached data if available
   const [users, setUsers] = useState<UserProfile[]>(cachedUsers)
   const [activeTab, setActiveTab] = useState<'Recommend' | 'Nearby'>(cachedTab)
   const [page, setPage] = useState(cachedPage)
@@ -57,7 +59,10 @@ export default function HomePage() {
     if (!profile) return;
     
     const currentTab = targetTab || activeTab;
-    if (pageNum === 0 && isManual) setIsRefreshing(true);
+    
+    // Only show the big loading indicator if the cache is empty
+    const shouldShowLoading = pageNum === 0 && users.length === 0;
+    if (shouldShowLoading || isManual) setIsRefreshing(true);
     if (pageNum > 0) setIsLoadingMore(true);
 
     try {
@@ -97,6 +102,7 @@ export default function HomePage() {
              const uniqueNew = filtered.filter(u => !existingIds.has(u.uid));
              return [...prev, ...uniqueNew];
           });
+          // Update global cache as well
           cachedUsers = [...cachedUsers, ...filtered.filter(u => !new Set(cachedUsers.map(x => u.uid)).has(u.uid))];
         }
         
@@ -110,7 +116,7 @@ export default function HomePage() {
       setIsRefreshing(false);
       setIsLoadingMore(false);
     }
-  }, [currentUser?.id, profile, activeTab]);
+  }, [currentUser?.id, profile, activeTab, users.length]);
 
   useEffect(() => {
     if (isInitialized && currentUser && !profile) {
@@ -127,9 +133,8 @@ export default function HomePage() {
 
   useEffect(() => {
     if (profile && !hasFetched.current) {
-      if (cachedUsers.length === 0) {
-        fetchUsers(0, true, activeTab);
-      }
+      // Background refresh even if we have cache
+      fetchUsers(0, false, activeTab);
       hasFetched.current = true;
     }
   }, [profile, fetchUsers, activeTab]);
@@ -167,6 +172,9 @@ export default function HomePage() {
     cachedTab = tab;
     setPage(0);
     cachedPage = 0;
+    // When switching tabs, we clear local and cache for that view to fetch fresh
+    cachedUsers = [];
+    setUsers([]);
     fetchUsers(0, true, tab);
   }
 
@@ -177,25 +185,25 @@ export default function HomePage() {
       <div className="px-4 grid grid-cols-2 gap-3 py-6 bg-[#00A2FF] shrink-0">
         <button 
           onClick={() => router.push('/mystery-note')} 
-          className="h-28 bg-gradient-to-br from-purple-500 to-purple-700 border border-white/20 rounded-2xl p-6 flex flex-col items-start justify-center gap-2 active:scale-95 transition-all text-white shadow-2xl relative overflow-hidden group"
+          className="h-28 bg-gradient-to-br from-purple-500/80 to-purple-700/90 border border-white/20 rounded-2xl p-6 flex flex-col items-start justify-center gap-1 active:scale-95 transition-all text-white shadow-xl relative overflow-hidden group backdrop-blur-sm"
         >
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-2xl group-active:scale-150 transition-transform" />
           <FileText className="w-6 h-6 mb-1 text-purple-100" />
-          <div>
+          <div className="text-left">
             <p className="text-[13px] font-black tracking-tight leading-none mb-1">Message Blast</p>
-            <p className="text-[9px] font-bold text-purple-100/70">Connect with many</p>
+            <p className="text-[9px] font-bold text-purple-100/70">Connect With Many</p>
           </div>
         </button>
         
         <button 
           onClick={() => router.push('/tasks')} 
-          className="h-28 bg-gradient-to-br from-indigo-800 to-blue-900 border border-white/20 rounded-2xl p-6 flex flex-col items-start justify-center gap-2 active:scale-95 transition-all text-white shadow-2xl relative overflow-hidden group"
+          className="h-28 bg-gradient-to-br from-blue-600/80 to-indigo-800/90 border border-white/20 rounded-2xl p-6 flex flex-col items-start justify-center gap-1 active:scale-95 transition-all text-white shadow-xl relative overflow-hidden group backdrop-blur-sm"
         >
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-2xl group-active:scale-150 transition-transform" />
           <Target className="w-6 h-6 mb-1 text-blue-100" />
-          <div>
+          <div className="text-left">
             <p className="text-[13px] font-black tracking-tight leading-none mb-1">Task Center</p>
-            <p className="text-[9px] font-bold text-blue-100/70">Daily rewards</p>
+            <p className="text-[9px] font-bold text-blue-100/70">Daily Rewards</p>
           </div>
         </button>
       </div>
@@ -217,12 +225,12 @@ export default function HomePage() {
       <main className="px-3 pt-4">
         {users.length > 0 ? (
           <>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               {users.map((u) => (
-                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.2] rounded-2xl shadow-xl bg-gray-50 active:scale-95 transition-all cursor-pointer" onClick={() => router.push(`/users/${u.uid}`)}>
+                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.1] rounded-xl shadow-lg bg-gray-50 active:scale-95 transition-all cursor-pointer" onClick={() => router.push(`/users/${u.uid}`)}>
                   <Image src={`${u.photo_url}?t=${u.updated_at}`} alt={u.name} fill className="object-cover" sizes="50vw" priority />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                  <div className="absolute inset-x-0 bottom-0 p-4 text-white flex flex-col gap-3">
+                  <div className="absolute inset-x-0 bottom-0 p-3 text-white flex flex-col gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 mb-0.5">
                         <h4 className="font-black text-xs truncate tracking-tight">{u.name}</h4>
@@ -230,10 +238,10 @@ export default function HomePage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="bg-[#00B200] text-white font-black text-[8px] px-1.5 py-0.5 rounded-md">{calculateAge(u.dob)}</span>
-                        <span className="text-[8px] font-bold opacity-70">{u.country}</span>
+                        <span className="text-[8px] font-bold opacity-70 truncate">{u.country}</span>
                       </div>
                     </div>
-                    <Button size="sm" className="w-full h-8 rounded-xl bg-[#00A2FF] hover:bg-[#0081CC] text-white font-black text-[10px] gap-1.5 shadow-lg z-10" onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }}>
+                    <Button size="sm" className="w-full h-7 rounded-lg bg-[#00A2FF] hover:bg-[#0081CC] text-white font-black text-[9px] gap-1.5 shadow-lg z-10" onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }}>
                       <MessageSquare className="w-3 h-3" />Chat
                     </Button>
                   </div>
@@ -245,7 +253,7 @@ export default function HomePage() {
               {hasMore && (
                 <div className="flex items-center gap-2 text-gray-400">
                   <Loader2 className="w-4 h-4 animate-spin text-[#00A2FF]" />
-                  <span className="text-[10px] font-bold tracking-widest">Searching...</span>
+                  <span className="text-[10px] font-bold tracking-widest uppercase">Searching...</span>
                 </div>
               )}
             </div>
@@ -255,7 +263,7 @@ export default function HomePage() {
             <div className="flex flex-col items-center justify-center py-40 opacity-20 text-center px-10">
               <Target className="w-12 h-12 mb-4 text-gray-400" />
               <p className="text-[11px] font-bold text-gray-500">
-                {activeTab === 'Nearby' ? "No users found in your country" : "No users here"}
+                {activeTab === 'Nearby' ? "No users found in your country" : "No users found"}
               </p>
             </div>
           )
