@@ -4,21 +4,31 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
 
 /**
- * @fileOverview Hardened Server Actions for QIVO with Rolling History.
+ * @fileOverview Hardened Server Actions for QIVO with Rolling History and Optimized Reads.
  */
 
 // Helper to keep history lean (latest 50 records)
+// Optimized to only run occasionally or if explicitly needed to save on DB writes
 async function trimHistory(supabase: any, userId: string, table: 'coin_history' | 'diamond_history') {
   try {
-    const { data } = await supabase
+    // We only delete if we are significantly over the limit to reduce DB pressure
+    const { count } = await supabase
       .from(table)
-      .select('id')
-      .eq('user_id', userId)
-      .order('timestamp', { ascending: false });
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
 
-    if (data && data.length > 50) {
-      const idsToDelete = data.slice(50).map((row: any) => row.id);
-      await supabase.from(table).delete().in('id', idsToDelete);
+    if (count && count > 60) {
+      const { data } = await supabase
+        .from(table)
+        .select('id')
+        .eq('user_id', userId)
+        .order('timestamp', { ascending: false })
+        .range(50, 100);
+
+      if (data && data.length > 0) {
+        const idsToDelete = data.map((row: any) => row.id);
+        await supabase.from(table).delete().in('id', idsToDelete);
+      }
     }
   } catch (e) {
     console.error(`Trim ${table} error:`, e);
@@ -82,7 +92,6 @@ export async function completeOnboardingAction(payload: {
         description: 'Welcome Bonus',
         timestamp
       });
-      await trimHistory(supabase, payload.uid, 'coin_history');
     }
 
     if (initialDiamonds > 0) {
@@ -94,7 +103,6 @@ export async function completeOnboardingAction(payload: {
         description: 'New Profile Bonus',
         timestamp
       });
-      await trimHistory(supabase, payload.uid, 'diamond_history');
     }
 
     return { success: true, bonus: initialCoins || initialDiamonds };
@@ -195,13 +203,13 @@ export async function awardCoinsAction(ownerUid: string, targetUid: string, amou
     const { data: owner } = await supabase.from('users').select('is_owner, is_coin_seller, is_special_user').eq('uid', ownerUid).single();
     if (!owner?.is_owner && !owner?.is_coin_seller && !owner?.is_special_user) throw new Error("Unauthorized");
 
-    const isUnlimited = owner.is_owner || owner.is_special_user;
     const ts = Date.now();
 
-    if (!isUnlimited) {
-      const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', ownerUid).single();
-      if ((Number(bal?.coins) || 0) < amount) throw new Error("Insufficient merchant balance");
-      await supabase.rpc("increment_coins", { p_user_id: ownerUid, p_amount: -amount });
+    // Deduct from owner if not unlimited (relying on DB check constraint for zero balance)
+    if (!owner.is_owner && !owner.is_special_user) {
+      const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: ownerUid, p_amount: -amount });
+      if (deductErr) throw new Error("Insufficient merchant balance");
+      
       await supabase.from('coin_history').insert({
         user_id: ownerUid,
         amount: -amount,
@@ -209,7 +217,6 @@ export async function awardCoinsAction(ownerUid: string, targetUid: string, amou
         description: 'Sales Transfer',
         timestamp: ts
       });
-      await trimHistory(supabase, ownerUid, 'coin_history');
     }
 
     const { error: awardErr } = await supabase.rpc("increment_coins", { p_user_id: targetUid, p_amount: amount });
@@ -222,7 +229,6 @@ export async function awardCoinsAction(ownerUid: string, targetUid: string, amou
       description: `Received from ${owner.is_coin_seller ? 'Merchant' : 'Admin'}`,
       timestamp: ts
     });
-    await trimHistory(supabase, targetUid, 'coin_history');
 
     return { success: true, message: `Successfully sent ${amount} coins.` };
   } catch (err: any) {
@@ -274,7 +280,6 @@ export async function dailyCheckInAction(uid: string) {
       description: `Daily Check-in (Day ${streak})`,
       timestamp: ts
     });
-    await trimHistory(supabase, uid, 'coin_history');
 
     return { success: true, amount, day: streak };
   } catch (err: any) {
@@ -297,9 +302,9 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
     const isFree = sender?.is_owner || sender?.is_special_user || sender?.is_coin_seller || recipient?.is_special_user || recipient?.is_coin_seller || recipient?.is_owner;
 
     if (sender?.gender === 'male' && !isFree) {
-      const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', payload.senderId).single();
-      if ((Number(bal?.coins) || 0) < cost) return { success: false, error: "insufficient_funds" };
-      await supabase.rpc("increment_coins", { p_user_id: payload.senderId, p_amount: -cost });
+      // Direct RPC call - DB constraint handles the "check"
+      const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: payload.senderId, p_amount: -cost });
+      if (deductErr) return { success: false, error: "insufficient_funds" };
       
       await supabase.from('coin_history').insert({
         user_id: payload.senderId,
@@ -308,7 +313,6 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
         description: 'Message Cost',
         timestamp
       });
-      await trimHistory(supabase, payload.senderId, 'coin_history');
     }
     
     await supabase.from('chats').upsert({ 
@@ -358,8 +362,9 @@ export async function sendMysteryNoteAction(senderUid: string, text: string, cou
   try {
     const cost = count * 10;
     const ts = Date.now();
-    const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', senderUid).single();
-    if ((Number(bal?.coins) || 0) < cost) throw new Error("Insufficient coins");
+    
+    const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: senderUid, p_amount: -cost });
+    if (deductErr) throw new Error("Insufficient coins");
 
     const { data: recipients } = await supabase
       .from('users')
@@ -370,7 +375,6 @@ export async function sendMysteryNoteAction(senderUid: string, text: string, cou
 
     if (!recipients || recipients.length === 0) throw new Error("No recipients found");
 
-    await supabase.rpc("increment_coins", { p_user_id: senderUid, p_amount: -cost });
     await supabase.from('coin_history').insert({
       user_id: senderUid,
       amount: -cost,
@@ -378,7 +382,6 @@ export async function sendMysteryNoteAction(senderUid: string, text: string, cou
       description: `Message Blast (${count} users)`,
       timestamp: ts
     });
-    await trimHistory(supabase, senderUid, 'coin_history');
 
     for (const r of recipients) {
       const ids = [senderUid, r.uid].sort();
@@ -396,7 +399,9 @@ export async function requestWithdrawalAction(userUid: string, diamonds: number,
   const supabase = getSupabaseAdmin();
   try {
     const ts = Date.now();
-    await supabase.rpc("increment_diamonds", { p_user_id: userUid, p_amount: -diamonds });
+    const { error: deductErr } = await supabase.rpc("increment_diamonds", { p_user_id: userUid, p_amount: -diamonds });
+    if (deductErr) throw new Error("Insufficient diamonds");
+
     await supabase.from('diamond_history').insert({
       user_id: userUid,
       amount: -diamonds,
@@ -404,7 +409,6 @@ export async function requestWithdrawalAction(userUid: string, diamonds: number,
       description: 'Agency Payout Request',
       timestamp: ts
     });
-    await trimHistory(supabase, userUid, 'diamond_history');
     
     await supabase.from('withdrawals').insert({ user_id: userUid, agency_id: agencyId, diamonds, amount_kes, mpesa_number: mpesaNumber, status: 'pending', timestamp: ts });
     return { success: true };
@@ -430,7 +434,6 @@ export async function updateWithdrawalStatusAction(requestId: string, status: 'p
         description: 'Rejected Payout Refund',
         timestamp: ts
       });
-      await trimHistory(supabase, req.user_id, 'diamond_history');
     }
     
     await supabase.from('withdrawals').update({ status }).eq('id', requestId);
@@ -494,18 +497,18 @@ export async function convertDiamondsToCoinsAction(user_id: string, diamonds: nu
   const supabase = getSupabaseAdmin();
   try {
     const ts = Date.now();
-    await supabase.rpc("increment_diamonds", { p_user_id: user_id, p_amount: -diamonds });
+    const { error: deductErr } = await supabase.rpc("increment_diamonds", { p_user_id: user_id, p_amount: -diamonds });
+    if (deductErr) throw new Error("Insufficient diamonds");
+
     await supabase.rpc("increment_coins", { p_user_id: user_id, p_amount: coins });
     
     await supabase.from('diamond_history').insert({
       user_id, amount: -diamonds, type: 'conversion', description: 'Converted to Coins', timestamp: ts
     });
-    await trimHistory(supabase, user_id, 'diamond_history');
 
     await supabase.from('coin_history').insert({
       user_id, amount: coins, type: 'conversion', description: 'Converted from Diamonds', timestamp: ts
     });
-    await trimHistory(supabase, user_id, 'coin_history');
 
     return { success: true };
   } catch (err: any) {
@@ -521,9 +524,8 @@ export async function sendGiftAction(senderUid: string, recipientUid: string, co
     const ts = Date.now();
 
     if (!isFree) {
-      const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', senderUid).single();
-      if ((Number(bal?.coins) || 0) < coinAmount) throw new Error("Insufficient coins.");
-      await supabase.rpc("increment_coins", { p_user_id: senderUid, p_amount: -coinAmount });
+      const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: senderUid, p_amount: -coinAmount });
+      if (deductErr) throw new Error("Insufficient coins.");
       
       await supabase.from('coin_history').insert({
         user_id: senderUid,
@@ -532,7 +534,6 @@ export async function sendGiftAction(senderUid: string, recipientUid: string, co
         description: `Sent Gift: ${giftName}`,
         timestamp: ts
       });
-      await trimHistory(supabase, senderUid, 'coin_history');
     }
 
     const { data: rec } = await supabase.from('users').select('gender, name').eq('uid', recipientUid).single();
@@ -548,7 +549,6 @@ export async function sendGiftAction(senderUid: string, recipientUid: string, co
       description: `Received ${giftName} from ${senderProfile?.name || 'User'}`,
       timestamp: ts
     });
-    await trimHistory(supabase, recipientUid, 'diamond_history');
 
     const chatId = `direct_${[senderUid, recipientUid].sort()[0]}_${[senderUid, recipientUid].sort()[1]}`;
     
@@ -566,8 +566,9 @@ export async function sendGiftAction(senderUid: string, recipientUid: string, co
 export async function playSpinGameAction(userId: string, stake: number) {
   const supabase = getSupabaseAdmin();
   try {
-    const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', userId).single();
-    if ((Number(bal?.coins) || 0) < stake) throw new Error("Insufficient coins.");
+    // Deduct stake first - DB constraint handles balance check
+    const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: -stake });
+    if (deductErr) throw new Error("Insufficient coins.");
 
     let prizes: number[] = [];
     if (stake === 20) {
@@ -580,19 +581,19 @@ export async function playSpinGameAction(userId: string, stake: number) {
 
     const index = Math.floor(Math.random() * prizes.length);
     const winAmount = prizes[index];
-    const net = winAmount - stake;
     const ts = Date.now();
 
-    await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: net });
+    if (winAmount > 0) {
+      await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: winAmount });
+    }
     
     await supabase.from('coin_history').insert({
       user_id: userId,
-      amount: net,
+      amount: winAmount - stake,
       type: 'game',
       description: winAmount > 0 ? `Won Spin (${winAmount})` : `Lost Spin stake (${stake})`,
       timestamp: ts
     });
-    await trimHistory(supabase, userId, 'coin_history');
 
     return { success: true, winAmount, index };
   } catch (err: any) {
@@ -603,8 +604,9 @@ export async function playSpinGameAction(userId: string, stake: number) {
 export async function playSlotsAction(userId: string, stake: number) {
   const supabase = getSupabaseAdmin();
   try {
-    const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', userId).single();
-    if ((Number(bal?.coins) || 0) < stake) throw new Error("Insufficient coins.");
+    // Atomically try to deduct stake
+    const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: -stake });
+    if (deductErr) throw new Error("Insufficient coins.");
 
     const slotsPossible = ["bar", "bar", "bar", "cherry", "crown"];
     const slot1 = slotsPossible[Math.floor(Math.random() * slotsPossible.length)];
@@ -618,22 +620,19 @@ export async function playSlotsAction(userId: string, stake: number) {
     if (slot1 === slot2 && slot2 === slot3) {
       winAmount = stake * 2;
       message = `WINNER! You matched 3 symbols and won ${winAmount} Coins!`;
+      await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: winAmount });
     } else {
       const loserPhrases = ["So close, yet so far.", "The machine wins again.", "Better luck next pull!", "Try again!"];
       message = loserPhrases[Math.floor(Math.random() * loserPhrases.length)];
     }
 
-    const net = winAmount - stake;
-    await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: net });
-    
     await supabase.from('coin_history').insert({
       user_id: userId,
-      amount: net,
+      amount: winAmount - stake,
       type: 'game',
       description: winAmount > 0 ? `Won Slots (${winAmount})` : `Lost Slots stake (${stake})`,
       timestamp: ts
     });
-    await trimHistory(supabase, userId, 'coin_history');
 
     return { success: true, winAmount, slots: [slot1, slot2, slot3], message };
   } catch (err: any) {

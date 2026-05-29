@@ -1,6 +1,7 @@
+
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, Coins, LayoutGrid, Loader2, Sparkles, Star, Info, Trophy } from "lucide-react"
@@ -28,9 +29,31 @@ export default function SlotMachinePage() {
   const [isSpinning, setIsSpinning] = useState(false)
   const [reels, setReels] = useState(["cherry", "bar", "crown"])
   const [lastWin, setLastWin] = useState<number | null>(null)
+  
+  // Animation interval refs
+  const spinInterval = useRef<NodeJS.Timeout | null>(null)
+
+  const stopAnimation = (finalSlots: string[], winAmount: number, message: string) => {
+    if (spinInterval.current) {
+      clearInterval(spinInterval.current)
+      spinInterval.current = null
+    }
+    
+    setReels(finalSlots)
+    setIsSpinning(false)
+    
+    if (winAmount > 0) {
+      setLastWin(winAmount)
+      toast({ title: "WINNER!", description: message || "Winnings added to your wallet." })
+    } else {
+      toast({ title: "No Win", description: message || "Try again!" })
+    }
+  }
 
   const handleSpin = async () => {
     if (!user || isSpinning) return
+    
+    // Client-side quick check (server action will still validate)
     if (coins < selectedStake) {
       toast({ variant: "destructive", title: "Insufficient Coins" })
       return
@@ -39,44 +62,48 @@ export default function SlotMachinePage() {
     setIsSpinning(true)
     setLastWin(null)
 
+    // START ANIMATION IMMEDIATELY (ZERO LAG)
+    spinInterval.current = setInterval(() => {
+      setReels([
+        SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)],
+        SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)],
+        SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)]
+      ])
+    }, 80)
+
+    const startTime = Date.now()
+
     try {
+      // Run server action in parallel with animation
       const res = await playSlotsAction(user.id, selectedStake)
       
+      const elapsedTime = Date.now() - startTime
+      const minSpinTime = 1200 // Guaranteed 1.2 seconds of animation for "feel"
+      const remainingTime = Math.max(0, minSpinTime - elapsedTime)
+
       if (res.success && res.slots) {
-        // Start reel shuffle animation
-        let counter = 0
-        const interval = setInterval(() => {
-          setReels([
-            SYMBOLS[Math.floor(Math.random() * 3)],
-            SYMBOLS[Math.floor(Math.random() * 3)],
-            SYMBOLS[Math.floor(Math.random() * 3)]
-          ])
-          counter++
-          if (counter > 20) {
-            clearInterval(interval)
-            setReels(res.slots)
-            setIsSpinning(false)
-            
-            if (res.winAmount > 0) {
-              setLastWin(res.winAmount)
-              toast({ title: "WINNER!", description: res.message || "Winnings added to your wallet." })
-            } else {
-              toast({ title: "No Win", description: res.message || "Try again!" })
-            }
-          }
-        }, 100)
+        setTimeout(() => {
+          stopAnimation(res.slots!, res.winAmount, res.message!)
+        }, remainingTime)
       } else {
         throw new Error(res.error)
       }
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.message })
+      if (spinInterval.current) clearInterval(spinInterval.current)
       setIsSpinning(false)
+      toast({ variant: "destructive", title: "Error", description: err.message })
     }
   }
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (spinInterval.current) clearInterval(spinInterval.current)
+    }
+  }, [])
+
   return (
     <div className="flex-1 bg-[#0F0F0F] min-h-screen flex flex-col select-none overflow-hidden relative">
-      {/* Background Ambience */}
       <div className="absolute inset-0 opacity-20 pointer-events-none">
         <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,#6366F1_0%,transparent_70%)]" />
       </div>
@@ -97,16 +124,13 @@ export default function SlotMachinePage() {
           <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.3em]">Match 3 & Double Your Stake</p>
         </div>
 
-        {/* SLOT REELS */}
         <div className="w-full max-w-sm bg-zinc-900 rounded-[3rem] p-6 border-8 border-indigo-950 shadow-[0_0_80px_rgba(99,102,241,0.15)] relative">
-           {/* Center Line */}
            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-1 bg-indigo-500/20 z-0" />
-           
            <div className="flex justify-between gap-4 relative z-10">
              {reels.map((symbol, i) => (
                <div key={i} className="flex-1 aspect-[3/4] bg-black rounded-2xl border-4 border-zinc-800 flex items-center justify-center shadow-inner overflow-hidden">
                   <div className={cn(
-                    "text-5xl transition-all duration-300",
+                    "text-5xl transition-transform",
                     isSpinning && "animate-bounce"
                   )}>
                     {ICON_MAP[symbol]}
@@ -116,7 +140,6 @@ export default function SlotMachinePage() {
            </div>
         </div>
 
-        {/* CONTROLS */}
         <div className="w-full max-w-sm space-y-8">
           <div className="space-y-3">
              <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Set Stake</p>
@@ -141,7 +164,7 @@ export default function SlotMachinePage() {
 
           <Button
             onClick={handleSpin}
-            disabled={isSpinning || coins < selectedStake}
+            disabled={isSpinning}
             className={cn(
               "w-full h-18 py-7 rounded-[2rem] text-sm font-black uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all",
               isSpinning ? "bg-indigo-900/20 text-indigo-500" : "bg-indigo-600 text-white hover:bg-indigo-500"
@@ -159,7 +182,6 @@ export default function SlotMachinePage() {
         </div>
       </main>
 
-      {/* WIN OVERLAY */}
       {lastWin !== null && lastWin > 0 && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md p-10 animate-in fade-in zoom-in duration-300" onClick={() => setLastWin(null)}>
            <div className="bg-indigo-600 p-10 rounded-[3rem] text-center space-y-6 shadow-[0_0_100px_rgba(99,102,241,0.5)] border-4 border-white/20">
