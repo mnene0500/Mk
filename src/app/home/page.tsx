@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
-import { RotateCw, BadgeCheck, FileText, Target, MessageSquare, Loader2, Sparkles } from "lucide-react"
+import { RotateCw, BadgeCheck, FileText, Target, Loader2, Sparkles } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
@@ -208,7 +208,7 @@ export default function HomePage() {
         </button>
       </div>
 
-      <div className="sticky top-0 z-40 bg-[#00A2FF] px-6 py-2 flex items-center justify-between border-b border-white/10 shadow-md h-12">
+      <div className="sticky top-0 z-40 bg-[#00A2FF] px-4 py-2 flex items-center justify-between border-b border-white/10 shadow-md h-12">
         <div className="flex items-center gap-8">
           {(['Recommend', 'Nearby'] as const).map((tab) => (
             <button key={tab} onClick={() => handleTabChange(tab)} className={cn("text-[13px] font-black transition-all relative py-2", activeTab === tab ? "text-white" : "text-white/40")}>
@@ -222,22 +222,21 @@ export default function HomePage() {
         </button>
       </div>
 
-      <main className="px-3 pt-4">
+      <main className="px-4 pt-4">
         {users.length > 0 ? (
           <>
             <div className="grid grid-cols-2 gap-2.5">
               {users.map((u) => (
-                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.4] rounded-lg shadow-lg bg-gray-50 active:scale-95 transition-all cursor-pointer" onClick={() => router.push(`/users/${u.uid}`)}>
+                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.35] rounded-lg shadow-lg bg-gray-50 active:scale-95 transition-all cursor-pointer" onClick={() => router.push(`/users/${u.uid}`)}>
                   <Image src={`${u.photo_url}?t=${u.updated_at}`} alt={u.name} fill className="object-cover" sizes="50vw" priority />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                   
-                  {/* FLOATING CHAT BUTTON TOP RIGHT */}
+                  {/* TEXT CHAT BUTTON TOP RIGHT */}
                   <Button 
-                    size="icon" 
-                    className="absolute top-2 right-2 rounded-full h-8 w-8 bg-[#00A2FF]/90 backdrop-blur-md text-white shadow-xl z-20 active:scale-90 border border-white/20" 
+                    className="absolute top-2 right-2 rounded-full h-7 px-4 bg-[#00A2FF]/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest shadow-xl z-20 active:scale-90 border border-white/20" 
                     onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }}
                   >
-                    <MessageSquare className="w-4 h-4 fill-current" />
+                    Chat
                   </Button>
 
                   <div className="absolute inset-x-0 bottom-0 p-3 text-white">
