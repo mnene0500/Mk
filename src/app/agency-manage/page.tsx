@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useCallback, useRef } from "react"
@@ -31,8 +32,6 @@ interface WithdrawalRequest {
   timestamp: number
 }
 
-const PAGE_SIZE = 15;
-
 export default function AgencyManagePage() {
   const router = useRouter()
   const { user, isInitialized } = useUser()
@@ -46,22 +45,10 @@ export default function AgencyManagePage() {
   const [applicants, setApplicants] = useState<UserProfile[]>([])
   const [members, setMembers] = useState<UserProfile[]>([])
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([])
-  
-  const [memberPage, setMemberPage] = useState(0)
-  const [hasMoreMembers, setHasMoreMembers] = useState(true)
-  const [payoutPage, setPayoutPage] = useState(0)
-  const [hasMorePayouts, setHasMorePayouts] = useState(true)
-  
-  const observerTarget = useRef<HTMLDivElement>(null)
 
-  const fetchData = useCallback(async (isRefresh = true) => {
+  const fetchData = useCallback(async () => {
     if (!user?.id) return
-    if (isRefresh) {
-      setLoading(true)
-      // Reset lists on refresh
-      if (activeTab === 'members') setMemberPage(0)
-      if (activeTab === 'withdrawals') setPayoutPage(0)
-    }
+    setLoading(true)
 
     const { data: p } = await supabase.from('users').select('*').eq('uid', user.id).single()
     if (p) {
@@ -72,52 +59,22 @@ export default function AgencyManagePage() {
           const { data } = await supabase.from('users').select('*').eq('agency_id', aid).eq('agency_status', 'pending')
           setApplicants(data || [])
         } else if (activeTab === 'members') {
-          const currentPage = isRefresh ? 0 : memberPage
-          const from = currentPage * PAGE_SIZE
-          const to = from + PAGE_SIZE - 1
-          const { data } = await supabase.from('users').select('*').eq('agency_id', aid).eq('agency_status', 'approved').range(from, to)
-          if (data) {
-            setMembers(prev => isRefresh ? data : [...prev, ...data])
-            setHasMoreMembers(data.length === PAGE_SIZE)
-          }
+          const { data } = await supabase.from('users').select('*').eq('agency_id', aid).eq('agency_status', 'approved').limit(100)
+          setMembers(data || [])
         } else if (activeTab === 'withdrawals') {
-          const currentPage = isRefresh ? 0 : payoutPage
-          const from = currentPage * PAGE_SIZE
-          const to = from + PAGE_SIZE - 1
-          const { data } = await supabase.from('withdrawals').select('*').eq('agency_id', aid).eq('status', 'pending').order('timestamp', { ascending: false }).range(from, to)
-          if (data) {
-            setWithdrawals(prev => isRefresh ? (data as any) : [...prev, ...(data as any)])
-            setHasMorePayouts(data.length === PAGE_SIZE)
-          }
+          const { data } = await supabase.from('withdrawals').select('*').eq('agency_id', aid).eq('status', 'pending').order('timestamp', { ascending: false }).limit(50)
+          setWithdrawals(data as any || [])
         }
       }
     }
     setLoading(false)
-  }, [user?.id, activeTab, memberPage, payoutPage])
+  }, [user?.id, activeTab])
 
-  // Initial and Tab-change Fetch
   useEffect(() => {
     if (isInitialized && user?.id) {
-      fetchData(true)
+      fetchData()
     }
-  }, [activeTab, isInitialized, user?.id])
-
-  // Infinite Scroll Trigger
-  useEffect(() => {
-    if (loading) return
-    if (!hasMoreMembers && activeTab === 'members') return
-    if (!hasMorePayouts && activeTab === 'withdrawals') return
-
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
-        if (activeTab === 'members' && hasMoreMembers) setMemberPage(p => p + 1)
-        if (activeTab === 'withdrawals' && hasMorePayouts) setPayoutPage(p => p + 1)
-      }
-    }, { threshold: 0.1 })
-
-    if (observerTarget.current) observer.observe(observerTarget.current)
-    return () => observer.disconnect()
-  }, [activeTab, hasMoreMembers, hasMorePayouts, loading])
+  }, [activeTab, isInitialized, user?.id, fetchData])
 
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
@@ -131,7 +88,7 @@ export default function AgencyManagePage() {
       const res = await reviewRecruitmentAction(applicantUid, status)
       if (res.success) {
         toast({ title: status === 'approved' ? "Member Approved" : "Applicant Rejected" })
-        fetchData(true) 
+        setApplicants(prev => prev.filter(a => a.uid !== applicantUid))
       } else {
         toast({ variant: "destructive", title: "Error", description: res.error })
       }
@@ -149,7 +106,7 @@ export default function AgencyManagePage() {
       const res = await updateWithdrawalStatusAction(requestId, status)
       if (res.success) {
         toast({ title: `Payout marked as ${status}` })
-        fetchData(true)
+        setWithdrawals(prev => prev.filter(w => (w as any).id !== requestId))
       } else {
         toast({ variant: "destructive", title: "Error", description: res.error })
       }
@@ -160,11 +117,7 @@ export default function AgencyManagePage() {
     }
   }
 
-  if (loading && memberPage === 0 && payoutPage === 0) return (
-    <div className="flex-1 flex items-center justify-center bg-white min-h-screen">
-      <Loader2 className="animate-spin text-[#00A2FF] w-8 h-8" />
-    </div>
-  )
+  if (loading) return <div className="flex-1 flex items-center justify-center min-h-screen bg-white"><Loader2 className="animate-spin text-[#00A2FF] w-8 h-8" /></div>
 
   return (
     <div className="flex-1 bg-white min-h-screen flex flex-col select-none">
@@ -182,7 +135,7 @@ export default function AgencyManagePage() {
         ].map((tab) => (
           <button 
             key={tab.id} 
-            onClick={() => { setActiveTab(tab.id as any); }} 
+            onClick={() => setActiveTab(tab.id as any)} 
             className={cn(
               "flex-1 py-4 flex flex-col items-center gap-1 border-b-2 transition-all", 
               activeTab === tab.id ? "border-[#00A2FF] text-[#00A2FF]" : "border-transparent text-gray-400"
@@ -202,10 +155,7 @@ export default function AgencyManagePage() {
             ) : applicants.map(app => (
               <div key={app.uid} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl animate-in fade-in slide-in-from-right-4">
                 <div className="flex items-center gap-3">
-                  <Avatar className="w-10 h-10">
-                    <AvatarImage src={app.photo_url} />
-                    <AvatarFallback><User /></AvatarFallback>
-                  </Avatar>
+                  <Avatar className="w-10 h-10"><AvatarImage src={app.photo_url} /><AvatarFallback><User /></AvatarFallback></Avatar>
                   <span className="font-bold text-sm">{app.name}</span>
                 </div>
                 <div className="flex gap-2">
@@ -252,7 +202,6 @@ export default function AgencyManagePage() {
                 ))
               )}
             </div>
-            <div ref={observerTarget} className="h-10" />
           </div>
         )}
 
@@ -287,7 +236,6 @@ export default function AgencyManagePage() {
                 </div>
               </div>
             ))}
-            <div ref={observerTarget} className="h-10" />
           </div>
         )}
       </main>

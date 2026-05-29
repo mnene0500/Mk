@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
@@ -65,7 +66,10 @@ export default function ManageReportsPage() {
     fetchReports()
     
     const channel = supabase.channel('reports-sync')
-      .on('postgres_changes', { event: '*', table: 'reports' }, () => fetchReports())
+      .on('postgres_changes', { event: 'UPDATE', table: 'reports', filter: "status=eq.resolved" }, (payload) => {
+         // Auto-remove resolved items from state if they change elsewhere
+         setReports(prev => prev.filter(r => r.id !== payload.new.id))
+      })
       .subscribe()
       
     return () => { supabase.removeChannel(channel) }
@@ -78,6 +82,7 @@ export default function ManageReportsPage() {
       const res = await resolveReportAction(user.id, reportId, reporterUid)
       if (res.success) {
         toast({ title: "Report Resolved", description: "Reporter notified." })
+        // Immediately remove from list
         setReports(prev => prev.filter(r => r.id !== reportId))
       } else {
         toast({ variant: "destructive", title: "Action Failed", description: res.error })
@@ -129,10 +134,6 @@ export default function ManageReportsPage() {
                         {format(report.timestamp, "MMM d, HH:mm")}
                       </p>
                    </div>
-                   <div className="text-right">
-                     <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest">Report ID</p>
-                     <p className="text-[10px] font-mono font-bold text-black">#{report.id}</p>
-                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -158,24 +159,13 @@ export default function ManageReportsPage() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                    <MessageSquareText className="w-3 h-3" /> Explanation
-                  </p>
-                  <div className="p-4 bg-white rounded-2xl border border-black/5 text-xs font-medium text-gray-700 italic leading-relaxed">
-                    "{report.description}"
-                  </div>
+                <div className="p-4 bg-white rounded-2xl border border-black/5 text-xs font-medium text-gray-700 italic leading-relaxed">
+                  "{report.description}"
                 </div>
 
                 {report.proof_photo_url && (
-                  <div className="space-y-2">
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                      <ImageIcon className="w-3 h-3" /> Proof Evidence
-                    </p>
-                    <div className="relative aspect-video rounded-3xl overflow-hidden shadow-inner border border-black/5 group cursor-zoom-in" onClick={() => window.open(report.proof_photo_url, '_blank')}>
-                      <Image src={report.proof_photo_url} alt="Proof" fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
-                      <div className="absolute inset-0 bg-black/5" />
-                    </div>
+                  <div className="relative aspect-video rounded-3xl overflow-hidden shadow-inner border border-black/5 group cursor-zoom-in" onClick={() => window.open(report.proof_photo_url, '_blank')}>
+                    <Image src={report.proof_photo_url} alt="Proof" fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
                   </div>
                 )}
 

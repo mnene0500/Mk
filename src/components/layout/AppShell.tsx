@@ -19,8 +19,9 @@ function ShellContent({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams()
   const { user } = useUser()
   const mainRef = useRef<HTMLElement>(null)
-  const [mounted, setMounted] = useState(false)
   
+  // HYDRATION SAFETY FLAG
+  const [mounted, setMounted] = useState(false)
   useEffect(() => {
     setMounted(true)
   }, [])
@@ -73,17 +74,19 @@ function ShellContent({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('qivo-nav-refresh', handleRefresh);
   }, [pathname])
 
+  // STABLE CONTAINER: Keep classes consistent between server/client to prevent hydration mismatches
   return (
     <div className="flex flex-col h-screen w-full overflow-hidden bg-white relative">
       <main 
         ref={mainRef}
         className={cn(
           "flex-1 w-full overflow-y-auto overflow-x-hidden relative z-0 no-scrollbar pb-[env(safe-area-inset-bottom)]",
-          showNav ? "pb-16" : "pb-0",
-          mounted ? "opacity-100" : "opacity-0"
+          showNav ? "pb-16" : "pb-0"
         )}
       >
-        {children}
+        <div className={cn("min-h-full flex flex-col", !mounted && "invisible")}>
+           {children}
+        </div>
       </main>
       
       {mounted && showNav && <BottomNav />}

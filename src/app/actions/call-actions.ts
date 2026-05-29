@@ -1,3 +1,4 @@
+
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -5,8 +6,18 @@ import { RtcTokenBuilder, RtcRole } from 'agora-token';
 
 /**
  * @fileOverview Agora Token Generation and Calling Economy for Owner system.
- * Updated to handle non-strict chat references.
  */
+
+// Helper to keep history lean
+async function trimHistory(supabase: any, userId: string, table: 'coin_history' | 'diamond_history') {
+  try {
+    const { data } = await supabase.from(table).select('id').eq('user_id', userId).order('timestamp', { ascending: false });
+    if (data && data.length > 50) {
+      const idsToDelete = data.slice(50).map((row: any) => row.id);
+      await supabase.from(table).delete().in('id', idsToDelete);
+    }
+  } catch (e) {}
+}
 
 export async function generateAgoraTokenAction(channelName: string, uid: string) {
   const appId = process.env.AGORA_APP_ID;
@@ -53,10 +64,8 @@ export async function startCallAction(chatId: string, callerId: string, receiver
       }
     }
 
-    // Clean up old active calls for this chat
     await supabase.from('calls').update({ status: 'ended' }).eq('chat_id', chatId).neq('status', 'ended');
 
-    // INSERT: Note - No strict Chat FK to allow calls before first message
     const { data, error } = await supabase.from('calls').insert({
       chat_id: chatId,
       caller_id: callerId,
@@ -122,6 +131,7 @@ export async function deductCallCoinsAction(uid: string, type: 'video' | 'voice'
         description: `${type.toUpperCase()} Call Minute`,
         timestamp: ts
       });
+      await trimHistory(supabase, uid, 'coin_history');
     }
 
     const { data: recipient } = await supabase.from('users').select('gender').eq('uid', partnerId).single();
@@ -135,6 +145,7 @@ export async function deductCallCoinsAction(uid: string, type: 'video' | 'voice'
         description: `Call from ${user?.name || 'User'}`,
         timestamp: ts
       });
+      await trimHistory(supabase, partnerId, 'diamond_history');
     }
 
     return { success: true };
