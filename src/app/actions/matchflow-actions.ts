@@ -486,7 +486,7 @@ export async function playSlotsAction(userId: string, stake: number) {
         message = "BAR MATCH! You win 5 Coins";
       }
     } else {
-      const loserPhrases = ["Not today, kid!", "So close, yet so far.", "The machine wins again.", "Better luck next pull!"];
+      const loserPhrases = ["So close, yet so far.", "The machine wins again.", "Better luck next pull!", "Try again!"];
       message = loserPhrases[Math.floor(Math.random() * loserPhrases.length)];
     }
 

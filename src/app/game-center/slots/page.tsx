@@ -59,9 +59,9 @@ export default function SlotMachinePage() {
             
             if (res.winAmount > 0) {
               setLastWin(res.winAmount)
-              toast({ title: res.message || "WINNER!", description: "Winning added to your wallet." })
+              toast({ title: "WINNER!", description: res.message || "Winnings added to your wallet." })
             } else {
-              toast({ title: "No Luck", description: res.message || "Not today kid!" })
+              toast({ title: "You Lost", description: res.message || "Better luck next time!" })
             }
           }
         }, 100)
@@ -119,7 +119,7 @@ export default function SlotMachinePage() {
         {/* CONTROLS */}
         <div className="w-full max-w-sm space-y-8">
           <div className="space-y-3">
-             <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Gamble Per Pull</p>
+             <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Set Stake</p>
              <div className="flex justify-between gap-1.5">
                {STAKES.map((stake) => (
                  <button
@@ -156,7 +156,7 @@ export default function SlotMachinePage() {
                 <span className="text-xs font-black text-green-400">10x STAKE</span>
              </div>
              <div className="p-3 bg-white/5 rounded-2xl border border-white/5 flex flex-col items-center">
-                <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">3x Crowns</span>
+                <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">3x Crowns</span>
                 <span className="text-xs font-black text-yellow-400">+50 COINS</span>
              </div>
           </div>
