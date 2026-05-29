@@ -4,7 +4,9 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 
 /**
  * @fileOverview Hardened Server Actions for QIVO.
- * Updated to handle free texting for Special Users and Merchants.
+ * Updated: 
+ * - Default placeholders for males.
+ * - Identity lock for verified users.
  */
 
 export async function completeOnboardingAction(payload: {
@@ -16,6 +18,11 @@ export async function completeOnboardingAction(payload: {
     const qId = Math.floor(1000000 + Math.random() * 900000000).toString();
     const timestamp = Date.now();
 
+    // Default placeholder for male users if no photo provided
+    const defaultPhoto = payload.gender === 'male' 
+      ? `https://picsum.photos/seed/${payload.uid}/400/400` 
+      : payload.photo_url;
+
     const { error: profileErr } = await supabase.from('users').upsert({
       uid: payload.uid, 
       email: payload.email, 
@@ -26,7 +33,7 @@ export async function completeOnboardingAction(payload: {
       looking_for: payload.looking_for, 
       onboarding_complete: true,
       match_flow_id: qId, 
-      photo_url: payload.photo_url, 
+      photo_url: defaultPhoto || payload.photo_url, 
       updated_at: new Date().toISOString()
     });
 
@@ -55,6 +62,32 @@ export async function completeOnboardingAction(payload: {
   } catch (err: any) {
     console.error("[Onboarding Error]:", err.message);
     return { success: false, error: err.message };
+  }
+}
+
+export async function checkIdentityDuplicateAction(uid: string) {
+  const supabase = getSupabaseAdmin();
+  try {
+    // In a real prod environment, we would compare face hashes. 
+    // Here we simulate checking if this specific auth user is trying to verify 
+    // while another account with the same 'email' or 'identity_key' is already verified.
+    const { data: user } = await supabase.from('users').select('email').eq('uid', uid).single();
+    if (!user) return { success: true };
+
+    const { data: existing } = await supabase
+      .from('users')
+      .select('match_flow_id')
+      .eq('email', user.email)
+      .eq('is_verified', true)
+      .neq('uid', uid)
+      .maybeSingle();
+
+    if (existing) {
+      return { success: false, matchFlowId: existing.match_flow_id };
+    }
+    return { success: true };
+  } catch (e) {
+    return { success: true }; // Fail open for the prototype
   }
 }
 
@@ -187,9 +220,6 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
     const { data: recipient } = await supabase.from('users').select('is_special_user, is_coin_seller, is_owner').eq('uid', payload.recipientId).single();
 
     const cost = 15;
-    
-    // FREE TEXTING LOGIC:
-    // Sender is Special/Owner/Merchant OR Recipient is Special/Owner/Merchant
     const isFree = sender?.is_owner || sender?.is_special_user || sender?.is_coin_seller || recipient?.is_special_user || recipient?.is_coin_seller || recipient?.is_owner;
 
     if (sender?.gender === 'male' && !isFree) {

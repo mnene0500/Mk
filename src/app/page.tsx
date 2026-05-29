@@ -7,7 +7,7 @@ import { useUser } from "@/firebase/auth/use-user"
 
 /**
  * Root Redirector with Splash UI.
- * Shows branding instead of a blank screen during the initial boot sequence.
+ * Pure cinematic branding focus.
  */
 export default function RootPage() {
   const router = useRouter()
@@ -42,7 +42,6 @@ export default function RootPage() {
     checkOnboarding()
   }, [user, isInitialized, authLoading, router])
 
-  // SHOW SPLASH: Prevents white flash on first load
   return (
     <div className="fixed inset-0 bg-white flex flex-col items-center justify-center select-none z-[9999]">
        <h1 className="text-8xl font-logo font-black text-[#00A2FF] tracking-tight animate-pulse duration-1000">

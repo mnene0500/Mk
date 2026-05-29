@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, Camera, ShieldCheck, CheckCircle2, AlertCircle, Loader2, Sparkles } from "lucide-react"
+import { ChevronLeft, Camera, ShieldCheck, CheckCircle2, AlertCircle, Loader2, Sparkles, UserX } from "lucide-react"
 import { verifyIdentity } from "@/ai/flows/verify-identity-flow"
 import { useToast } from "@/hooks/use-toast"
+import { checkIdentityDuplicateAction } from "@/app/actions/matchflow-actions"
 import Image from "next/image"
 import imageCompression from "browser-image-compression"
 
@@ -19,6 +20,7 @@ export default function VerifyIdentityPage() {
   const [step, setStep] = useState<'instructions' | 'capture' | 'analyzing' | 'result'>('instructions')
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
   const [isSuccess, setIsSuccess] = useState(false)
+  const [duplicateId, setDuplicateId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [profile, setProfile] = useState<any>(null)
   const [profileLoading, setProfileLoading] = useState(true)
@@ -54,6 +56,16 @@ export default function VerifyIdentityPage() {
     setStep('analyzing')
     
     try {
+      // Step 1: Check for unique identity lock
+      const dupRes = await checkIdentityDuplicateAction(user.id);
+      if (!dupRes.success) {
+        setDuplicateId(dupRes.matchFlowId);
+        setIsSuccess(false);
+        setStep('result');
+        return;
+      }
+
+      // Step 2: Run AI Verification
       const result = await verifyIdentity({ profilePhotoUrl: profile.photo_url, selfieDataUri: capturedImage })
       if (result.isMatch && result.confidence >= 0.7) {
         await supabase.from('users').update({ is_verified: true, updated_at: new Date().toISOString() }).eq('uid', user.id)
@@ -97,7 +109,7 @@ export default function VerifyIdentityPage() {
                   <div className="w-24 h-24 bg-blue-50 rounded-[2.5rem] flex items-center justify-center"><ShieldCheck className="w-12 h-12 text-[#00A2FF]" /></div>
                   <div className="space-y-2"><h2 className="text-2xl font-bold text-black tracking-tight">AI Verification</h2><p className="text-sm font-medium text-gray-400 px-4">Instant identity check to ensure community trust.</p></div>
                 </div>
-                <div className="space-y-4">{[{ title: "Good Lighting", desc: "Face must be clearly visible.", icon: Sparkles }, { title: "Face Centered", desc: "Hold your phone at eye level.", icon: Camera }, { title: "Match Photo", desc: "AI compares this with your profile.", icon: ShieldCheck }].map((item, i) => (<div key={i} className="flex gap-4 items-center bg-gray-50 p-5 rounded-3xl border border-gray-100/50"><div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm"><item.icon className="w-5 h-5 text-[#00A2FF]" /></div><div><p className="text-xs font-bold text-black uppercase tracking-tight">{item.title}</p><p className="text-[10px] font-bold text-gray-400 mt-0.5">{item.desc}</p></div></div>))}</div>
+                <div className="space-y-4">{[{ title: "Good Lighting", desc: "Face must be clearly visible.", icon: Sparkles }, { title: "Face Centered", desc: "Hold your phone at eye level.", icon: Camera }, { title: "Unique Profile", desc: "One identity per person policy.", icon: ShieldCheck }].map((item, i) => (<div key={i} className="flex gap-4 items-center bg-gray-50 p-5 rounded-3xl border border-gray-100/50"><div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm"><item.icon className="w-5 h-5 text-[#00A2FF]" /></div><div><p className="text-xs font-bold text-black uppercase tracking-tight">{item.title}</p><p className="text-[10px] font-bold text-gray-400 mt-0.5">{item.desc}</p></div></div>))}</div>
                 <Button className="w-full h-16 rounded-full bg-[#00A2FF] text-white font-bold uppercase tracking-widest text-sm shadow-xl mt-auto active:scale-95 transition-all" onClick={() => fileInputRef.current?.click()}>Start Verification</Button>
                 <input type="file" accept="image/*" capture="user" className="hidden" ref={fileInputRef} onChange={handleCapture} />
               </div>
@@ -114,10 +126,16 @@ export default function VerifyIdentityPage() {
                 </div>
               </div>
             )}
-            {step === 'analyzing' && <div className="flex-1 flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-500"><div className="relative"><div className="w-32 h-32 border-4 border-[#00A2FF]/10 rounded-full animate-spin border-t-[#00A2FF]" /><div className="absolute inset-0 flex items-center justify-center"><Loader2 className="w-10 h-10 text-[#00A2FF] animate-spin" /></div></div><div className="text-center space-y-2"><h3 className="text-xl font-bold text-black tracking-tight">AI Analyzing...</h3><p className="text-sm font-medium text-gray-400">Verifying features against your profile</p></div></div>}
+            {step === 'analyzing' && <div className="flex-1 flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-500"><div className="relative"><div className="w-32 h-32 border-4 border-[#00A2FF]/10 rounded-full animate-spin border-t-[#00A2FF]" /><div className="absolute inset-0 flex items-center justify-center"><Loader2 className="w-10 h-10 text-[#00A2FF] animate-spin" /></div></div><div className="text-center space-y-2"><h3 className="text-xl font-bold text-black tracking-tight">AI Analyzing...</h3><p className="text-sm font-medium text-gray-400">Verifying features and uniqueness</p></div></div>}
             {step === 'result' && (
               <div className="flex-1 flex flex-col items-center justify-center space-y-10 animate-in zoom-in-95 duration-500">
-                {isSuccess ? (<><div className="w-24 h-24 bg-green-50 rounded-[2.5rem] flex items-center justify-center text-green-500"><CheckCircle2 className="w-16 h-16" /></div><div className="text-center space-y-3"><h2 className="text-2xl font-bold text-black tracking-tight">Verified!</h2><p className="text-sm font-medium text-gray-500 px-8 leading-relaxed">Your identity has been confirmed. You now have the verified badge on your profile.</p></div><Button className="w-full h-16 rounded-full bg-[#00A2FF] text-white font-bold uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all mt-auto" onClick={() => router.push('/profile')}>Back to Profile</Button></>) : (<><div className="w-24 h-24 bg-red-50 rounded-[2.5rem] flex items-center justify-center text-red-500"><AlertCircle className="w-16 h-16" /></div><div className="text-center space-y-3"><h2 className="text-2xl font-bold text-black tracking-tight">Verification Failed</h2><p className="text-sm font-medium text-gray-500 px-8 leading-relaxed">The AI couldn't confirm a match. Please ensure your lighting is good and your profile photo is clear.</p></div><Button className="w-full h-16 rounded-full bg-[#00A2FF] text-white font-bold uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all mt-auto" onClick={() => setStep('instructions')}>Try Again</Button></>)}
+                {isSuccess ? (<><div className="w-24 h-24 bg-green-50 rounded-[2.5rem] flex items-center justify-center text-green-500"><CheckCircle2 className="w-16 h-16" /></div><div className="text-center space-y-3"><h2 className="text-2xl font-bold text-black tracking-tight">Verified!</h2><p className="text-sm font-medium text-gray-500 px-8 leading-relaxed">Your identity has been confirmed. You now have the verified badge on your profile.</p></div><Button className="w-full h-16 rounded-full bg-[#00A2FF] text-white font-bold uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all mt-auto" onClick={() => router.push('/profile')}>Back to Profile</Button></>) : (
+                  duplicateId ? (
+                    <><div className="w-24 h-24 bg-red-50 rounded-[2.5rem] flex items-center justify-center text-red-500"><UserX className="w-16 h-16" /></div><div className="text-center space-y-3"><h2 className="text-2xl font-bold text-black tracking-tight">Security Alert</h2><p className="text-sm font-medium text-gray-500 px-8 leading-relaxed">This identity is already verified in another account with ID <span className="font-black text-black">#{duplicateId}</span>. Please delete that account first to verify this one.</p></div><Button className="w-full h-16 rounded-full bg-[#00A2FF] text-white font-bold uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all mt-auto" onClick={() => router.push('/profile')}>Back to Profile</Button></>
+                  ) : (
+                    <><div className="w-24 h-24 bg-red-50 rounded-[2.5rem] flex items-center justify-center text-red-500"><AlertCircle className="w-16 h-16" /></div><div className="text-center space-y-3"><h2 className="text-2xl font-bold text-black tracking-tight">Verification Failed</h2><p className="text-sm font-medium text-gray-500 px-8 leading-relaxed">The AI couldn't confirm a match. Please ensure your lighting is good and your profile photo is clear.</p></div><Button className="w-full h-16 rounded-full bg-[#00A2FF] text-white font-bold uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all mt-auto" onClick={() => setStep('instructions')}>Try Again</Button></>
+                  )
+                )}
               </div>
             )}
           </>

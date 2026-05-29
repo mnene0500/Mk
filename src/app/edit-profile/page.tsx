@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useRef } from "react"
@@ -21,7 +20,7 @@ const AFRICAN_COUNTRIES = [
 ]
 
 const LOOKING_FOR_OPTIONS = [
-  "Serious partner", "Casual friendship", "Networking", "Dating", "Travel buddy"
+  "Serious Partner", "Casual Friendship", "Networking", "Dating", "Travel Buddy"
 ]
 
 const EDUCATION_LEVELS = [
@@ -93,7 +92,7 @@ export default function EditProfilePage() {
     if (!user?.id) return
 
     if (!formData.interests || formData.interests.trim().length < 5) {
-      toast({ variant: "destructive", title: "Bio is Compulsory", description: "Please write a short bio about yourself." });
+      toast({ variant: "destructive", title: "Bio Compulsory", description: "Please write a short bio about yourself." });
       return;
     }
 
@@ -143,14 +142,14 @@ export default function EditProfilePage() {
   if (loading) return <div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
 
   return (
-    <div className="flex-1 bg-white min-h-screen flex flex-col pb-20 select-none native-page-transition">
+    <div className="flex-1 bg-white min-h-screen flex flex-col relative select-none native-page-transition">
       <header className="px-4 h-16 flex items-center justify-between border-b sticky top-0 bg-white z-50">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
         <h1 className="text-sm font-black text-black uppercase tracking-widest">Edit Profile</h1>
-        <Button variant="ghost" size="icon" onClick={handleSave} disabled={saving} className="text-[#00A2FF]">{saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}</Button>
+        <div className="w-10" />
       </header>
 
-      <main className="flex-1 p-6 space-y-8 overflow-y-auto no-scrollbar">
+      <main className="flex-1 p-6 space-y-8 overflow-y-auto no-scrollbar pb-40">
         <div className="flex flex-col items-center">
           <div className="relative group cursor-pointer" onClick={() => { setTargetPhotoIndex('profile'); fileInputRef.current?.click(); }}>
             <Avatar className="w-32 h-32 border-none shadow-2xl overflow-hidden bg-gray-100">
@@ -200,7 +199,7 @@ export default function EditProfilePage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase text-gray-400 ml-1 flex items-center gap-1.5"><Calendar className="w-3 h-3"/> Date of Birth</Label>
-              <Input type="date" value={formData.dob} onChange={(e) => setFormData({...formData, dob: e.target.value})} className="rounded-xl h-14 border-gray-50 bg-gray-50 font-bold" />
+              <Input type="date" value={formData.dob} onChange={(e) => setFormData({...formData, dob: e.target.value})} className="rounded-xl h-14 border-gray-50 bg-gray-50 font-bold text-sm" />
             </div>
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase text-gray-400 ml-1 flex items-center gap-1.5"><MapPin className="w-3 h-3"/> Origin</Label>
@@ -241,6 +240,16 @@ export default function EditProfilePage() {
           </div>
         </div>
       </main>
+
+      <footer className="fixed bottom-0 inset-x-0 p-6 bg-white/90 backdrop-blur-xl border-t border-black/5 z-[60] pb-[env(safe-area-inset-bottom,24px)]">
+        <Button 
+          onClick={handleSave} 
+          disabled={saving} 
+          className="w-full h-14 rounded-2xl bg-[#00A2FF] hover:bg-[#0081CC] text-white font-black uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all"
+        >
+          {saving ? <Loader2 className="animate-spin w-6 h-6" /> : "Save Changes"}
+        </Button>
+      </footer>
 
       <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
 
