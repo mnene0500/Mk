@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, Suspense, useCallback, useRef } from "react"
@@ -65,6 +66,7 @@ function ChatsContent() {
   const { user: currentUser, loading: authLoading, isInitialized } = useUser()
   const { coins } = useBalance()
   const startWithId = searchParams.get("startWith")
+  const autoMsg = searchParams.get("autoMsg")
   
   const [chatSummaries, setChatSummaries] = useState<ChatSummary[]>(cachedSummaries)
   const [loadingSummaries, setLoadingSummaries] = useState(false)
@@ -88,9 +90,6 @@ function ChatsContent() {
   const longPressTimer = useRef<NodeJS.Timeout | null>(null)
   const isLongPress = useRef(false)
 
-  // --------------------------------------------------------------------------
-  // CHAT SUMMARIES LOGIC (INFINITE SCROLL)
-  // --------------------------------------------------------------------------
   const fetchSummaries = useCallback(async (pageNum = 0) => {
     if (!currentUser?.id || loadingSummaries) return
     if (pageNum === 0) setLoadingSummaries(true)
@@ -169,7 +168,6 @@ function ChatsContent() {
     }
   }, [currentUser?.id, startWithId, fetchSummaries])
 
-  // INFINITE SCROLL OBSERVER (SUMMARY LIST)
   useEffect(() => {
     if (!startWithId && hasMoreSummaries) {
       const observer = new IntersectionObserver((entries) => {
@@ -182,20 +180,6 @@ function ChatsContent() {
     }
   }, [startWithId, hasMoreSummaries, loadingSummaries, summaryPage, fetchSummaries]);
 
-  // REFRESH EVENT
-  useEffect(() => {
-    const handleRefresh = (e: any) => {
-      if (e.detail.path === '/chats' && !startWithId) {
-        fetchSummaries(0);
-      }
-    }
-    window.addEventListener('qivo-nav-refresh', handleRefresh);
-    return () => window.removeEventListener('qivo-nav-refresh', handleRefresh);
-  }, [fetchSummaries, startWithId])
-
-  // --------------------------------------------------------------------------
-  // CONVERSATION LOGIC (FETCH ON SCROLL UP)
-  // --------------------------------------------------------------------------
   const fetchMessagesBatch = useCallback(async (isLoadMore = false) => {
     if (!chatId || activeChatClearedAt === -1 || loadingMessages) return;
     if (isLoadMore && !hasMoreMessages) return;
@@ -227,7 +211,6 @@ function ChatsContent() {
     setLoadingMessages(false);
   }, [chatId, activeChatClearedAt, messages, hasMoreMessages, loadingMessages]);
 
-  // SCROLL UP OBSERVER (MESSAGES)
   useEffect(() => {
     if (startWithId && hasMoreMessages) {
       const observer = new IntersectionObserver((entries) => {
@@ -257,8 +240,12 @@ function ChatsContent() {
         const cleared = (cRes.data?.cleared_at as Record<string, number>)?.[currentUser.id] || 0
         setActiveChatClearedAt(cleared)
       })
+
+      if (autoMsg) {
+        setNewMessage(autoMsg.replace(/_/g, ' '))
+      }
     }
-  }, [currentUser?.id, startWithId])
+  }, [currentUser?.id, startWithId, autoMsg])
 
   useEffect(() => {
     if (chatId && activeChatClearedAt !== -1) {
@@ -327,9 +314,6 @@ function ChatsContent() {
 
   if (authLoading || !isInitialized) return null;
 
-  // --------------------------------------------------------------------------
-  // RENDER CHAT LIST
-  // --------------------------------------------------------------------------
   if (!startWithId) return (
     <div className="flex-1 bg-white min-h-screen relative select-none">
       <header className="px-6 h-16 flex items-center border-b sticky top-0 bg-white/90 backdrop-blur-md z-[50]">
@@ -350,7 +334,7 @@ function ChatsContent() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between mb-1">
-                    <div className="flex items-center gap-1.5 min-w-0"><p className="text-sm font-black truncate">{s.partner_name}</p>{s.partner_is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-blue-50 shrink-0" />}</div>
+                    <div className="flex items-center gap-1.5 min-w-0"><p className="text-sm font-black truncate">{s.partner_name}</p>{s.partner_is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-blue-50" />}</div>
                     <span className="text-[9px] font-bold text-gray-300 uppercase shrink-0">{format(s.last_message_at, "HH:mm")}</span>
                   </div>
                   <p className={cn("text-xs truncate", s.unread_count > 0 ? "font-bold text-black" : "text-gray-400")}>{s.last_message}</p>
@@ -376,12 +360,9 @@ function ChatsContent() {
     </div>
   )
 
-  // --------------------------------------------------------------------------
-  // RENDER CONVERSATION
-  // --------------------------------------------------------------------------
   return (
     <div className="flex flex-col h-screen bg-white select-none overflow-hidden">
-      <header className="h-16 border-b flex items-center px-4 gap-4 bg-white z-[50] sticky top-0">
+      <header className="h-16 border-b flex items-center px-4 gap-4 bg-white z-[50] sticky top-0 shrink-0">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
         <div className="flex items-center gap-3 flex-1 cursor-pointer active:opacity-70 transition-opacity min-w-0" onClick={() => router.push(`/users/${startWithId}`)}>
           <Avatar className="w-10 h-10 border shrink-0"><AvatarImage src={partnerProfile?.photo_url} className="object-cover" /><AvatarFallback>{partnerProfile?.name?.[0]}</AvatarFallback></Avatar>
@@ -403,7 +384,7 @@ function ChatsContent() {
           const isMe = m.sender_id === currentUser?.id;
           const gift = m.is_gift ? GIFTS.find(g => m.text.includes(g.name)) : null;
           return (
-            <div key={m.id} className={cn("max-w-[80%] p-4 rounded-[2rem] text-sm font-medium shadow-sm relative animate-in fade-in slide-in-from-bottom-2", 
+            <div key={m.id} className={cn("max-w-[85%] p-4 rounded-3xl text-sm font-medium shadow-sm relative animate-in fade-in slide-in-from-bottom-2", 
               isMe ? "bg-[#00A2FF] text-white self-end rounded-br-none" : "bg-white text-black self-start rounded-bl-none border",
               m.is_gift && "bg-gradient-to-br from-pink-500 to-rose-600 text-white border-none p-6 flex flex-col items-center text-center gap-3"
             )}>
@@ -416,10 +397,14 @@ function ChatsContent() {
         </div>
       </main>
 
-      <footer className="p-4 border-t bg-white pb-[env(safe-area-inset-bottom)] z-[50] sticky bottom-0">
-        <div className="flex items-center gap-2">
+      <footer className="p-4 border-t bg-white pb-[env(safe-area-inset-bottom, 16px)] shrink-0 z-[50]">
+        <div className="flex items-center gap-3 max-w-full">
           <Dialog open={giftDialogOpen} onOpenChange={setGiftDialogOpen}>
-            <DialogTrigger asChild><Button size="icon" variant="ghost" className="rounded-full h-12 w-12 text-pink-500"><Gift className="w-6 h-6" /></Button></DialogTrigger>
+            <DialogTrigger asChild>
+              <Button size="icon" variant="ghost" className="rounded-full h-11 w-11 text-pink-500 shrink-0">
+                <Gift className="w-6 h-6" />
+              </Button>
+            </DialogTrigger>
             <DialogContent className="rounded-[2.5rem] p-0 max-w-[95vw]">
               <DialogHeader className="p-6 pb-2"><DialogTitle className="text-lg font-black uppercase">Gifts ({coins} Coins)</DialogTitle></DialogHeader>
               <div className="grid grid-cols-3 gap-2 p-6 pt-0 max-h-[50vh] overflow-y-auto no-scrollbar">
@@ -431,8 +416,28 @@ function ChatsContent() {
               </div>
             </DialogContent>
           </Dialog>
-          <input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendMessage()} className="flex-1 h-12 bg-gray-50 rounded-2xl px-5 text-sm font-bold outline-none" placeholder="Type something..." />
-          <Button onClick={() => handleSendMessage()} size="icon" className="rounded-full h-12 w-12 bg-[#00A2FF] shrink-0"><Send className="w-5 h-5" /></Button>
+          
+          <div className="flex-1 flex items-center bg-gray-50 rounded-2xl px-4 h-11 border border-black/5 focus-within:ring-2 focus-within:ring-[#00A2FF]/20 transition-all">
+            <input 
+              value={newMessage} 
+              onChange={e => setNewMessage(e.target.value)} 
+              onKeyDown={e => e.key === 'Enter' && handleSendMessage()} 
+              className="flex-1 bg-transparent text-sm font-bold outline-none placeholder:text-gray-400 min-w-0" 
+              placeholder="Type something..." 
+            />
+          </div>
+
+          <Button 
+            onClick={() => handleSendMessage()} 
+            size="icon" 
+            disabled={!newMessage.trim()}
+            className={cn(
+              "rounded-full h-11 w-11 shrink-0 shadow-lg transition-all active:scale-90",
+              newMessage.trim() ? "bg-[#00A2FF] text-white" : "bg-gray-100 text-gray-400 shadow-none"
+            )}
+          >
+            <Send className="w-5 h-5" />
+          </Button>
         </div>
       </footer>
     </div>

@@ -177,7 +177,7 @@ export default function HomePage() {
       <div className="px-4 grid grid-cols-2 gap-3 py-6 bg-[#00A2FF] shrink-0">
         <button 
           onClick={() => router.push('/mystery-note')} 
-          className="h-28 bg-gradient-to-br from-purple-500 to-purple-700 border border-white/20 rounded-[2rem] p-6 flex flex-col items-start justify-center gap-2 active:scale-95 transition-all text-white shadow-2xl relative overflow-hidden group"
+          className="h-28 bg-gradient-to-br from-purple-500 to-purple-700 border border-white/20 rounded-2xl p-6 flex flex-col items-start justify-center gap-2 active:scale-95 transition-all text-white shadow-2xl relative overflow-hidden group"
         >
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-2xl group-active:scale-150 transition-transform" />
           <FileText className="w-6 h-6 mb-1 text-purple-100" />
@@ -189,7 +189,7 @@ export default function HomePage() {
         
         <button 
           onClick={() => router.push('/tasks')} 
-          className="h-28 bg-gradient-to-br from-indigo-800 to-blue-900 border border-white/20 rounded-[2rem] p-6 flex flex-col items-start justify-center gap-2 active:scale-95 transition-all text-white shadow-2xl relative overflow-hidden group"
+          className="h-28 bg-gradient-to-br from-indigo-800 to-blue-900 border border-white/20 rounded-2xl p-6 flex flex-col items-start justify-center gap-2 active:scale-95 transition-all text-white shadow-2xl relative overflow-hidden group"
         >
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-2xl group-active:scale-150 transition-transform" />
           <Target className="w-6 h-6 mb-1 text-blue-100" />
@@ -200,7 +200,7 @@ export default function HomePage() {
         </button>
       </div>
 
-      <div className="sticky top-0 z-40 bg-[#00A2FF] px-6 py-2 flex items-center justify-between border-b border-white/10 shadow-md">
+      <div className="sticky top-0 z-40 bg-[#00A2FF] px-6 py-2 flex items-center justify-between border-b border-white/10 shadow-md h-12">
         <div className="flex items-center gap-8">
           {(['Recommend', 'Nearby'] as const).map((tab) => (
             <button key={tab} onClick={() => handleTabChange(tab)} className={cn("text-[13px] font-black transition-all relative py-2", activeTab === tab ? "text-white" : "text-white/40")}>
@@ -219,22 +219,22 @@ export default function HomePage() {
           <>
             <div className="grid grid-cols-2 gap-3">
               {users.map((u) => (
-                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.3] rounded-[2.5rem] shadow-xl bg-gray-50 active:scale-95 transition-all cursor-pointer" onClick={() => router.push(`/users/${u.uid}`)}>
+                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.2] rounded-2xl shadow-xl bg-gray-50 active:scale-95 transition-all cursor-pointer" onClick={() => router.push(`/users/${u.uid}`)}>
                   <Image src={`${u.photo_url}?t=${u.updated_at}`} alt={u.name} fill className="object-cover" sizes="50vw" priority />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
-                  <div className="absolute inset-x-0 bottom-0 p-5 text-white flex flex-col gap-4">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                  <div className="absolute inset-x-0 bottom-0 p-4 text-white flex flex-col gap-3">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <h4 className="font-black text-sm truncate tracking-tight">{u.name}</h4>
-                        {u.is_verified && <BadgeCheck className="w-4 h-4 text-[#00A2FF] fill-white shrink-0" />}
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <h4 className="font-black text-xs truncate tracking-tight">{u.name}</h4>
+                        {u.is_verified && <BadgeCheck className="w-3 h-3 text-[#00A2FF] fill-white shrink-0" />}
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="bg-[#00B200] text-white font-black text-[9px] px-2 py-0.5 rounded-md">{calculateAge(u.dob)}</span>
-                        <span className="text-[9px] font-bold opacity-70">{u.country}</span>
+                        <span className="bg-[#00B200] text-white font-black text-[8px] px-1.5 py-0.5 rounded-md">{calculateAge(u.dob)}</span>
+                        <span className="text-[8px] font-bold opacity-70">{u.country}</span>
                       </div>
                     </div>
-                    <Button size="sm" className="w-full h-10 rounded-2xl bg-[#00A2FF] hover:bg-[#0081CC] text-white font-black text-[11px] gap-2 shadow-lg z-10" onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }}>
-                      <MessageSquare className="w-3.5 h-3.5" />Chat
+                    <Button size="sm" className="w-full h-8 rounded-xl bg-[#00A2FF] hover:bg-[#0081CC] text-white font-black text-[10px] gap-1.5 shadow-lg z-10" onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }}>
+                      <MessageSquare className="w-3 h-3" />Chat
                     </Button>
                   </div>
                 </Card>

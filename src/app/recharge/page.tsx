@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, Coins, ShieldCheck, Loader2, MessageSquare, ExternalLink, Zap, Check, History, AlertCircle } from "lucide-react"
+import { ChevronLeft, Coins, ShieldCheck, Loader2, MessageSquare, ExternalLink, Zap, Check, History, AlertCircle, Info } from "lucide-react"
 import { useUser } from "@/firebase/auth/use-user"
 import { useToast } from "@/hooks/use-toast"
 import { initiatePesaPalPayment } from "@/app/actions/payment-actions"
@@ -13,13 +13,22 @@ import { useBalance } from "@/lib/providers/BalanceProvider"
 import { supabase } from "@/lib/supabase"
 
 const PACKAGES = [
-  { id: "p1", label: "10", coins: 10, price: 1 },
-  { id: "p2", label: "500", coins: 500, price: 60 },
-  { id: "p3", label: "1K", coins: 1000, price: 120, popular: true },
-  { id: "p4", label: "1.5K", coins: 1500, price: 180 },
-  { id: "p5", label: "2K", coins: 2000, price: 240 },
-  { id: "p6", label: "5K", coins: 5000, price: 600 },
+  { id: "p1", label: "10", coins: 10, priceKes: 1 },
+  { id: "p2", label: "500", coins: 500, priceKes: 60 },
+  { id: "p3", label: "1K", coins: 1000, priceKes: 120, popular: true },
+  { id: "p4", label: "1.5K", coins: 1500, priceKes: 180 },
+  { id: "p5", label: "2K", coins: 2000, priceKes: 240 },
+  { id: "p6", label: "5K", coins: 5000, priceKes: 600 },
 ]
+
+// Conversion Rates (Approximate for Prototype)
+const RATES = {
+  'Kenya': { code: 'KES', rate: 1 },
+  'Nigeria': { code: 'NGN', rate: 12.5 },
+  'Ghana': { code: 'GHS', rate: 0.12 },
+  'South Africa': { code: 'ZAR', rate: 0.15 },
+  'Default': { code: 'USD', rate: 0.0078 }
+}
 
 export default function RechargePage() {
   const router = useRouter()
@@ -42,6 +51,7 @@ export default function RechargePage() {
 
   const selectedPackage = PACKAGES.find(p => p.id === selectedId)
   const isPesaPalCountry = profile && !['Nigeria', 'Ghana', 'South Africa'].includes(profile.country)
+  const currencyInfo = profile ? (RATES[profile.country as keyof typeof RATES] || RATES['Default']) : RATES['Kenya']
 
   const handleRecharge = async () => {
     if (!user) {
@@ -49,19 +59,20 @@ export default function RechargePage() {
       return
     }
 
-    if (!isPesaPalCountry) {
-      toast({ variant: "destructive", title: "Gateway Restricted", description: "Use Certified Merchants for your region." })
+    if (!selectedPackage) {
+      toast({ title: "Select a package first" })
       return
     }
 
-    if (!selectedPackage) {
-      toast({ title: "Select a package first" })
+    if (!isPesaPalCountry) {
+      // REDIRECT TO MERCHANT FLOW WITH SELECTION
+      router.push(`/coin-sellers?selectedPackage=${selectedPackage.label}&amount=${selectedPackage.coins}`)
       return
     }
     
     setIsProcessing(true)
     try {
-      const res = await initiatePesaPalPayment(user.id, selectedPackage.price, selectedPackage.coins)
+      const res = await initiatePesaPalPayment(user.id, selectedPackage.priceKes, selectedPackage.coins)
       if (res.success && res.redirect_url) {
         window.location.href = res.redirect_url
       } else {
@@ -74,13 +85,18 @@ export default function RechargePage() {
     }
   }
 
+  const formatPrice = (kes: number) => {
+    const val = (kes * currencyInfo.rate).toFixed(2)
+    return `${currencyInfo.code} ${val}`
+  }
+
   return (
     <div className="flex-1 bg-white min-h-screen flex flex-col select-none animate-in fade-in duration-500">
       <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-50">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full text-black">
           <ChevronLeft className="w-6 h-6" />
         </Button>
-        <h1 className="text-base font-black text-black tracking-widest">Recharge</h1>
+        <h1 className="text-sm font-black text-black uppercase tracking-widest">Store</h1>
         <Button variant="ghost" size="icon" onClick={() => router.push('/coin-history')} className="rounded-full text-black">
           <History className="w-5 h-5" />
         </Button>
@@ -92,17 +108,26 @@ export default function RechargePage() {
                 <Coins className='w-6 h-6 text-yellow-500 fill-yellow-500'/>
                 <span className="text-2xl font-black text-black">{coins}</span>
             </div>
-            <p className="text-[10px] font-bold text-gray-400 tracking-widest">Available Coins</p>
+            <p className="text-[10px] font-bold text-gray-400 tracking-widest">Balance Available</p>
         </div>
 
-        {isPesaPalCountry ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-1">
+             <h3 className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Select Package</h3>
+             {!isPesaPalCountry && (
+               <span className="text-[8px] font-bold text-[#00A2FF] bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 flex items-center gap-1">
+                 <Info className="w-2.5 h-2.5" /> Merchant Only Region
+               </span>
+             )}
+          </div>
+          
           <div className="grid grid-cols-3 gap-3">
             {PACKAGES.map((pkg) => (
               <button 
                 key={pkg.id} 
                 onClick={() => setSelectedId(pkg.id)}
                 className={cn(
-                  "relative group flex flex-col items-center justify-center p-4 rounded-3xl border-2 transition-all active:scale-95 h-32",
+                  "relative group flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all active:scale-95 h-32",
                   selectedId === pkg.id 
                     ? "border-[#00A2FF] bg-blue-50/50 shadow-lg shadow-blue-100" 
                     : "border-gray-50 bg-gray-50/30 hover:border-gray-100"
@@ -127,26 +152,14 @@ export default function RechargePage() {
                 
                 <div className="mt-auto">
                   <span className={cn(
-                    "text-[10px] font-black",
+                    "text-[9px] font-black",
                     selectedId === pkg.id ? "text-[#00A2FF]" : "text-gray-400"
-                  )}>KES {pkg.price}</span>
+                  )}>{formatPrice(pkg.priceKes)}</span>
                 </div>
               </button>
             ))}
           </div>
-        ) : !loadingProfile ? (
-          <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100 flex flex-col items-center text-center gap-4">
-            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-[#00A2FF] shadow-sm">
-              <AlertCircle className="w-6 h-6" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-sm font-black text-black">Local Recharge Only</h3>
-              <p className="text-[10px] font-medium text-gray-500 leading-relaxed">PesaPal is restricted in {profile?.country}. Please contact a Certified Merchant below to buy coins.</p>
-            </div>
-          </div>
-        ) : (
-          <div className="h-32 flex items-center justify-center"><Loader2 className="animate-spin text-gray-200" /></div>
-        )}
+        </div>
 
         <div className="space-y-4">
           <Button 
@@ -159,38 +172,45 @@ export default function RechargePage() {
                 <MessageSquare className="w-4 h-4 text-yellow-400 fill-current" />
               </div>
               <div className="text-left">
-                <span className="block text-[11px] font-black uppercase tracking-widest leading-none">Contact Merchants</span>
-                <span className="text-[8px] opacity-60 font-bold">Fast Local Payment</span>
+                <span className="block text-[11px] font-black uppercase tracking-widest leading-none">Merchant List</span>
+                <span className="text-[8px] opacity-60 font-bold">Fast Local Transfer</span>
               </div>
             </div>
             <ExternalLink className="w-4 h-4 text-yellow-400" />
           </Button>
 
-          {isPesaPalCountry && (
+          {isPesaPalCountry ? (
             <div className="flex items-center justify-center gap-2 text-gray-300 py-4">
               <ShieldCheck className="w-4 h-4" />
-              <span className="text-[9px] font-black tracking-[0.2em]">Secure PesaPal Channel</span>
+              <span className="text-[9px] font-black tracking-[0.2em]">Secured by PesaPal</span>
             </div>
+          ) : (
+             <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 text-center">
+               <p className="text-[9px] font-bold text-amber-700 leading-relaxed uppercase tracking-widest">
+                 Please select a package above to contact a merchant for local payment.
+               </p>
+             </div>
           )}
         </div>
       </main>
 
-      {isPesaPalCountry && (
-        <footer className="fixed bottom-0 inset-x-0 p-6 bg-white/90 backdrop-blur-md border-t border-gray-50 z-40 flex flex-col gap-4">
-          <Button 
-            onClick={handleRecharge}
-            disabled={isProcessing || !selectedId}
-            className="w-full h-16 rounded-full bg-[#00A2FF] hover:bg-[#0081CC] text-white font-black tracking-widest text-sm shadow-xl active:scale-95 transition-all"
-          >
-            {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : (
-              <div className="flex items-center gap-2">
-                <Zap className="w-4 h-4 fill-current text-yellow-300" />
-                {selectedPackage ? `Recharge Now (KES ${selectedPackage.price})` : "Select a Package"}
-              </div>
-            )}
-          </Button>
-        </footer>
-      )}
+      <footer className="fixed bottom-0 inset-x-0 p-6 bg-white/90 backdrop-blur-md border-t border-gray-50 z-40 flex flex-col gap-4">
+        <Button 
+          onClick={handleRecharge}
+          disabled={isProcessing || !selectedId}
+          className="w-full h-16 rounded-full bg-[#00A2FF] hover:bg-[#0081CC] text-white font-black tracking-widest text-sm shadow-xl active:scale-95 transition-all"
+        >
+          {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : (
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 fill-current text-yellow-300" />
+              {!isPesaPalCountry 
+                ? (selectedPackage ? `Contact Merchant (${formatPrice(selectedPackage.priceKes)})` : "Select a Package")
+                : (selectedPackage ? `Recharge Now (${formatPrice(selectedPackage.priceKes)})` : "Select a Package")
+              }
+            </div>
+          )}
+        </Button>
+      </footer>
     </div>
   )
 }

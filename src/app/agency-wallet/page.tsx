@@ -8,7 +8,7 @@ import { useUser } from "@/firebase/auth/use-user"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ChevronLeft, Gem, Banknote, History, Wallet, ArrowRightLeft, Loader2 } from "lucide-react"
+import { ChevronLeft, Gem, Banknote, History, Wallet, ArrowRightLeft, Loader2, Info } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { requestWithdrawalAction } from "@/app/actions/matchflow-actions"
 
@@ -119,6 +119,13 @@ export default function AgencyMemberPage() {
               <span className="text-xl font-bold text-green-600">Ksh {expectedKes}</span>
             </div>
           )}
+
+          <div className="p-4 bg-gray-50 rounded-2xl border border-black/5 flex items-start gap-3">
+            <Info className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+            <p className="text-[10px] font-bold text-gray-400 leading-relaxed uppercase tracking-widest">
+              Please note: Transaction and processing charges apply during withdrawal according to your local bank or mobile money provider.
+            </p>
+          </div>
 
           <Button className="w-full h-16 rounded-full bg-green-600 text-white font-bold uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all" onClick={handleWithdraw} disabled={isProcessing || !diamondsToUse || Number(diamondsToUse) < minDiamondsForCash}>
             {isProcessing ? <Loader2 className="animate-spin" /> : <div className="flex items-center gap-2"><ArrowRightLeft className="w-5 h-5" />Request Payout</div>}
