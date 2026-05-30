@@ -55,7 +55,7 @@ const GIFTS = [
 ]
 
 let cachedSummaries: ChatSummary[] = [];
-const SUMMARY_PAGE_SIZE = 15;
+const SUMMARY_PAGE_SIZE = 20;
 const MESSAGE_PAGE_SIZE = 30;
 
 function ChatsContent() {
@@ -91,78 +91,91 @@ function ChatsContent() {
   const isLongPress = useRef(false)
 
   const fetchSummaries = useCallback(async (pageNum = 0) => {
-    if (!currentUser?.id || loadingSummaries) return
+    if (!currentUser?.id || (loadingSummaries && pageNum !== 0)) return
     
-    if (pageNum === 0 && chatSummaries.length === 0) setLoadingSummaries(true)
+    setLoadingSummaries(true)
     
     const from = pageNum * SUMMARY_PAGE_SIZE;
     const to = from + SUMMARY_PAGE_SIZE - 1;
 
-    const { data: chatsData } = await supabase
-      .from('chats')
-      .select('id, participant_ids, last_message, last_message_at, cleared_at, last_seen_at, last_sender_id')
-      .contains('participant_ids', [currentUser.id])
-      .order('last_message_at', { ascending: false })
-      .range(from, to);
+    try {
+      const { data: chatsData, error: fetchErr } = await supabase
+        .from('chats')
+        .select('id, participant_ids, last_message, last_message_at, cleared_at, last_seen_at, last_sender_id')
+        .contains('participant_ids', [currentUser.id])
+        .order('last_message_at', { ascending: false })
+        .range(from, to);
 
-    if (!chatsData || chatsData.length === 0) {
-      if (pageNum === 0) {
-        setChatSummaries([]);
-        cachedSummaries = [];
+      if (fetchErr || !chatsData || chatsData.length === 0) {
+        if (pageNum === 0) {
+          setChatSummaries([]);
+          cachedSummaries = [];
+        }
+        setHasMoreSummaries(false);
+        setLoadingSummaries(false);
+        return;
       }
-      setHasMoreSummaries(false);
-      setLoadingSummaries(false);
-      return;
-    }
 
-    const { data: userData } = await supabase.from('users').select('blocking, blocked_by').eq('uid', currentUser.id).single();
-    const blockedUids = new Set([...(userData?.blocking || []), ...(userData?.blocked_by || [])]);
+      const { data: userData } = await supabase.from('users').select('blocking, blocked_by').eq('uid', currentUser.id).single();
+      const blockedUids = new Set([...(userData?.blocking || []), ...(userData?.blocked_by || [])]);
 
-    const validChats = chatsData.filter(c => {
-      const pId = c.participant_ids.find((id: string) => id !== currentUser.id)
-      if (!pId || blockedUids.has(pId)) return false;
-      const myClearedAt = (c.cleared_at as Record<string, number>)?.[currentUser.id] || 0;
-      return (c.last_message_at > myClearedAt);
-    });
-
-    const partnerIds = validChats.map(c => c.participant_ids.find((id: string) => id !== currentUser.id));
-    const { data: profiles } = await supabase.from('users').select('uid, name, photo_url, is_verified').in('uid', partnerIds);
-    const profileMap = new Map(profiles?.map(p => [p.uid, p]));
-
-    const enhanced: ChatSummary[] = validChats.map(c => {
-      const pId = c.participant_ids.find((id: string) => id !== currentUser.id);
-      const p = profileMap.get(pId);
-      const mySeenAt = (c.last_seen_at as Record<string, number>)?.[currentUser.id] || 0;
-      const isUnread = c.last_message_at > mySeenAt && c.last_sender_id !== currentUser.id;
-
-      return {
-        id: c.id,
-        partner_id: pId,
-        partner_name: p?.name || 'User',
-        partner_photo: p?.photo_url || '',
-        partner_is_verified: p?.is_verified,
-        last_message: c.last_message || "",
-        last_message_at: c.last_message_at || Date.now(),
-        unread_count: isUnread ? 1 : 0
-      }
-    });
-
-    if (pageNum === 0) {
-      setChatSummaries(enhanced);
-      cachedSummaries = enhanced;
-    } else {
-      setChatSummaries(prev => {
-        const ids = new Set(prev.map(s => s.id));
-        const filtered = enhanced.filter(s => !ids.has(s.id));
-        return [...prev, ...filtered];
+      const validChats = chatsData.filter(c => {
+        const pId = c.participant_ids.find((id: string) => id !== currentUser.id)
+        if (!pId || blockedUids.has(pId)) return false;
+        const myClearedAt = (c.cleared_at as Record<string, number>)?.[currentUser.id] || 0;
+        return (c.last_message_at > myClearedAt);
       });
-      cachedSummaries = [...cachedSummaries, ...enhanced.filter(s => !new Set(cachedSummaries.map(x => x.id)).has(s.id))];
+
+      if (validChats.length === 0 && chatsData.length === SUMMARY_PAGE_SIZE) {
+        // If all items in this page were filtered but there might be more in DB, fetch next page
+        setLoadingSummaries(false);
+        fetchSummaries(pageNum + 1);
+        return;
+      }
+
+      const partnerIds = validChats.map(c => c.participant_ids.find((id: string) => id !== currentUser.id));
+      const { data: profiles } = await supabase.from('users').select('uid, name, photo_url, is_verified').in('uid', partnerIds);
+      const profileMap = new Map(profiles?.map(p => [p.uid, p]));
+
+      const enhanced: ChatSummary[] = validChats.map(c => {
+        const pId = c.participant_ids.find((id: string) => id !== currentUser.id);
+        const p = profileMap.get(pId);
+        const mySeenAt = (c.last_seen_at as Record<string, number>)?.[currentUser.id] || 0;
+        const isUnread = c.last_message_at > mySeenAt && c.last_sender_id !== currentUser.id;
+
+        return {
+          id: c.id,
+          partner_id: pId!,
+          partner_name: p?.name || 'User',
+          partner_photo: p?.photo_url || '',
+          partner_is_verified: p?.is_verified,
+          last_message: c.last_message || "",
+          last_message_at: c.last_message_at || Date.now(),
+          unread_count: isUnread ? 1 : 0
+        }
+      });
+
+      if (pageNum === 0) {
+        setChatSummaries(enhanced);
+        cachedSummaries = enhanced;
+      } else {
+        setChatSummaries(prev => {
+          const ids = new Set(prev.map(s => s.id));
+          const filtered = enhanced.filter(s => !ids.has(s.id));
+          return [...prev, ...filtered];
+        });
+        cachedSummaries = [...cachedSummaries, ...enhanced.filter(s => !new Set(cachedSummaries.map(x => x.id)).has(s.id))];
+      }
+      
+      setHasMoreSummaries(chatsData.length === SUMMARY_PAGE_SIZE);
+      setSummaryPage(pageNum);
+    } catch (e) {
+      console.error("Fetch summaries error:", e);
+      setHasMoreSummaries(false);
+    } finally {
+      setLoadingSummaries(false);
     }
-    
-    setHasMoreSummaries(chatsData.length === SUMMARY_PAGE_SIZE);
-    setSummaryPage(pageNum);
-    setLoadingSummaries(false);
-  }, [currentUser?.id, loadingSummaries, chatSummaries.length])
+  }, [currentUser?.id, loadingSummaries]);
 
   useEffect(() => {
     if (currentUser?.id && !startWithId) {
@@ -172,7 +185,7 @@ function ChatsContent() {
         .subscribe()
       return () => { supabase.removeChannel(channel) }
     }
-  }, [currentUser?.id, startWithId, fetchSummaries])
+  }, [currentUser?.id, startWithId]);
 
   useEffect(() => {
     if (!startWithId && hasMoreSummaries) {
@@ -282,7 +295,7 @@ function ChatsContent() {
         }).subscribe()
       return () => { supabase.removeChannel(channel) }
     }
-  }, [chatId, activeChatClearedAt]);
+  }, [chatId, activeChatClearedAt, fetchMessagesBatch]);
 
   const handleSendMessage = useCallback(async () => {
     const text = newMessage.trim()
@@ -339,7 +352,7 @@ function ChatsContent() {
         <h1 className="text-2xl font-black text-[#00A2FF] tracking-tight">Chats</h1>
       </header>
       <main className="flex flex-col">
-        {chatSummaries.length === 0 && loadingSummaries ? (
+        {loadingSummaries && chatSummaries.length === 0 ? (
           <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
         ) : chatSummaries.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-40 opacity-40 px-12 text-center text-gray-300">

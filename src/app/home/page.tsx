@@ -176,7 +176,7 @@ export default function HomePage() {
       <div className="px-4 grid grid-cols-2 gap-3 py-6 bg-[#00A2FF] shrink-0">
         <button 
           onClick={() => router.push('/mystery-note')} 
-          className="h-28 bg-gradient-to-br from-purple-500/80 to-purple-700/90 border border-white/20 rounded-2xl p-6 flex flex-col items-start justify-center gap-1 active:scale-95 transition-all text-white shadow-xl relative overflow-hidden group backdrop-blur-sm"
+          className="h-28 bg-gradient-to-br from-purple-500/80 to-purple-700/90 border border-white/20 rounded-2xl p-6 flex flex-col items-start justify-center gap-1 transition-all text-white shadow-xl relative overflow-hidden group backdrop-blur-sm"
         >
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-2xl transition-transform" />
           <FileText className="w-6 h-6 mb-1 text-purple-100" />
@@ -188,7 +188,7 @@ export default function HomePage() {
         
         <button 
           onClick={() => router.push('/tasks')} 
-          className="h-28 bg-gradient-to-br from-blue-600/80 to-indigo-800/90 border border-white/20 rounded-2xl p-6 flex flex-col items-start justify-center gap-1 active:scale-95 transition-all text-white shadow-xl relative overflow-hidden group backdrop-blur-sm"
+          className="h-28 bg-gradient-to-br from-blue-600/80 to-indigo-800/90 border border-white/20 rounded-2xl p-6 flex flex-col items-start justify-center gap-1 transition-all text-white shadow-xl relative overflow-hidden group backdrop-blur-sm"
         >
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-2xl transition-transform" />
           <Target className="w-6 h-6 mb-1 text-blue-100" />
@@ -208,7 +208,7 @@ export default function HomePage() {
             </button>
           ))}
         </div>
-        <button onClick={() => fetchUsers(0, true)} className={cn("p-2 text-white active:opacity-70 transition-opacity", isRefreshing && "animate-spin")}>
+        <button onClick={() => fetchUsers(0, true)} className={cn("p-2 text-white transition-opacity", isRefreshing && "animate-spin")}>
           <RotateCw className="w-4 h-4" />
         </button>
       </div>
@@ -233,7 +233,7 @@ export default function HomePage() {
                     )}
 
                     <Button 
-                      className="absolute top-2 right-2 rounded-full h-7 px-4 bg-[#00A2FF]/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest shadow-xl z-20 active:opacity-80 border border-white/20" 
+                      className="absolute top-2 right-2 rounded-full h-7 px-4 bg-[#00A2FF]/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest shadow-xl z-20 border border-white/20" 
                       onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }}
                     >
                       Chat
