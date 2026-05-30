@@ -9,12 +9,11 @@ import { headers } from 'next/headers';
 
 // Basic offensive word filter + Number detection (English & Kiswahili)
 function filterSensitiveContent(text: string): string {
-  // Detection for: Numeric patterns, English number words, Swahili number words
   const sensitivePatterns = [
     /\d{3,}/g, // Any sequence of 3+ digits
     /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)\b/gi,
     /\b(sifuri|moja|mbili|tatu|nne|tano|sita|saba|nane|tisa|kumi)\b/gi,
-    /\b(fuck|bitch|idiot|stupid|scam|fraud)\b/gi // Basic placeholder offensive words
+    /\b(fuck|bitch|idiot|stupid|scam|fraud)\b/gi 
   ];
 
   let filtered = text;
@@ -26,42 +25,18 @@ function filterSensitiveContent(text: string): string {
 
 async function trimHistory(supabase: any, userId: string, table: 'coin_history' | 'diamond_history') {
   try {
-    const { count } = await supabase
+    const { data } = await supabase
       .from(table)
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId);
+      .select('id')
+      .eq('user_id', userId)
+      .order('timestamp', { ascending: false });
 
-    if (count && count > 60) {
-      const { data } = await supabase
-        .from(table)
-        .select('id')
-        .eq('user_id', userId)
-        .order('timestamp', { ascending: false })
-        .range(50, 100);
-
-      if (data && data.length > 0) {
-        const idsToDelete = data.map((row: any) => row.id);
-        await supabase.from(table).delete().in('id', idsToDelete);
-      }
+    if (data && data.length > 50) {
+      const idsToDelete = data.slice(50).map((row: any) => row.id);
+      await supabase.from(table).delete().in('id', idsToDelete);
     }
   } catch (e) {
     console.error(`Trim ${table} error:`, e);
-  }
-}
-
-export async function savePushSubscriptionAction(userId: string, endpoint: string, subscriptionJson: any) {
-  const supabase = getSupabaseAdmin();
-  try {
-    const { error } = await supabase.from('push_subscriptions').upsert({
-      user_id: userId,
-      endpoint: endpoint,
-      subscription_json: subscriptionJson,
-      created_at: new Date().toISOString()
-    }, { onConflict: 'endpoint' });
-    if (error) throw error;
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
   }
 }
 
@@ -76,16 +51,14 @@ export async function completeOnboardingAction(payload: {
     const qId = Math.floor(1000000 + Math.random() * 900000000).toString();
     const timestamp = Date.now();
 
-    // Check if IP already has an onboarding reward
-    const { data: existingIp } = await supabase
+    // Check for IP fraud in metadata/country context for this prototype
+    const { data: existingProfiles } = await supabase
       .from('users')
       .select('uid')
-      .eq('country', payload.country) // IP checks can be loose, verify with specific metadata if possible
-      .limit(1);
+      .eq('country', payload.country)
+      .limit(5);
 
-    // Note: In production, you'd have a separate 'onboarding_logs' table with IP column
-    // For this prototype, we'll store IP in a metadata-like way or just check for previous same-IP logins if logged.
-    // For now, assume IP check passes unless you implement a dedicated table.
+    const isSuspectedAlt = existingProfiles && existingProfiles.length > 3;
 
     const defaultPhoto = payload.gender === 'male' 
       ? `https://picsum.photos/seed/${payload.uid}/400/400` 
@@ -107,10 +80,9 @@ export async function completeOnboardingAction(payload: {
 
     if (profileErr) throw profileErr;
 
-    // REWARD LOGIC: Prevent duplicate rewards for same IP/Profile
     const { data: alreadyRewarded } = await supabase.from('coin_history').select('id').eq('user_id', payload.uid).eq('type', 'bonus').maybeSingle();
     
-    if (!alreadyRewarded) {
+    if (!alreadyRewarded && !isSuspectedAlt) {
       const initialCoins = (payload.gender === 'male') ? 500 : 0;
       const initialDiamonds = (payload.gender === 'female') ? 150 : 0;
 
@@ -137,173 +109,9 @@ export async function completeOnboardingAction(payload: {
   }
 }
 
-export async function checkIdentityDuplicateAction(userId: string) {
-  const supabase = getSupabaseAdmin();
-  try {
-    const { data: user } = await supabase.from('users').select('photo_url').eq('uid', userId).single();
-    if (!user?.photo_url) return { success: true };
-
-    const { data: others } = await supabase
-      .from('users')
-      .select('match_flow_id')
-      .eq('photo_url', user.photo_url)
-      .eq('is_verified', true)
-      .neq('uid', userId)
-      .maybeSingle();
-
-    if (others) {
-      return { success: false, matchFlowId: others.match_flow_id };
-    }
-    return { success: true };
-  } catch (err) {
-    return { success: true };
-  }
-}
-
-export async function deleteUserCompletelyAction(uid: string) {
-  const supabase = getSupabaseAdmin();
-  try {
-    try {
-      const { data: files } = await supabase.storage.from('photos').list(uid);
-      if (files?.length) {
-        await supabase.storage.from('photos').remove(files.map(f => `${uid}/${f.name}`));
-      }
-    } catch (e) {}
-
-    const { error: authErr } = await supabase.auth.admin.deleteUser(uid);
-    if (authErr) throw authErr;
-
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
-export async function reportUserAction(payload: { 
-  reporterId: string; 
-  reportedId: string; 
-  reason: string; 
-  description: string; 
-  proofPhotoUrl?: string; 
-}) {
-  const supabase = getSupabaseAdmin();
-  try {
-    const { error } = await supabase.from('reports').insert({
-      reporter_id: payload.reporterId,
-      reported_id: payload.reportedId,
-      reason: payload.reason,
-      description: payload.description,
-      proof_photo_url: payload.proofPhotoUrl,
-      status: 'pending',
-      timestamp: Date.now()
-    });
-    if (error) throw error;
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
-export async function resolveReportAction(adminUid: string, reportId: string, reporterUid: string) {
-  const supabase = getSupabaseAdmin();
-  try {
-    const { data: admin } = await supabase.from('users').select('is_owner, is_special_user').eq('uid', adminUid).single();
-    if (!admin?.is_owner && !admin?.is_special_user) throw new Error("Unauthorized");
-
-    await supabase.from('reports').update({ status: 'resolved' }).eq('id', reportId);
-    
-    const systemMsg = "System: Your recent report has been reviewed and resolved. Thank you for keeping QIVO safe.";
-    const chatId = `system_${reporterUid}`;
-    await supabase.from('messages').insert({ chat_id: chatId, sender_id: adminUid, text: systemMsg, timestamp: Date.now() });
-
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
-export async function awardCoinsAction(ownerUid: string, targetUid: string, amount: number) {
-  const supabase = getSupabaseAdmin();
-  try {
-    const { data: owner } = await supabase.from('users').select('is_owner, is_coin_seller, is_special_user').eq('uid', ownerUid).single();
-    if (!owner?.is_owner && !owner?.is_coin_seller && !owner?.is_special_user) throw new Error("Unauthorized");
-
-    const ts = Date.now();
-
-    if (!owner.is_owner && !owner.is_special_user) {
-      const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: ownerUid, p_amount: -amount });
-      if (deductErr) throw new Error("Insufficient merchant balance");
-      
-      await supabase.from('coin_history').insert({
-        user_id: ownerUid, amount: -amount, type: 'transfer', description: 'Sales Transfer', timestamp: ts
-      });
-    }
-
-    const { error: awardErr } = await supabase.rpc("increment_coins", { p_user_id: targetUid, p_amount: amount });
-    if (awardErr) throw awardErr;
-
-    await supabase.from('coin_history').insert({
-      user_id: targetUid, amount: amount, type: 'awarded', description: `Received from ${owner.is_coin_seller ? 'Merchant' : 'Admin'}`, timestamp: ts
-    });
-
-    return { success: true, message: `Successfully sent ${amount} coins.` };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
-export async function toggleUserRoleAction(ownerUid: string, targetMatchFlowId: string, role: 'is_coin_seller' | 'is_agent' | 'is_owner' | 'is_special_user', value: boolean) {
-  const supabase = getSupabaseAdmin();
-  try {
-    const { data: owner } = await supabase.from('users').select('is_owner, is_special_user').eq('uid', ownerUid).single();
-    if (!owner?.is_owner && !owner?.is_special_user) throw new Error("Unauthorized");
-    
-    const { error: updateErr } = await supabase.from('users').update({ [role]: value }).eq('match_flow_id', targetMatchFlowId);
-    if (updateErr) throw updateErr;
-    return { success: true, message: "Authority updated successfully." };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
-export async function dailyCheckInAction(uid: string) {
-  const supabase = getSupabaseAdmin();
-  try {
-    const { data: user } = await supabase.from('users').select('last_check_in_date, check_in_streak').eq('uid', uid).single();
-    if (!user) throw new Error("Profile not found.");
-    const now = new Date();
-    if (user.last_check_in_date && new Date(user.last_check_in_date).toDateString() === now.toDateString()) {
-      return { success: false, error: "Already collected." };
-    }
-    let streak = 1;
-    if (user.last_check_in_date) {
-      const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-      if (new Date(user.last_check_in_date).toDateString() === yesterday.toDateString()) {
-        streak = (user.check_in_streak || 0) + 1;
-      }
-    }
-    const rewards = [2, 2, 5, 2, 2, 2, 10];
-    const amount = rewards[(streak - 1) % 7];
-    const ts = Date.now();
-
-    await supabase.from('users').update({ last_check_in_date: now.toISOString(), check_in_streak: streak }).eq('uid', uid);
-    await supabase.rpc("increment_coins", { p_user_id: uid, p_amount: amount });
-    
-    await supabase.from('coin_history').insert({
-      user_id: uid, amount, type: 'reward', description: `Daily Check-in (Day ${streak})`, timestamp: ts
-    });
-
-    return { success: true, amount, day: streak };
-  } catch (err: any) {
-    return { success: false, error: "Task failed." };
-  }
-}
-
 export async function sendMessageAction(payload: { chatId: string; senderId: string; recipientId: string; text: string; }) {
   const supabase = getSupabaseAdmin();
   const timestamp = Date.now();
-  
-  // Content Filtering (Offensive + Numbers)
   const safeText = filterSensitiveContent(payload.text);
 
   try {
@@ -335,8 +143,6 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
       last_sender_id: payload.senderId,
       updated_at: new Date().toISOString()
     }, { onConflict: 'id' });
-
-    await supabase.from('users').update({ updated_at: new Date().toISOString() }).eq('uid', payload.senderId);
 
     const { error: msgError } = await supabase.from('messages').insert({ chat_id: payload.chatId, text: safeText, sender_id: payload.senderId, timestamp });
     if (msgError) throw msgError;
@@ -372,35 +178,50 @@ export async function clearChatAction(userId: string, chatId: string) {
   }
 }
 
-export async function sendMysteryNoteAction(senderUid: string, text: string, count: number) {
+export async function awardCoinsAction(ownerUid: string, targetUid: string, amount: number) {
   const supabase = getSupabaseAdmin();
-  const safeText = filterSensitiveContent(text);
   try {
-    const cost = count * 10;
+    const { data: owner } = await supabase.from('users').select('is_owner, is_coin_seller, is_special_user').eq('uid', ownerUid).single();
+    if (!owner?.is_owner && !owner?.is_coin_seller && !owner?.is_special_user) throw new Error("Unauthorized");
+
     const ts = Date.now();
-    
-    const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: senderUid, p_amount: -cost });
-    if (deductErr) throw new Error("Insufficient coins");
-
-    const { data: recipients } = await supabase
-      .from('users')
-      .select('uid')
-      .neq('uid', senderUid)
-      .eq('onboarding_complete', true)
-      .limit(count);
-
-    if (!recipients || recipients.length === 0) throw new Error("No recipients found");
-
-    await supabase.from('coin_history').insert({
-      user_id: senderUid, amount: -cost, type: 'blast', description: `Message Blast (${count} users)`, timestamp: ts
-    });
-
-    for (const r of recipients) {
-      const ids = [senderUid, r.uid].sort();
-      const chatId = `direct_${ids[0]}_${ids[1]}`;
-      await sendMessageAction({ chatId, senderId: senderUid, recipientId: r.uid, text: safeText });
+    if (!owner.is_owner && !owner.is_special_user) {
+      const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: ownerUid, p_amount: -amount });
+      if (deductErr) throw new Error("Insufficient merchant balance");
     }
 
+    await supabase.rpc("increment_coins", { p_user_id: targetUid, p_amount: amount });
+    await supabase.from('coin_history').insert({ user_id: targetUid, amount, type: 'awarded', description: `Received from ${owner.is_coin_seller ? 'Merchant' : 'Admin'}`, timestamp: ts });
+    await trimHistory(supabase, targetUid, 'coin_history');
+
+    return { success: true, message: `Sent ${amount} coins.` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function reportUserAction(payload: { reporterId: string; reportedId: string; reason: string; description: string; proofPhotoUrl?: string; }) {
+  const supabase = getSupabaseAdmin();
+  try {
+    await supabase.from('reports').insert({
+      reporter_id: payload.reporterId,
+      reported_id: payload.reportedId,
+      reason: payload.reason,
+      description: payload.description,
+      proof_photo_url: payload.proofPhotoUrl,
+      status: 'pending',
+      timestamp: Date.now()
+    });
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function resolveReportAction(adminUid: string, reportId: string, reporterUid: string) {
+  const supabase = getSupabaseAdmin();
+  try {
+    await supabase.from('reports').update({ status: 'resolved' }).eq('id', reportId);
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -414,13 +235,21 @@ export async function requestWithdrawalAction(userUid: string, diamonds: number,
     const { error: deductErr } = await supabase.rpc("increment_diamonds", { p_user_id: userUid, p_amount: -diamonds });
     if (deductErr) throw new Error("Insufficient diamonds");
 
-    await supabase.from('diamond_history').insert({
-      user_id: userUid, amount: -diamonds, type: 'withdrawal', description: 'Agency Payout Request', timestamp: ts
-    });
-    
     await supabase.from('withdrawals').insert({ 
       user_id: userUid, agency_id: agencyId, diamonds, amount_kes, mpesa_number: mpesaNumber, status: 'pending', timestamp: ts 
     });
+    await trimHistory(supabase, userUid, 'diamond_history');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function reviewRecruitmentAction(applicantUid: string, status: 'approved' | 'rejected') {
+  const supabase = getSupabaseAdmin();
+  try {
+    const s = status === 'approved' ? 'approved' : 'rejected';
+    await supabase.from('users').update({ agency_status: s }).eq('uid', applicantUid);
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -433,19 +262,44 @@ export async function updateWithdrawalStatusAction(requestId: string, status: 'p
     const { data: req } = await supabase.from('withdrawals').select('*').eq('id', requestId).single();
     if (!req) throw new Error("Request not found");
 
-    const ts = Date.now();
-
     if (status === 'rejected' && req.status === 'pending') {
       await supabase.rpc("increment_diamonds", { p_user_id: req.user_id, p_amount: req.diamonds });
-      await supabase.from('diamond_history').insert({
-        user_id: req.user_id, amount: req.diamonds, type: 'refund', description: 'Rejected Payout Refund', timestamp: ts
-      });
     }
     
     await supabase.from('withdrawals').update({ status }).eq('id', requestId);
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
+  }
+}
+
+export async function toggleUserRoleAction(ownerUid: string, targetMatchFlowId: string, role: string, value: boolean) {
+  const supabase = getSupabaseAdmin();
+  try {
+    await supabase.from('users').update({ [role]: value }).eq('match_flow_id', targetMatchFlowId);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteUserCompletelyAction(uid: string) {
+  const supabase = getSupabaseAdmin();
+  try {
+    await supabase.auth.admin.deleteUser(uid);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function savePushSubscriptionAction(userId: string, endpoint: string, subscriptionJson: any) {
+  const supabase = getSupabaseAdmin();
+  try {
+    await supabase.from('push_subscriptions').upsert({ user_id: userId, endpoint, subscription_json: subscriptionJson }, { onConflict: 'endpoint' });
+    return { success: true };
+  } catch (err: any) {
+    return { success: false };
   }
 }
 
@@ -466,8 +320,6 @@ export async function joinAgencyAction(userUid: string, code: string) {
   try {
     const { data: user } = await supabase.from('users').select('gender').eq('uid', userUid).single();
     if (user?.gender !== 'female') throw new Error("Restricted.");
-    const { data: agency } = await supabase.from('agencies').select('code').eq('code', code).maybeSingle();
-    if (!agency) throw new Error("Invalid Code.");
     await supabase.from('users').update({ agency_id: code, agency_status: 'pending' }).eq('uid', userUid);
     return { success: true };
   } catch (err: any) {
@@ -485,61 +337,22 @@ export async function leaveAgencyAction(userUid: string) {
   }
 }
 
-export async function convertDiamondsToCoinsAction(user_id: string, diamonds: number, coins: number) {
-  const supabase = getSupabaseAdmin();
-  try {
-    const ts = Date.now();
-    const { error: deductErr } = await supabase.rpc("increment_diamonds", { p_user_id: user_id, p_amount: -diamonds });
-    if (deductErr) throw new Error("Insufficient diamonds");
-
-    await supabase.rpc("increment_coins", { p_user_id: user_id, p_amount: coins });
-    
-    await supabase.from('diamond_history').insert({
-      user_id, amount: -diamonds, type: 'conversion', description: 'Converted to Coins', timestamp: ts
-    });
-
-    await supabase.from('coin_history').insert({
-      user_id, amount: coins, type: 'conversion', description: 'Converted from Diamonds', timestamp: ts
-    });
-
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
 export async function sendGiftAction(senderUid: string, recipientUid: string, coinAmount: number, giftName: string) {
   const supabase = getSupabaseAdmin();
   try {
-    const { data: senderProfile } = await supabase.from('users').select('is_owner, is_special_user').eq('uid', senderUid).single();
-    const isFree = senderProfile?.is_owner || senderProfile?.is_special_user;
     const ts = Date.now();
-
-    if (!isFree) {
-      const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: senderUid, p_amount: -coinAmount });
-      if (deductErr) throw new Error("Insufficient coins.");
-      
-      await supabase.from('coin_history').insert({
-        user_id: senderUid, amount: -coinAmount, type: 'gift', description: `Sent Gift: ${giftName}`, timestamp: ts
-      });
-      await trimHistory(supabase, senderUid, 'coin_history');
-    }
-
-    const { data: rec } = await supabase.from('users').select('gender, name').eq('uid', recipientUid).single();
-    if(!rec) throw new Error("User not found");
+    const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: senderUid, p_amount: -coinAmount });
+    if (deductErr) throw new Error("Insufficient coins.");
     
-    const reward = Math.floor(coinAmount * (rec.gender === 'female' ? 0.5 : 0.4));
+    const reward = Math.floor(coinAmount * 0.5);
     await supabase.rpc("increment_diamonds", { p_user_id: recipientUid, p_amount: reward });
     
-    await supabase.from('diamond_history').insert({
-      user_id: recipientUid, amount: reward, type: 'gift_income', description: `Received ${giftName} from ${senderProfile?.name || 'User'}`, timestamp: ts
-    });
-
     const chatId = `direct_${[senderUid, recipientUid].sort()[0]}_${[senderUid, recipientUid].sort()[1]}`;
+    await supabase.from('messages').insert({ chat_id: chatId, sender_id: senderUid, text: `[Gift: ${giftName}]`, is_gift: true, timestamp: ts });
     
     await Promise.all([
-      supabase.from('messages').insert({ chat_id: chatId, sender_id: senderUid, text: `[Gift: ${giftName}]`, is_gift: true, timestamp: ts }),
-      supabase.from('chats').upsert({ id: chatId, last_message: `[Gift: ${giftName}]`, last_message_at: ts, participant_ids: [senderUid, recipientUid], last_sender_id: senderUid, updated_at: new Date().toISOString() })
+      trimHistory(supabase, senderUid, 'coin_history'),
+      trimHistory(supabase, recipientUid, 'diamond_history')
     ]);
 
     return { success: true };
@@ -548,35 +361,27 @@ export async function sendGiftAction(senderUid: string, recipientUid: string, co
   }
 }
 
+export async function dailyCheckInAction(uid: string) {
+  const supabase = getSupabaseAdmin();
+  try {
+    const { data: user } = await supabase.from('users').select('last_check_in_date, check_in_streak').eq('uid', uid).single();
+    const amount = 5;
+    await supabase.from('users').update({ last_check_in_date: new Date().toISOString(), check_in_streak: (user?.check_in_streak || 0) + 1 }).eq('uid', uid);
+    await supabase.rpc("increment_coins", { p_user_id: uid, p_amount: amount });
+    return { success: true, amount };
+  } catch (err) {
+    return { success: false };
+  }
+}
+
 export async function playSpinGameAction(userId: string, stake: number) {
   const supabase = getSupabaseAdmin();
   try {
-    const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: -stake });
-    if (deductErr) throw new Error("Insufficient coins.");
-
-    let prizes: number[] = [];
-    if (stake === 20) {
-      prizes = [0, 5, 10, 0, 20, 0, 50, 5, 0, 10, 20, 0, 5, 0, 30, 0, 10, 50, 0, 15];
-    } else if (stake === 50 || stake === 100) {
-      prizes = [0, 20, 50, 0, 100, 0, 200, 20, 0, 50, 100, 0, 20, 0, 150, 0, 50, 200, 0, 80];
-    } else {
-      prizes = [0, 100, 200, 0, 500, 0, 1000, 100, 0, 200, 500, 0, 100, 0, 750, 0, 200, 1000, 0, 400];
-    }
-
-    const index = Math.floor(Math.random() * prizes.length);
-    const winAmount = prizes[index];
-    const ts = Date.now();
-
-    if (winAmount > 0) {
-      await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: winAmount });
-    }
-    
-    await supabase.from('coin_history').insert({
-      user_id: userId, amount: winAmount - stake, type: 'game', description: winAmount > 0 ? `Won Spin (${winAmount})` : `Lost Spin stake (${stake})`, timestamp: ts
-    });
+    await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: -stake });
+    const win = Math.random() > 0.8 ? stake * 2 : 0;
+    if (win > 0) await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: win });
     await trimHistory(supabase, userId, 'coin_history');
-
-    return { success: true, winAmount, index };
+    return { success: true, winAmount: win, index: Math.floor(Math.random() * 20) };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -585,33 +390,34 @@ export async function playSpinGameAction(userId: string, stake: number) {
 export async function playSlotsAction(userId: string, stake: number) {
   const supabase = getSupabaseAdmin();
   try {
-    const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: -stake });
-    if (deductErr) throw new Error("Insufficient coins.");
-
-    const slotsPossible = ["bar", "bar", "bar", "cherry", "crown"];
-    const slot1 = slotsPossible[Math.floor(Math.random() * slotsPossible.length)];
-    const slot2 = slotsPossible[Math.floor(Math.random() * slotsPossible.length)];
-    const slot3 = slotsPossible[Math.floor(Math.random() * slotsPossible.length)];
-
-    let winAmount = 0;
-    let message = "";
-    const ts = Date.now();
-
-    if (slot1 === slot2 && slot2 === slot3) {
-      winAmount = stake * 2;
-      message = `WINNER! You matched 3 symbols and won ${winAmount} Coins!`;
-      await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: winAmount });
-    } else {
-      const loserPhrases = ["So close, yet so far.", "The machine wins again.", "Better luck next pull!", "Try again!"];
-      message = loserPhrases[Math.floor(Math.random() * loserPhrases.length)];
-    }
-
-    await supabase.from('coin_history').insert({
-      user_id: userId, amount: winAmount - stake, type: 'game', description: winAmount > 0 ? `Won Slots (${winAmount})` : `Lost Slots stake (${stake})`, timestamp: ts
-    });
+    await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: -stake });
+    const win = Math.random() > 0.9 ? stake * 2 : 0;
+    if (win > 0) await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: win });
     await trimHistory(supabase, userId, 'coin_history');
+    return { success: true, winAmount: win, slots: ["bar", "bar", "bar"], message: win > 0 ? "WINNER!" : "Try again!" };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
 
-    return { success: true, winAmount, slots: [slot1, slot2, slot3], message };
+export async function sendMysteryNoteAction(senderUid: string, text: string, count: number) {
+  const supabase = getSupabaseAdmin();
+  try {
+    const cost = count * 10;
+    const { error: dErr } = await supabase.rpc("increment_coins", { p_user_id: senderUid, p_amount: -cost });
+    if (dErr) throw new Error("Insufficient coins");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function convertDiamondsToCoinsAction(userId: string, diamonds: number, coins: number) {
+  const supabase = getSupabaseAdmin();
+  try {
+    await supabase.rpc("increment_diamonds", { p_user_id: userId, p_amount: -diamonds });
+    await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: coins });
+    return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

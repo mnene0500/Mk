@@ -23,18 +23,13 @@ interface UserProfile {
 
 const PAGE_SIZE = 12;
 
-let cachedUsers: UserProfile[] = [];
-let cachedTab: 'Recommend' | 'Nearby' = 'Recommend';
-let cachedPage = 0;
-
 function calculateAge(dob: string) {
   if (!dob) return 18
-  const birthDate = new Date(dob)
-  const today = new Date()
-  let age = today.getFullYear() - birthDate.getFullYear()
-  const m = today.getMonth() - birthDate.getMonth()
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--
-  return age
+  const birthDate = new Date(dob); const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+  return age;
 }
 
 export default function HomePage() {
@@ -42,239 +37,80 @@ export default function HomePage() {
   const { user: currentUser, loading: authLoading, isInitialized } = useUser()
   
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [users, setUsers] = useState<UserProfile[]>(cachedUsers)
-  const [activeTab, setActiveTab] = useState<'Recommend' | 'Nearby'>(cachedTab)
-  const [page, setPage] = useState(cachedPage)
+  const [users, setUsers] = useState<UserProfile[]>([])
+  const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const [profile, setProfile] = useState<any>(null)
-  
   const observerTarget = useRef<HTMLDivElement>(null)
-  const hasFetched = useRef(false)
 
-  const fetchUsers = useCallback(async (pageNum = 0, isManual = false, targetTab?: 'Recommend' | 'Nearby') => {
+  const fetchUsers = useCallback(async (pageNum = 0, isManual = false) => {
     if (!profile) return;
-    
-    const currentTab = targetTab || activeTab;
-    const shouldShowLoading = pageNum === 0 && users.length === 0;
-    if (shouldShowLoading || isManual) setIsRefreshing(true);
-    if (pageNum > 0) setIsLoadingMore(true);
+    if (pageNum === 0) setIsRefreshing(true);
 
     try {
       const from = pageNum * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
-      const oppositeGender = profile.gender === 'male' ? 'female' : profile.gender === 'female' ? 'male' : null;
-      const blockedList = [...(profile.blocking || []), ...(profile.blocked_by || [])];
+      const oppositeGender = profile.gender === 'male' ? 'female' : 'male';
 
-      let query = supabase
+      const { data, error } = await supabase
         .from('users')
-        .select('uid, name, photo_url, country, dob, is_verified, updated_at')
+        .select('*')
         .eq('onboarding_complete', true)
+        .eq('gender', oppositeGender)
         .is('is_deleted', false)
-        .not('uid', 'in', `(${[currentUser?.id, ...blockedList].filter(Boolean).join(',')})`)
-        .order('updated_at', { ascending: false }) 
+        .neq('uid', currentUser?.id)
+        .order('updated_at', { ascending: false })
         .range(from, to);
 
-      if (oppositeGender) {
-        query = query.eq('gender', oppositeGender);
-      }
-      
-      if (currentTab === 'Nearby' && profile.country) {
-        query = query.eq('country', profile.country);
-      }
-
-      const { data, error } = await query;
-      
-      if (error) throw error;
-
       if (data) {
-        let results = data as any[];
-        
-        if (isManual && currentTab === 'Recommend') {
-          results = [...results].sort(() => Math.random() - 0.5);
-        }
-
-        if (pageNum === 0) {
-          setUsers(results);
-          cachedUsers = results;
-        } else {
-          setUsers(prev => {
-             const existingIds = new Set(prev.map(u => u.uid));
-             const uniqueNew = results.filter(u => !existingIds.has(u.uid));
-             return [...prev, ...uniqueNew];
-          });
-          cachedUsers = [...cachedUsers, ...results.filter(u => !new Set(cachedUsers.map(x => u.uid)).has(u.uid))];
-        }
-        
-        setHasMore(results.length === PAGE_SIZE);
+        setUsers(prev => pageNum === 0 ? data : [...prev, ...data]);
+        setHasMore(data.length === PAGE_SIZE);
         setPage(pageNum);
-        cachedPage = pageNum;
-      } else {
-        setHasMore(false);
       }
-    } catch (err) {
-      console.error("Fetch Users Error:", err);
-      setHasMore(false);
     } finally {
       setIsRefreshing(false);
-      setIsLoadingMore(false);
     }
-  }, [currentUser?.id, profile, activeTab, users.length]);
+  }, [currentUser?.id, profile]);
 
   useEffect(() => {
     if (isInitialized && currentUser && !profile) {
-      supabase.from('users').select('*').eq('uid', currentUser.id).single()
-        .then(({ data }) => {
-          if (data?.onboarding_complete) {
-            setProfile(data);
-          } else if (!data && !authLoading) {
-             router.replace("/fastonboard");
-          }
-        });
+      supabase.from('users').select('*').eq('uid', currentUser.id).single().then(({ data }) => {
+        if (data?.onboarding_complete) setProfile(data);
+        else router.replace("/fastonboard");
+      });
     }
-  }, [isInitialized, currentUser, router, profile, authLoading]);
+  }, [isInitialized, currentUser, router, profile]);
 
   useEffect(() => {
-    if (profile && !hasFetched.current) {
-      fetchUsers(0, false, activeTab);
-      hasFetched.current = true;
-    }
-  }, [profile, fetchUsers, activeTab]);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoadingMore && !isRefreshing && profile) {
-          fetchUsers(page + 1);
-        }
-      },
-      { threshold: 0.1 }
-    );
-
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current);
-    }
-
-    return () => observer.disconnect();
-  }, [hasMore, isLoadingMore, isRefreshing, page, fetchUsers, profile]);
-
-  const handleTabChange = (tab: 'Recommend' | 'Nearby') => {
-    if (activeTab === tab) return;
-    setActiveTab(tab);
-    cachedTab = tab;
-    setPage(0);
-    cachedPage = 0;
-    cachedUsers = [];
-    setUsers([]);
-    fetchUsers(0, true, tab);
-  }
-
-  if (authLoading || !isInitialized) return null;
+    if (profile && users.length === 0) fetchUsers(0);
+  }, [profile, fetchUsers, users.length]);
 
   return (
     <div className="flex flex-col w-full bg-white select-none">
       <div className="px-4 grid grid-cols-2 gap-3 py-6 bg-[#00A2FF] shrink-0">
-        <button 
-          onClick={() => router.push('/mystery-note')} 
-          className="h-28 bg-gradient-to-br from-purple-500/80 to-purple-700/90 border border-white/20 rounded-2xl p-6 flex flex-col items-start justify-center gap-1 transition-all text-white shadow-xl relative overflow-hidden group backdrop-blur-sm"
-        >
-          <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-2xl transition-transform" />
-          <FileText className="w-6 h-6 mb-1 text-purple-100" />
-          <div className="text-left">
-            <p className="text-[13px] font-black tracking-tight leading-none mb-1">Message Blast</p>
-            <p className="text-[9px] font-bold text-purple-100/70">Connect With Many</p>
-          </div>
-        </button>
-        
-        <button 
-          onClick={() => router.push('/tasks')} 
-          className="h-28 bg-gradient-to-br from-blue-600/80 to-indigo-800/90 border border-white/20 rounded-2xl p-6 flex flex-col items-start justify-center gap-1 transition-all text-white shadow-xl relative overflow-hidden group backdrop-blur-sm"
-        >
-          <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-2xl transition-transform" />
-          <Target className="w-6 h-6 mb-1 text-blue-100" />
-          <div className="text-left">
-            <p className="text-[13px] font-black tracking-tight leading-none mb-1">Task Center</p>
-            <p className="text-[9px] font-bold text-blue-100/70">Daily Rewards</p>
-          </div>
-        </button>
+        <button onClick={() => router.push('/mystery-note')} className="h-28 bg-white/10 border border-white/20 rounded-2xl p-6 flex flex-col items-start justify-center gap-1 text-white"><FileText className="w-6 h-6" /><p className="text-sm font-black">Message Blast</p></button>
+        <button onClick={() => router.push('/tasks')} className="h-28 bg-white/10 border border-white/20 rounded-2xl p-6 flex flex-col items-start justify-center gap-1 text-white"><Target className="w-6 h-6" /><p className="text-sm font-black">Task Center</p></button>
       </div>
 
-      <div className="sticky top-0 z-40 bg-[#00A2FF] px-4 py-2 flex items-center justify-between border-b border-white/10 shadow-md h-12">
-        <div className="flex items-center gap-8">
-          {(['Recommend', 'Nearby'] as const).map((tab) => (
-            <button key={tab} onClick={() => handleTabChange(tab)} className={cn("text-[13px] font-black transition-all relative py-2", activeTab === tab ? "text-white" : "text-white/40")}>
-              {tab}
-              {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-1 bg-white rounded-full animate-in fade-in" />}
-            </button>
+      <div className="sticky top-0 z-40 bg-[#00A2FF] px-4 py-2 flex items-center justify-between border-b border-white/10 h-12">
+        <span className="text-white font-black text-sm uppercase tracking-widest">Recommended</span>
+        <button onClick={() => fetchUsers(0, true)} className={cn("p-2 text-white", isRefreshing && "animate-spin")}><RotateCw className="w-4 h-4" /></button>
+      </div>
+
+      <main className="px-4 pt-4 pb-20">
+        <div className="grid grid-cols-2 gap-3">
+          {users.map((u) => (
+            <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.25] rounded-lg shadow-lg" onClick={() => router.push(`/users/${u.uid}`)}>
+              <Image src={u.photo_url} alt={u.name} fill className="object-cover" sizes="50vw" priority />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+              <div className="absolute bottom-2 left-2 right-2 text-white">
+                <div className="flex items-center gap-1 mb-0.5"><h4 className="font-black text-xs truncate">{u.name}</h4>{u.is_verified && <BadgeCheck className="w-3 h-3 text-[#00A2FF]" />}</div>
+                <div className="flex items-center gap-2"><span className="bg-green-600 text-[8px] font-black px-1.5 py-0.5 rounded">{calculateAge(u.dob)}</span><span className="text-[8px] font-bold opacity-70 uppercase truncate">{u.country}</span></div>
+              </div>
+            </Card>
           ))}
         </div>
-        <button onClick={() => fetchUsers(0, true)} className={cn("p-2 text-white transition-opacity", isRefreshing && "animate-spin")}>
-          <RotateCw className="w-4 h-4" />
-        </button>
-      </div>
-
-      <main className="px-4 pt-4">
-        {users.length > 0 ? (
-          <>
-            <div className="grid grid-cols-2 gap-2.5">
-              {users.map((u) => {
-                const isRecentlyActive = (Date.now() - new Date(u.updated_at).getTime()) < 300000;
-                
-                return (
-                  <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.25] rounded-lg shadow-lg bg-gray-50 cursor-pointer" onClick={() => router.push(`/users/${u.uid}`)}>
-                    <Image src={`${u.photo_url}?t=${u.updated_at}`} alt={u.name} fill className="object-cover" sizes="50vw" priority />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                    
-                    {isRecentlyActive && (
-                      <div className="absolute top-2 left-2 flex items-center gap-1 bg-black/40 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10 z-20">
-                         <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                         <span className="text-[8px] font-black text-white uppercase tracking-widest">Active</span>
-                      </div>
-                    )}
-
-                    <Button 
-                      className="absolute top-2 right-2 rounded-full h-7 px-4 bg-[#00A2FF]/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest shadow-xl z-20 border border-white/20" 
-                      onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }}
-                    >
-                      Chat
-                    </Button>
-
-                    <div className="absolute inset-x-0 bottom-0 p-3 text-white">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <h4 className="font-black text-[13px] truncate tracking-tight">{u.name}</h4>
-                          {u.is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-white shrink-0" />}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="bg-[#00B200] text-white font-black text-[9px] px-1.5 py-0.5 rounded-md">{calculateAge(u.dob)}</span>
-                          <span className="text-[9px] font-bold opacity-70 truncate uppercase tracking-tighter">{u.country}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                )
-              })}
-            </div>
-            
-            {hasMore && (
-              <div ref={observerTarget} className="h-24 flex items-center justify-center py-10">
-                <div className="flex items-center gap-2 text-gray-400">
-                  <Loader2 className="w-4 h-4 animate-spin text-[#00A2FF]" />
-                  <span className="text-[10px] font-bold tracking-widest uppercase">Searching...</span>
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          !isRefreshing && (
-            <div className="flex flex-col items-center justify-center py-40 opacity-20 text-center px-10">
-              <Target className="w-12 h-12 mb-4 text-gray-400" />
-              <p className="text-[11px] font-bold text-gray-500">
-                {activeTab === 'Nearby' ? "No users found in your country" : "No users found"}
-              </p>
-            </div>
-          )
-        )}
+        {hasMore && !isRefreshing && <div ref={observerTarget} className="h-20 flex items-center justify-center"><Loader2 className="animate-spin text-[#00A2FF]" /></div>}
       </main>
     </div>
   )

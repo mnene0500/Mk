@@ -8,7 +8,7 @@ import { useUser } from "@/firebase/auth/use-user"
 
 /**
  * @fileOverview Viewport-Centric App Shell with Scroll Persistence.
- * Fix: Uses sessionStorage to persist scroll across sessions/reloads.
+ * Strictly manages hydration state to prevent mismatch errors.
  */
 
 function ShellContent({ children }: { children: React.ReactNode }) {
@@ -23,24 +23,16 @@ function ShellContent({ children }: { children: React.ReactNode }) {
   }, [])
 
   const isChatDetail = pathname === '/chats' && searchParams.has('startWith')
-  const isCall = pathname?.startsWith('/call/')
-  const isWelcome = pathname === '/welcome'
-  const isAuth = pathname === '/auth'
-  const isSplash = pathname === '/'
-  const isFastOnboard = pathname === '/fastonboard'
-
   const showNav = useMemo(() => {
     if (!mounted || !user) return false;
     const navRoutes = ['/home', '/chats', '/profile'];
-    return navRoutes.includes(pathname || "") && !isChatDetail && !isCall && !isWelcome && !isAuth && !isSplash && !isFastOnboard;
-  }, [mounted, user, pathname, isChatDetail, isCall, isWelcome, isAuth, isSplash, isFastOnboard]);
+    return navRoutes.includes(pathname || "") && !isChatDetail;
+  }, [mounted, user, pathname, isChatDetail]);
 
-  // SCROLL PERSISTENCE ENGINE
   useEffect(() => {
     if (mainRef.current && mounted && pathname) {
       const saved = sessionStorage.getItem(`scroll_${pathname}`);
       if (saved) {
-        // Delay scroll restoration to allow data to render
         setTimeout(() => {
           if (mainRef.current) mainRef.current.scrollTop = parseInt(saved);
         }, 50);
@@ -51,25 +43,11 @@ function ShellContent({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const currentMain = mainRef.current;
     if (!currentMain || !pathname) return;
-
     const handleScroll = () => {
       sessionStorage.setItem(`scroll_${pathname}`, currentMain.scrollTop.toString());
     }
-
     currentMain.addEventListener('scroll', handleScroll, { passive: true });
     return () => currentMain.removeEventListener('scroll', handleScroll);
-  }, [pathname])
-
-  // GLOBAL REFRESH -> SCROLL TO TOP
-  useEffect(() => {
-    const handleRefresh = (e: any) => {
-      if (e.detail.path === pathname && mainRef.current) {
-        mainRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-        sessionStorage.setItem(`scroll_${pathname}`, '0');
-      }
-    }
-    window.addEventListener('qivo-nav-refresh', handleRefresh);
-    return () => window.removeEventListener('qivo-nav-refresh', handleRefresh);
   }, [pathname])
 
   return (
@@ -77,8 +55,8 @@ function ShellContent({ children }: { children: React.ReactNode }) {
       <main 
         ref={mainRef}
         className={cn(
-          "flex-1 w-full overflow-y-auto overflow-x-hidden relative z-0 no-scrollbar pb-[env(safe-area-inset-bottom)]",
-          showNav ? "pb-16" : "pb-0"
+          "flex-1 w-full overflow-y-auto overflow-x-hidden relative z-0 no-scrollbar",
+          mounted && showNav ? "pb-16" : "pb-0"
         )}
       >
         <div className={cn("min-h-full flex flex-col", !mounted && "invisible")}>
