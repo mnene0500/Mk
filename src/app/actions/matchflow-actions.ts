@@ -6,7 +6,7 @@ import { headers } from 'next/headers';
 
 /**
  * @fileOverview Definitive Server Actions for QIVO Production.
- * Fully implemented and exported to prevent "is not a function" errors.
+ * Hardened atomic operations for Messaging, Economy, and Management.
  */
 
 function filterSensitiveContent(text: string): string {
@@ -79,6 +79,7 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
       await trimHistory(supabase, payload.senderId, 'coin_history');
     }
     
+    // ATOMIC UPSERT: Ensures chat is never filtered out by soft-delete timestamps on new messages
     await supabase.from('chats').upsert({ 
       id: payload.chatId, 
       last_message: safeText.slice(0, 100), 
@@ -86,11 +87,18 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
       participant_ids: [payload.senderId, payload.recipientId],
       last_sender_id: payload.senderId,
       updated_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+
+    await supabase.from('messages').insert({ 
+      chat_id: payload.chatId, 
+      text: safeText, 
+      sender_id: payload.senderId, 
+      timestamp 
     });
 
-    await supabase.from('messages').insert({ chat_id: payload.chatId, text: safeText, sender_id: payload.senderId, timestamp });
     return { success: true };
   } catch (err: any) {
+    console.error("[SendMessage Error]:", err.message);
     return { success: false, error: "system_error" };
   }
 }

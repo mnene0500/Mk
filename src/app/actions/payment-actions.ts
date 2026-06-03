@@ -47,12 +47,14 @@ export async function initiatePesaPalPayment(userId: string, amount: number, coi
       status: 'pending'
     });
 
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://qivo10.vercel.app";
+
     const payload = {
       id: orderId,
       currency: "KES",
       amount: amount,
       description: `Purchase of ${coins} Coins on QIVO`,
-      callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/payment-success`,
+      callback_url: `${appUrl}/payment-success`,
       notification_id: process.env.PESAPAL_IPN_ID,
       billing_address: {
         email_address: "payment@qivo.com"

@@ -124,7 +124,6 @@ export default function RechargePage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-white select-none">
-      {/* LOCKED HEADER */}
       <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-[70] shrink-0">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full text-black">
@@ -167,9 +166,8 @@ export default function RechargePage() {
         </Button>
       </header>
 
-      {/* SCROLLABLE MIDDLE */}
-      <main className="flex-1 overflow-y-auto no-scrollbar">
-        <div className="p-5 space-y-8 pb-32">
+      <main className="flex-1 overflow-y-auto no-scrollbar pb-32">
+        <div className="p-5 space-y-8">
           <div className="flex flex-col items-center gap-2 pt-4">
               <div className="bg-yellow-50 px-6 py-3 rounded-full flex items-center gap-3 border border-yellow-100 shadow-sm">
                   <Coins className='w-6 h-6 text-yellow-500 fill-yellow-500'/>
@@ -236,7 +234,7 @@ export default function RechargePage() {
           </Button>
 
           {isPesaPalCountry && (
-            <div className="flex items-center justify-center gap-2 text-gray-300 pt-4">
+            <div className="flex items-center justify-center gap-2 text-gray-300 pt-4 pb-10">
               <ShieldCheck className="w-4 h-4" />
               <span className="text-[9px] font-black tracking-[0.2em]">Verified Secure Gateway</span>
             </div>
@@ -244,7 +242,6 @@ export default function RechargePage() {
         </div>
       </main>
 
-      {/* LOCKED FOOTER */}
       <footer className="sticky bottom-0 inset-x-0 p-6 bg-white/95 backdrop-blur-xl border-t border-black/5 z-[80] flex flex-col gap-4 pb-[env(safe-area-inset-bottom,24px)] shadow-[0_-10px_30px_rgba(0,0,0,0.04)] shrink-0">
         <Button 
           onClick={handleRecharge}
