@@ -166,7 +166,7 @@ export default function RechargePage() {
         </Button>
       </header>
 
-      <main className="flex-1 overflow-y-auto no-scrollbar pb-32">
+      <main className="flex-1 overflow-y-auto no-scrollbar pb-40">
         <div className="p-5 space-y-8">
           <div className="flex flex-col items-center gap-2 pt-4">
               <div className="bg-yellow-50 px-6 py-3 rounded-full flex items-center gap-3 border border-yellow-100 shadow-sm">
@@ -242,7 +242,7 @@ export default function RechargePage() {
         </div>
       </main>
 
-      <footer className="sticky bottom-0 inset-x-0 p-6 bg-white/95 backdrop-blur-xl border-t border-black/5 z-[80] flex flex-col gap-4 pb-[env(safe-area-inset-bottom,24px)] shadow-[0_-10px_30px_rgba(0,0,0,0.04)] shrink-0">
+      <footer className="fixed bottom-0 inset-x-0 p-6 bg-white/95 backdrop-blur-xl border-t border-black/5 z-[80] flex flex-col gap-4 pb-[env(safe-area-inset-bottom,24px)] shadow-[0_-10px_30px_rgba(0,0,0,0.04)] shrink-0">
         <Button 
           onClick={handleRecharge}
           disabled={isProcessing || !selectedId}

@@ -2,7 +2,6 @@
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { headers } from 'next/headers';
 
 /**
  * @fileOverview Definitive Server Actions for QIVO Production.
@@ -11,7 +10,7 @@ import { headers } from 'next/headers';
 
 function filterSensitiveContent(text: string): string {
   const sensitivePatterns = [
-    /\d{3,}/g, // Block phone numbers
+    /\d{3,}/g, 
     /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)\b/gi,
     /\b(sifuri|moja|mbili|tatu|nne|tano|sita|saba|nane|tisa|kumi)\b/gi,
     /\b(fuck|bitch|idiot|stupid|scam|fraud|malaya|pumbavu|nguruwe)\b/gi 
@@ -79,7 +78,7 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
       await trimHistory(supabase, payload.senderId, 'coin_history');
     }
     
-    // ATOMIC UPSERT: Ensures chat is never filtered out by soft-delete timestamps on new messages
+    // ATOMIC UPSERT: Ensures chat is never hidden by old clear timestamps
     await supabase.from('chats').upsert({ 
       id: payload.chatId, 
       last_message: safeText.slice(0, 100), 

@@ -36,7 +36,6 @@ function ChatsContent() {
   const [newMessage, setNewMessage] = useState("")
   const [chatToDelete, setChatToDelete] = useState<string | null>(null)
   const [isSending, setIsSending] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
 
   const fetchSummaries = useCallback(async () => {
     if (!currentUser?.id) return;

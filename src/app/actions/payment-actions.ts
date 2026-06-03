@@ -47,6 +47,7 @@ export async function initiatePesaPalPayment(userId: string, amount: number, coi
       status: 'pending'
     });
 
+    // CRITICAL: Must be exactly https://qivo10.vercel.app in Vercel settings
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://qivo10.vercel.app";
 
     const payload = {
