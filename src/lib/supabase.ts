@@ -3,14 +3,15 @@ import { createClient } from '@supabase/supabase-js';
 
 /**
  * @fileOverview Hardened Supabase Client.
- * Handles both public client and secure admin instances.
+ * Handles both public client and secure admin instances using Vercel environment variables.
  */
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
+// Defensive check to prevent "Failed to Fetch" on misconfigured environments
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn("Supabase Environment Variables are missing. Authentication and database calls will fail.");
+  console.warn("Supabase Environment Variables are missing. Ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in Vercel.");
 }
 
 export const supabase = createClient(
@@ -24,14 +25,14 @@ export const supabase = createClient(
       flowType: 'pkce'
     },
     global: {
-      headers: { 'x-application-name': 'qivo' }
+      headers: { 'x-application-name': 'qivo-production' }
     }
   }
 );
 
 /**
- * Creates an Admin client for secure server-side operations.
- * NEVER call this on the client side.
+ * Creates an Admin client for secure server-side operations (Server Actions only).
+ * This client bypasses RLS and allows atomic balance updates.
  */
 export const getSupabaseAdmin = () => {
   if (typeof window !== 'undefined') {
@@ -42,7 +43,7 @@ export const getSupabaseAdmin = () => {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!adminUrl || !serviceKey) {
-    throw new Error("Missing Supabase Admin credentials in Environment Variables.");
+    throw new Error("Missing Supabase credentials. Ensure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set in Vercel.");
   }
 
   return createClient(adminUrl, serviceKey, {

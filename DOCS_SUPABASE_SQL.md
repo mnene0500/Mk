@@ -1,7 +1,11 @@
 
-# QIVO HARDENED PRODUCTION SQL
+# QIVO FINAL HARDENED PRODUCTION SQL
 
--- 1. SETUP ATOMIC HELPERS (Hardened for Realtime Economy)
+Run this entire script in the **Supabase SQL Editor** to initialize all tables, functions, and security policies.
+
+```sql
+-- 1. SETUP ATOMIC ECONOMY HELPERS
+-- These functions handle balance shifts securely via SECURITY DEFINER
 CREATE OR REPLACE FUNCTION public.increment_diamonds(p_user_id UUID, p_amount NUMERIC)
 RETURNS VOID AS $$
 BEGIN
@@ -113,7 +117,7 @@ CREATE TABLE IF NOT EXISTS public.withdrawals (
   diamonds NUMERIC,
   amount_kes NUMERIC,
   mpesa_number TEXT,
-  status TEXT DEFAULT 'pending', -- pending, paid, rejected
+  status TEXT DEFAULT 'pending', 
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
@@ -124,7 +128,7 @@ CREATE TABLE IF NOT EXISTS public.reports (
   reason TEXT,
   description TEXT,
   proof_photo_url TEXT,
-  status TEXT DEFAULT 'pending', -- pending, resolved
+  status TEXT DEFAULT 'pending',
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
@@ -153,7 +157,7 @@ CREATE TABLE IF NOT EXISTS public.push_subscriptions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. ENABLE RLS & POLICIES
+-- 3. ENABLE RLS
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.balances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chats ENABLE ROW LEVEL SECURITY;
@@ -161,8 +165,9 @@ ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.withdrawals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Public profiles are viewable" ON public.users;
-CREATE POLICY "Public profiles are viewable" ON public.users FOR SELECT USING (true);
+-- 4. CREATE POLICIES
+DROP POLICY IF EXISTS "Public profiles viewable" ON public.users;
+CREATE POLICY "Public profiles viewable" ON public.users FOR SELECT USING (true);
 CREATE POLICY "Users manage own profile" ON public.users FOR ALL USING (auth.uid() = uid);
 CREATE POLICY "Users view own balance" ON public.balances FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Participants view chats" ON public.chats FOR SELECT USING (auth.uid() = ANY(participant_ids));
@@ -170,7 +175,8 @@ CREATE POLICY "Participants view messages" ON public.messages FOR SELECT USING (
   SELECT 1 FROM public.chats WHERE id = messages.chat_id AND auth.uid() = ANY(participant_ids)
 ));
 
--- 4. GRANT PERMISSIONS
+-- 5. GRANT PERMISSIONS
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated;
+```

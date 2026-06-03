@@ -5,8 +5,8 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { headers } from 'next/headers';
 
 /**
- * @fileOverview Definitive Server Actions for QIVO.
- * Comprehensive logic for Economy, Roles, Safety, and Games.
+ * @fileOverview Definitive Server Actions for QIVO Production.
+ * Optimized for Vercel and Supabase with full logic implementation.
  */
 
 function filterSensitiveContent(text: string): string {
@@ -41,13 +41,6 @@ export async function completeOnboardingAction(payload: {
     const qId = Math.floor(1000000 + Math.random() * 900000000).toString();
     const timestamp = Date.now();
 
-    // Anti-Fraud: check for IP-based multiple accounts
-    const headersList = await headers();
-    const ip = headersList.get('x-forwarded-for') || '0.0.0.0';
-    
-    const { data: existingProfiles } = await supabase.from('users').select('uid').limit(10);
-    const isSuspectedAlt = false; // Logic would typically check an 'ip_logs' table
-
     const { error: profileErr } = await supabase.from('users').upsert({
       uid: payload.uid, email: payload.email, name: payload.name, gender: payload.gender, dob: payload.dob,
       country: payload.country, looking_for: payload.looking_for, onboarding_complete: true,
@@ -55,21 +48,16 @@ export async function completeOnboardingAction(payload: {
     });
     if (profileErr) throw profileErr;
 
-    if (!isSuspectedAlt) {
-      const initialCoins = (payload.gender === 'male') ? 500 : 0;
-      const initialDiamonds = (payload.gender === 'female') ? 150 : 0;
-
-      if (initialCoins > 0) {
-        await supabase.rpc("increment_coins", { p_user_id: payload.uid, p_amount: initialCoins });
-        await supabase.from('coin_history').insert({ user_id: payload.uid, amount: initialCoins, type: 'bonus', description: 'Welcome Bonus', timestamp });
-      }
-      if (initialDiamonds > 0) {
-        await supabase.rpc("increment_diamonds", { p_user_id: payload.uid, p_amount: initialDiamonds });
-        await supabase.from('diamond_history').insert({ user_id: payload.uid, amount: initialDiamonds, type: 'bonus', description: 'New Profile Bonus', timestamp });
-      }
-      return { success: true, bonus: initialCoins || initialDiamonds };
+    // Fixed: Male profiles always receive 500 coins. Female profiles 150 diamonds.
+    if (payload.gender === 'male') {
+      await supabase.rpc("increment_coins", { p_user_id: payload.uid, p_amount: 500 });
+      await supabase.from('coin_history').insert({ user_id: payload.uid, amount: 500, type: 'bonus', description: 'Welcome Bonus', timestamp });
+    } else {
+      await supabase.rpc("increment_diamonds", { p_user_id: payload.uid, p_amount: 150 });
+      await supabase.from('diamond_history').insert({ user_id: payload.uid, amount: 150, type: 'bonus', description: 'New Profile Bonus', timestamp });
     }
-    return { success: true, bonus: 0 };
+    
+    return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -92,6 +80,7 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
       await trimHistory(supabase, payload.senderId, 'coin_history');
     }
     
+    // ATOMIC UPSERT: Ensures chat list visibility instantly
     await supabase.from('chats').upsert({ 
       id: payload.chatId, 
       last_message: safeText.slice(0, 100), 
@@ -143,6 +132,7 @@ export async function awardCoinsAction(ownerUid: string, targetUid: string, amou
     if (!owner?.is_owner && !owner?.is_coin_seller && !owner?.is_special_user) throw new Error("Unauthorized");
     
     if (!owner.is_owner && !owner.is_special_user) {
+      // Merchants (Coin Sellers) deduct from their own balance
       const { error: dErr } = await supabase.rpc("increment_coins", { p_user_id: ownerUid, p_amount: -amount });
       if (dErr) throw new Error("Insufficient merchant balance");
     }
@@ -197,6 +187,7 @@ export async function dailyCheckInAction(uid: string) {
 export async function deleteUserCompletelyAction(targetUid: string) {
   const supabase = getSupabaseAdmin();
   try {
+    // 1. Wipe all economy records first
     await Promise.all([
       supabase.from('balances').delete().eq('user_id', targetUid),
       supabase.from('coin_history').delete().eq('user_id', targetUid),
@@ -205,6 +196,7 @@ export async function deleteUserCompletelyAction(targetUid: string) {
       supabase.from('reports').delete().or(`reporter_id.eq.${targetUid},reported_id.eq.${targetUid}`)
     ]);
 
+    // 2. Remove the profile
     const { error } = await supabase.from('users').delete().eq('uid', targetUid);
     if (error) throw error;
 
@@ -310,7 +302,9 @@ export async function updateWithdrawalStatusAction(requestId: string, status: 'p
 export async function requestWithdrawalAction(userUid: string, diamonds: number, amount_kes: number, agencyId: string, mpesaNumber: string) {
   const supabase = getSupabaseAdmin();
   try {
+    // Rigid Production Check: Only Saturdays
     if (new Date().getDay() !== 6) throw new Error("Withdrawals are only allowed on Saturdays.");
+    
     const { error: deductErr } = await supabase.rpc("increment_diamonds", { p_user_id: userUid, p_amount: -diamonds });
     if (deductErr) throw new Error("Insufficient diamonds");
 
@@ -331,7 +325,11 @@ export async function playSlotsAction(userId: string, stake: number) {
     if (dErr) throw new Error("Insufficient coins");
     
     const symbols = ["bar", "cherry", "crown"];
-    const result = [symbols[Math.floor(Math.random()*3)], symbols[Math.floor(Math.random()*3)], symbols[Math.floor(Math.random()*3)]];
+    const result = [
+      symbols[Math.floor(Math.random()*3)], 
+      symbols[Math.floor(Math.random()*3)], 
+      symbols[Math.floor(Math.random()*3)]
+    ];
     const win = result[0] === result[1] && result[1] === result[2] ? stake * 2 : 0;
     
     if (win > 0) {
