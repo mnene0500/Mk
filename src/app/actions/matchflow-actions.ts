@@ -78,8 +78,8 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
       await trimHistory(supabase, payload.senderId, 'coin_history');
     }
     
-    // ATOMIC UPSERT: Ensures chat is never hidden by old clear timestamps
-    await supabase.from('chats').upsert({ 
+    // ATOMIC UPSERT: Ensures chat is revived and visible to both parties
+    const { error: upsertErr } = await supabase.from('chats').upsert({ 
       id: payload.chatId, 
       last_message: safeText.slice(0, 100), 
       last_message_at: timestamp, 
@@ -88,12 +88,16 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
       updated_at: new Date().toISOString()
     }, { onConflict: 'id' });
 
-    await supabase.from('messages').insert({ 
+    if (upsertErr) throw upsertErr;
+
+    const { error: msgErr } = await supabase.from('messages').insert({ 
       chat_id: payload.chatId, 
       text: safeText, 
       sender_id: payload.senderId, 
       timestamp 
     });
+
+    if (msgErr) throw msgErr;
 
     return { success: true };
   } catch (err: any) {

@@ -42,8 +42,10 @@ function ChatsContent() {
     const { data: chats } = await supabase.from('chats').select('*').contains('participant_ids', [currentUser.id]).order('last_message_at', { ascending: false });
     if (!chats) { setSummaries([]); setLoading(false); return; }
 
+    // Revival Logic: If last_message_at > cleared_at, it shows
     const filtered = chats.filter(c => (c.last_message_at || 0) > ((c.cleared_at as any)?.[currentUser.id] || 0));
     const partnerIds = filtered.map(c => c.participant_ids.find((id: string) => id !== currentUser.id));
+    
     const { data: profiles } = await supabase.from('users').select('uid, name, photo_url, is_verified').in('uid', partnerIds);
     const pMap = new Map(profiles?.map(p => [p.uid, p]));
 
@@ -61,13 +63,24 @@ function ChatsContent() {
     setLoading(false);
   }, [currentUser?.id]);
 
+  // Global Chat List Sync
   useEffect(() => {
-    if (!startWithId || !currentUser?.id) { fetchSummaries(); return; }
+    if (!currentUser?.id || startWithId) return;
+    fetchSummaries();
+    const channel = supabase.channel('chats-sync')
+      .on('postgres_changes', { event: '*', table: 'chats' }, () => fetchSummaries())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [currentUser?.id, startWithId, fetchSummaries]);
+
+  // Conversation View Logic
+  useEffect(() => {
+    if (!startWithId || !currentUser?.id) return;
     
     const cid = `direct_${[currentUser.id, startWithId].sort()[0]}_${[currentUser.id, startWithId].sort()[1]}`;
     setChatId(cid);
     
-    // Resolve partner immediately
+    // Resolve partner immediately to prevent "..."
     supabase.from('users').select('*').eq('uid', startWithId).single().then(({ data }) => setPartner(data));
     
     const loadMessages = async () => {
@@ -78,8 +91,6 @@ function ChatsContent() {
     };
 
     loadMessages();
-
-    // Mark as read immediately
     markChatAsReadAction(currentUser.id, cid);
 
     const channel = supabase.channel(`msgs-${cid}`)
@@ -88,6 +99,7 @@ function ChatsContent() {
           if (prev.some(m => m.id === payload.new.id)) return prev;
           return [payload.new, ...prev];
         });
+        markChatAsReadAction(currentUser.id, cid);
       })
       .subscribe();
 
@@ -100,9 +112,20 @@ function ChatsContent() {
     const text = newMessage;
     setNewMessage("");
     
+    // OPTIMISTIC UPDATE: Show bubble instantly
+    const optimisticMsg = {
+      id: Date.now(),
+      chat_id: chatId,
+      sender_id: currentUser.id,
+      text: text,
+      timestamp: Date.now()
+    };
+    setMessages(prev => [optimisticMsg, ...prev]);
+
     const res = await sendMessageAction({ chatId, senderId: currentUser.id, recipientId: startWithId, text });
     if (!res.success) {
       toast({ variant: "destructive", title: "Error", description: res.error });
+      setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id)); // Rollback if fail
     }
     setIsSending(false);
   };
@@ -173,7 +196,7 @@ function ChatsContent() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-6 flex flex-col-reverse gap-4 bg-gray-50 no-scrollbar">
+      <main className="flex-1 overflow-y-auto p-6 flex flex-col-reverse gap-4 bg-gray-50 no-scrollbar pb-10">
         {messages.map(m => (
           <div key={m.id} className={cn(
             "max-w-[85%] p-4 rounded-2xl text-sm font-medium shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300", 
