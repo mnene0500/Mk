@@ -78,7 +78,6 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
       await trimHistory(supabase, payload.senderId, 'coin_history');
     }
     
-    // ATOMIC UPSERT: Ensures chat is revived and visible to both parties instantly
     const { error: upsertErr } = await supabase.from('chats').upsert({ 
       id: payload.chatId, 
       last_message: safeText.slice(0, 100), 
@@ -119,7 +118,6 @@ export async function sendGiftAction(senderUid: string, recipientUid: string, co
     const chatId = `direct_${[senderUid, recipientUid].sort()[0]}_${[senderUid, recipientUid].sort()[1]}`;
     const text = `[Gift: ${giftName}]`;
     
-    // ATOMIC UPSERT: Vital for visibility and unread sync
     await supabase.from('chats').upsert({ 
       id: chatId, 
       last_message: text, 
@@ -399,7 +397,6 @@ export async function sendMysteryNoteAction(userId: string, text: string, recipi
     if (recipients) {
       for (const r of recipients) {
         const chatId = `direct_${[userId, r.uid].sort()[0]}_${[userId, r.uid].sort()[1]}`;
-        // ATOMIC UPSERT for every recipient to ensure visibility
         await supabase.from('chats').upsert({ 
           id: chatId, 
           last_message: text, 

@@ -1,13 +1,13 @@
 
 "use client"
 
-import { useEffect, useState, Suspense, useCallback, useRef } from "react"
+import { useEffect, useState, Suspense, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Send, ChevronLeft, User, Gift, Trash2, BadgeCheck, Loader2, Sparkles, Coins } from "lucide-react"
+import { Send, ChevronLeft, Gift, BadgeCheck, Loader2, MessageSquare, CheckCircle2, RotateCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
@@ -48,11 +48,11 @@ function ChatsContent() {
   const [newMessage, setNewMessage] = useState("")
   const [chatToDelete, setChatToDelete] = useState<string | null>(null)
   const [isSending, setIsSending] = useState(false)
+  const [lastGiftSent, setLastGiftSent] = useState<typeof GIFTS[0] | null>(null)
 
   const fetchSummaries = useCallback(async () => {
     if (!currentUser?.id) return;
     
-    // Fetch all chats where user is a participant
     const { data: chats } = await supabase
       .from('chats')
       .select('*')
@@ -61,7 +61,6 @@ function ChatsContent() {
       
     if (!chats) { setSummaries([]); setLoading(false); return; }
 
-    // Revival Logic: A chat is visible ONLY IF it has a message newer than its 'cleared_at' timestamp
     const filtered = chats.filter(c => (c.last_message_at || 0) > ((c.cleared_at as any)?.[currentUser.id] || 0));
     
     if (filtered.length === 0) { setSummaries([]); setLoading(false); return; }
@@ -89,7 +88,6 @@ function ChatsContent() {
     setLoading(false);
   }, [currentUser?.id]);
 
-  // Global Chat List Real-time Sync
   useEffect(() => {
     if (!currentUser?.id) return;
     fetchSummaries();
@@ -101,14 +99,12 @@ function ChatsContent() {
     return () => { supabase.removeChannel(channel); };
   }, [currentUser?.id, fetchSummaries]);
 
-  // Conversation Screen Logic
   useEffect(() => {
     if (!startWithId || !currentUser?.id) return;
     
     const cid = `direct_${[currentUser.id, startWithId].sort()[0]}_${[currentUser.id, startWithId].sort()[1]}`;
     setChatId(cid);
     
-    // Resolve partner immediately
     supabase.from('users').select('*').eq('uid', startWithId).single().then(({ data }) => setPartner(data));
     
     const loadMessages = async () => {
@@ -129,7 +125,6 @@ function ChatsContent() {
     loadMessages();
     markChatAsReadAction(currentUser.id, cid);
 
-    // Subscription for INSTANT bubbles
     const channel = supabase.channel(`msgs-${cid}`)
       .on('postgres_changes', { 
         event: 'INSERT', 
@@ -155,7 +150,6 @@ function ChatsContent() {
     const text = newMessage;
     setNewMessage("");
     
-    // OPTIMISTIC UPDATE: Show the bubble instantly in the UI
     const optimisticMsg = {
       id: Date.now() + Math.random(),
       chat_id: chatId,
@@ -169,7 +163,7 @@ function ChatsContent() {
     
     if (!res.success) {
       toast({ variant: "destructive", title: "Error", description: res.error });
-      setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id)); // Rollback on failure
+      setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id));
     }
     setIsSending(false);
   };
@@ -177,11 +171,11 @@ function ChatsContent() {
   const handleSendGift = async (g: typeof GIFTS[0]) => {
     if (!currentUser?.id || !startWithId || isSending) return;
     setIsSending(true);
+    setLastGiftSent(null);
     try {
       const res = await sendGiftAction(currentUser.id, startWithId, g.cost, g.name);
       if (res.success) {
-        toast({ title: `Sent ${g.icon} Gift!` });
-        // Optimistic bubble for gift
+        setLastGiftSent(g);
         const giftMsg = {
           id: Date.now() + Math.random(),
           chat_id: chatId!,
@@ -209,7 +203,6 @@ function ChatsContent() {
     setChatToDelete(null);
   };
 
-  // CHAT LIST VIEW
   if (!startWithId) return (
     <div className="flex-1 bg-white min-h-screen relative select-none">
       <header className="px-6 h-16 flex items-center border-b sticky top-0 bg-white/90 backdrop-blur-md z-50">
@@ -220,7 +213,7 @@ function ChatsContent() {
           <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#00A2FF]" /></div>
         ) : summaries.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-40 opacity-40 space-y-4">
-            <Sparkles className="w-12 h-12 text-gray-200" />
+            <MessageSquare className="w-12 h-12 text-gray-200" />
             <p className="uppercase font-black text-[10px] tracking-widest">No conversations yet</p>
           </div>
         ) : (
@@ -234,7 +227,7 @@ function ChatsContent() {
               <div className="relative">
                 <Avatar className="w-14 h-14 border"><AvatarImage src={s.partner_photo} /><AvatarFallback>{s.partner_name[0]}</AvatarFallback></Avatar>
                 {s.unread_count > 0 && (
-                  <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-in zoom-in">
+                  <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                     {s.unread_count}
                   </div>
                 )}
@@ -270,7 +263,6 @@ function ChatsContent() {
     </div>
   );
 
-  // CONVERSATION VIEW
   return (
     <div className="flex flex-col h-screen bg-white overflow-hidden select-none">
       <header className="h-16 border-b flex items-center px-4 gap-4 bg-white z-50 shrink-0">
@@ -295,9 +287,9 @@ function ChatsContent() {
         ))}
       </main>
 
-      <footer className="p-4 border-t bg-white shrink-0 pb-[env(safe-area-inset-bottom,16px)]">
+      <footer className="p-4 border-t bg-white shrink-0 pb-[env(safe-area-inset-bottom,20px)]">
         <div className="flex items-center gap-2 max-w-5xl mx-auto w-full">
-          <Dialog>
+          <Dialog onOpenChange={(open) => !open && setLastGiftSent(null)}>
             <DialogTrigger asChild>
               <Button size="icon" variant="ghost" className="rounded-full text-pink-500 hover:bg-pink-50 transition-colors">
                 <Gift className="w-6 h-6" />
@@ -305,22 +297,43 @@ function ChatsContent() {
             </DialogTrigger>
             <DialogContent className="rounded-[2.5rem] p-6 border-none shadow-2xl">
                <DialogHeader><DialogTitle className="text-center font-black uppercase text-xs tracking-widest">Send Appreciation</DialogTitle></DialogHeader>
-               <div className="grid grid-cols-2 gap-3 mt-4">
-                  {GIFTS.map(g => (
-                    <button 
-                      key={g.name} 
-                      onClick={() => handleSendGift(g)} 
-                      className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-2xl hover:bg-pink-50 transition-all border border-transparent hover:border-pink-100 active:scale-95"
+               
+               {lastGiftSent ? (
+                 <div className="flex flex-col items-center justify-center p-8 space-y-6 animate-in zoom-in-95">
+                    <div className="w-24 h-24 bg-pink-50 rounded-full flex items-center justify-center text-5xl shadow-xl shadow-pink-100">
+                      {lastGiftSent.icon}
+                    </div>
+                    <div className="text-center">
+                      <p className="text-lg font-black text-black uppercase tracking-tight">Gift Sent!</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">You're making someone's day</p>
+                    </div>
+                    <Button 
+                      onClick={() => handleSendGift(lastGiftSent)} 
+                      disabled={isSending}
+                      className="w-full h-14 rounded-full bg-pink-500 text-white font-black uppercase tracking-widest text-[10px] shadow-lg active:scale-95"
                     >
-                      <span className="text-3xl mb-2">{g.icon}</span>
-                      <span className="text-[10px] font-black uppercase text-gray-500">{g.name}</span>
-                      <div className="flex items-center gap-1 mt-1">
-                        <Coins className="w-3 h-3 text-yellow-500" />
-                        <span className="text-xs font-bold text-black">{g.cost}</span>
-                      </div>
-                    </button>
-                  ))}
-               </div>
+                      {isSending ? <Loader2 className="animate-spin" /> : <div className="flex items-center gap-2"><RotateCw className="w-4 h-4" /> Send One More</div>}
+                    </Button>
+                    <Button variant="ghost" onClick={() => setLastGiftSent(null)} className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Send different gift</Button>
+                 </div>
+               ) : (
+                 <div className="grid grid-cols-2 gap-3 mt-4">
+                    {GIFTS.map(g => (
+                      <button 
+                        key={g.name} 
+                        onClick={() => handleSendGift(g)} 
+                        className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-2xl hover:bg-pink-50 transition-all border border-transparent hover:border-pink-100 active:scale-95"
+                      >
+                        <span className="text-3xl mb-2">{g.icon}</span>
+                        <span className="text-[10px] font-black uppercase text-gray-500">{g.name}</span>
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className="text-xs font-bold text-black">{g.cost}</span>
+                          <CheckCircle2 className="w-3 h-3 text-yellow-500" />
+                        </div>
+                      </button>
+                    ))}
+                 </div>
+               )}
             </DialogContent>
           </Dialog>
 

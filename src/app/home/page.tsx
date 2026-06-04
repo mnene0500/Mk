@@ -34,28 +34,36 @@ export default function HomePage() {
     setProfile(myProfile);
 
     const oppositeGender = myProfile.gender === 'male' ? 'female' : 'male';
-    let query = supabase.from('users').select('*').eq('onboarding_complete', true).eq('gender', oppositeGender).is('is_deleted', false).neq('uid', currentUser.id);
+    let query = supabase.from('users')
+      .select('*')
+      .eq('onboarding_complete', true)
+      .eq('gender', oppositeGender)
+      .is('is_deleted', false)
+      .neq('uid', currentUser.id);
 
     if (activeTab === 'nearby') query = query.eq('country', myProfile.country);
     
+    // Prioritize active users
     const { data } = await query.order('updated_at', { ascending: false }).limit(40);
 
     if (data) {
       let final = data as any[];
       if (reshuffle && final.length > 5) {
-        const top = final.slice(0, 4);
-        const rest = final.slice(4);
-        final = [top[1], top[2], top[0], top[3], ...rest];
+        // Cyclic shuffle requested: first moves to middle
+        const top = final[0];
+        const rest = final.slice(1);
+        const mid = Math.floor(rest.length / 2);
+        final = [...rest.slice(0, mid), top, ...rest.slice(mid)];
       }
       setUsers(final);
       cachedUsers = final;
     }
     setLoading(false);
-  }, [currentUser?.id, activeTab]);
+  }, [currentUser?.id, activeTab, users.length]);
 
   useEffect(() => {
     if (isInitialized) fetchUsers();
-  }, [isInitialized, activeTab]);
+  }, [isInitialized, activeTab, fetchUsers]);
 
   const calculateAge = (dob: string) => {
     if (!dob) return 21;
@@ -65,27 +73,39 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col w-full bg-white select-none">
-      <div className="px-4 grid grid-cols-2 gap-3 py-6 bg-white shrink-0">
-        <button onClick={() => router.push('/mystery-note')} className="h-28 bg-gradient-to-br from-blue-900 via-blue-800 to-blue-600 rounded-[2rem] p-6 flex flex-col items-start justify-center text-white shadow-xl">
-          <FileText className="w-6 h-6 mb-1" /><p className="text-sm font-black uppercase tracking-widest">Message Blast</p>
-        </button>
-        <button onClick={() => router.push('/tasks')} className="h-28 bg-gradient-to-br from-purple-900 via-purple-800 to-purple-600 rounded-[2rem] p-6 flex flex-col items-start justify-center text-white shadow-xl">
-          <Target className="w-6 h-6 mb-1" /><p className="text-sm font-black uppercase tracking-widest">Task Center</p>
-        </button>
-      </div>
-
-      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-xl px-5 py-3 flex items-center justify-between border-b h-14">
-        <div className="flex items-center gap-6">
-          {['recommend', 'nearby'].map((t) => (
-            <button key={t} onClick={() => setActiveTab(t as any)} className={cn("text-xs font-black uppercase tracking-widest", activeTab === t ? "text-[#00A2FF]" : "text-gray-300")}>
-              {t}
-            </button>
-          ))}
+      {/* BLUE HEADER SECTION */}
+      <div className="bg-[#00A2FF] pt-10 pb-4 shadow-xl">
+        <div className="px-4 grid grid-cols-2 gap-3 py-6">
+          <button onClick={() => router.push('/mystery-note')} className="h-28 bg-white/10 backdrop-blur-md rounded-[2rem] p-6 flex flex-col items-start justify-center text-white border border-white/20 active:scale-95 transition-all">
+            <FileText className="w-6 h-6 mb-1" /><p className="text-sm font-black uppercase tracking-widest leading-tight">Message<br/>Blast</p>
+          </button>
+          <button onClick={() => router.push('/tasks')} className="h-28 bg-white/10 backdrop-blur-md rounded-[2rem] p-6 flex flex-col items-start justify-center text-white border border-white/20 active:scale-95 transition-all">
+            <Target className="w-6 h-6 mb-1" /><p className="text-sm font-black uppercase tracking-widest leading-tight">Task<br/>Center</p>
+          </button>
         </div>
-        <button onClick={() => fetchUsers(true)} className="p-2 text-gray-400"><RotateCw className="w-4 h-4" /></button>
+
+        <div className="px-5 py-3 flex items-center justify-between h-14">
+          <div className="flex items-center gap-6">
+            {['recommend', 'nearby'].map((t) => (
+              <button 
+                key={t} 
+                onClick={() => setActiveTab(t as any)} 
+                className={cn(
+                  "text-xs font-black uppercase tracking-widest transition-all", 
+                  activeTab === t ? "text-white scale-110" : "text-white/40"
+                )}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => fetchUsers(true)} className="p-2 text-white/60 active:rotate-180 transition-transform duration-500">
+            <RotateCw className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      <main className="px-4 pt-4 pb-24">
+      <main className="px-4 pt-6 pb-24">
         {loading ? (
           <div className="grid grid-cols-2 gap-3">{[1,2,3,4].map(i => <div key={i} className="aspect-[1/1.3] bg-gray-50 rounded-[2rem] animate-pulse" />)}</div>
         ) : users.length === 0 ? (
@@ -93,7 +113,7 @@ export default function HomePage() {
         ) : (
           <div className="grid grid-cols-2 gap-3">
             {users.map((u) => (
-              <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.3] rounded-[2rem] shadow-xl" onClick={() => router.push(`/users/${u.uid}`)}>
+              <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.3] rounded-[2rem] shadow-xl active:scale-[0.98] transition-all" onClick={() => router.push(`/users/${u.uid}`)}>
                 <Image src={u.photo_url} alt={u.name} fill className="object-cover" sizes="50vw" priority />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                 <div className="absolute bottom-4 left-4 right-4 text-white">
