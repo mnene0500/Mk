@@ -6,7 +6,7 @@ import { supabase, base64ToBlob, uploadPostPhoto } from "@/lib/supabase"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Send, ChevronLeft, Gift, BadgeCheck, Loader2, MessageSquare, PlusCircle, Coins, Phone, Video, Check, CheckCheck, Camera, Image as ImageIcon, X } from "lucide-react"
+import { Send, ChevronLeft, Gift, BadgeCheck, Loader2, MessageSquare, PlusCircle, Coins, Phone, Video, Check, CheckCheck, Image as ImageIcon, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
@@ -283,8 +283,8 @@ function ChatsContent() {
             </Button>
           </div>
 
-          {/* BOTTOM ROW: ACTIONS (GIFT, CAMERA) */}
-          <div className="flex items-center gap-4 px-1">
+          {/* BOTTOM ROW: ACTIONS (GIFT, IMAGE) */}
+          <div className="flex items-center gap-6 px-1">
             <Sheet onOpenChange={(open) => !open && setLastGiftSent(null)}>
               <SheetTrigger asChild>
                 <button className="flex items-center gap-2 text-pink-500 active:scale-95 transition-transform">
@@ -308,7 +308,7 @@ function ChatsContent() {
               onClick={() => fileInputRef.current?.click()} 
               className="flex items-center gap-2 text-blue-500 active:scale-95 transition-transform"
             >
-              <Camera className="w-6 h-6" />
+              <ImageIcon className="w-6 h-6" />
               <span className="text-[10px] font-black uppercase tracking-widest">Share Photo</span>
             </button>
             <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
