@@ -8,6 +8,7 @@ import { RtcTokenBuilder, RtcRole } from 'agora-token';
  * @fileOverview Hardened Agora Token Generation and Billing Engine.
  * Rates: Audio 70/min, Video 150/min. 
  * Logic: 10s free preview, deduct at 11s, then at the start of every minute.
+ * Added: Busy Check and DND support.
  */
 
 export async function generateAgoraTokenAction(channelName: string, uid: string) {
@@ -46,9 +47,26 @@ export async function generateAgoraTokenAction(channelName: string, uid: string)
 export async function startCallAction(chatId: string, callerId: string, receiverId: string, type: 'video' | 'voice') {
   const supabase = getSupabaseAdmin();
   try {
+    // 1. Check if receiver is in DND mode
+    const { data: receiver } = await supabase.from('users').select('is_dnd, name').eq('uid', receiverId).single();
+    if (receiver?.is_dnd) {
+      return { success: false, error: `${receiver.name} has activated Do Not Disturb.` };
+    }
+
+    // 2. Check if receiver is already in an active call
+    const { data: activeCalls } = await supabase
+      .from('calls')
+      .select('id')
+      .or(`caller_id.eq.${receiverId},receiver_id.eq.${receiverId}`)
+      .in('status', ['calling', 'active']);
+    
+    if (activeCalls && activeCalls.length > 0) {
+      return { success: false, error: `${receiver?.name || 'User'} is currently on another call.` };
+    }
+
     const cost = type === 'video' ? 150 : 70;
     
-    // Check balance
+    // 3. Check caller balance
     const { data: user } = await supabase.from('users').select('is_admin, is_coin_seller').eq('uid', callerId).single();
     if (!user?.is_admin && !user?.is_coin_seller) {
       const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', callerId).single();

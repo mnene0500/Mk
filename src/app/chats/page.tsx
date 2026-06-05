@@ -15,7 +15,7 @@ import { clearChatAction, sendMessageAction, markChatAsReadAction, sendGiftActio
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { useBalance } from "@/lib/providers/BalanceProvider"
-import { checkCallBalanceAction, startCallAction } from "@/app/actions/call-actions"
+import { startCallAction } from "@/app/actions/call-actions"
 
 interface ChatSummary {
   id: string; 
@@ -87,7 +87,13 @@ function ChatsContent() {
     };
     loadMessages(); markChatAsReadAction(currentUser.id, cid);
     const channel = supabase.channel(`msgs-${cid}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${cid}` }, (payload) => {
-      setMessages(prev => [payload.new, ...prev]); markChatAsReadAction(currentUser.id, cid);
+      // Deduplication: prevent optimistic message showing twice
+      setMessages(prev => {
+        const isDuplicate = prev.some(m => m.timestamp === payload.new.timestamp && m.sender_id === payload.new.sender_id);
+        if (isDuplicate) return prev;
+        return [payload.new, ...prev];
+      });
+      markChatAsReadAction(currentUser.id, cid);
     }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [startWithId, currentUser?.id]);
@@ -95,18 +101,29 @@ function ChatsContent() {
   const handleSend = async () => {
     if (!newMessage.trim() || !chatId || !currentUser?.id || !startWithId || isSending) return;
     setIsSending(true); const text = newMessage; setNewMessage("");
+    
+    // Optimistic Update
+    const optimisticMsg = { id: Date.now(), sender_id: currentUser.id, text, timestamp: Date.now(), is_optimistic: true };
+    setMessages(prev => [optimisticMsg, ...prev]);
+
     const res = await sendMessageAction({ chatId, senderId: currentUser.id, recipientId: startWithId, text });
-    if (!res.success) toast({ variant: "destructive", title: "Failed", description: res.error === 'insufficient_funds' ? "You need coins." : "Error." });
+    if (!res.success) {
+      toast({ variant: "destructive", title: "Failed", description: res.error === 'insufficient_funds' ? "You need coins." : "Error." });
+      setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id));
+    }
     setIsSending(false);
   };
 
   const handleCall = async (type: 'video' | 'voice') => {
     if (!currentUser?.id || !startWithId || !chatId) return;
-    const balCheck = await checkCallBalanceAction(currentUser.id, type);
-    if (!balCheck.success) { toast({ variant: "destructive", title: "Insufficient Coins", description: "Top up to start a call." }); return; }
+    setIsSending(true);
     const callRes = await startCallAction(chatId, currentUser.id, startWithId, type);
-    if (callRes.success) router.push(`/call/${chatId}?type=${type}&partnerId=${startWithId}&callId=${callRes.callId}`);
-    else toast({ variant: "destructive", title: "Call Error", description: callRes.error });
+    if (callRes.success) {
+      router.push(`/call/${chatId}?type=${type}&partnerId=${startWithId}&callId=${callRes.callId}`);
+    } else {
+      toast({ variant: "destructive", title: "Call Failed", description: callRes.error });
+    }
+    setIsSending(false);
   };
 
   const handleSendGift = async (g: typeof GIFTS[0]) => {

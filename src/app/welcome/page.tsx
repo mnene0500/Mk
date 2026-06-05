@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Mail, Loader2, Sparkles, Globe } from "lucide-react"
+import { Mail, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
@@ -11,7 +11,8 @@ import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 
 /**
- * @fileOverview Cinematic Welcome Page v2.
+ * @fileOverview Cinematic Welcome Page v2.1.
+ * Refined branding and restored video background.
  */
 export default function WelcomePage() {
   const [loading, setLoading] = useState(false)
@@ -41,20 +42,28 @@ export default function WelcomePage() {
 
   return (
     <div className="fixed inset-0 bg-black overflow-hidden select-none">
-      <div className="absolute inset-0 z-0 scale-110">
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent z-10" />
-        <video autoPlay loop muted playsInline className="w-full h-full object-cover opacity-50 grayscale-[40%]">
+      {/* RESTORED VIDEO BACKGROUND */}
+      <div className="absolute inset-0 z-0">
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-10" />
+        <video 
+          autoPlay 
+          loop 
+          muted 
+          playsInline 
+          className="w-full h-full object-cover opacity-60 grayscale-[20%]"
+        >
           <source src="https://assets.mixkit.co/videos/preview/mixkit-people-dancing-at-a-party-with-strobe-lights-4008-large.mp4" type="video/mp4" />
         </video>
       </div>
 
       <div className="relative z-20 h-full flex flex-col px-8 pt-24 pb-16 justify-between items-center text-center">
-        <div className="space-y-4 pt-10">
-          <h1 className="text-8xl font-logo font-black text-white drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)] tracking-tight">QIVO</h1>
+        <div className="space-y-4 pt-20">
+          {/* REDUCED FONT SIZE */}
+          <h1 className="text-6xl font-logo font-black text-white drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)] tracking-tight">QIVO</h1>
           <div className="flex items-center justify-center gap-3">
-             <div className="h-[1px] w-8 bg-white/20" />
-             <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.5em]">The Premium Network</p>
-             <div className="h-[1px] w-8 bg-white/20" />
+             <div className="h-[1px] w-6 bg-white/20" />
+             <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+             <div className="h-[1px] w-6 bg-white/20" />
           </div>
         </div>
 

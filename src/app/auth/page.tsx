@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo } from "react"
@@ -7,11 +8,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { ChevronLeft, Mail, Loader2, ShieldCheck, Lock, AtSign } from "lucide-react"
+import { ChevronLeft, Mail, Loader2, ShieldCheck, Lock, AtSign, Eye, EyeOff } from "lucide-react"
 
+/**
+ * @fileOverview Unified Auth Page with Password Visibility and Manual Control.
+ */
 export default function UnifiedAuthPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [view, setView] = useState<'login' | 'register'>('login')
   const [loading, setLoading] = useState(false)
   const [socialLoading, setSocialLoading] = useState(false)
@@ -32,7 +37,10 @@ export default function UnifiedAuthPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email || !password) return
+    if (!email || !password) {
+      toast({ variant: "destructive", title: "Required", description: "Email and password are required." })
+      return
+    }
     setLoading(true)
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -154,12 +162,19 @@ export default function UnifiedAuthPage() {
                 <div className="relative group">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300 group-focus-within:text-[#00A2FF] transition-colors" />
                   <Input 
-                    type="password" 
+                    type={showPassword ? "text" : "password"} 
                     placeholder="••••••••" 
                     value={password} 
                     onChange={(e) => setPassword(e.target.value)} 
-                    className="rounded-2xl h-16 pl-12 border-gray-100 bg-gray-50 focus:bg-white text-sm font-bold transition-all" 
+                    className="rounded-2xl h-16 pl-12 pr-12 border-gray-100 bg-gray-50 focus:bg-white text-sm font-bold transition-all" 
                   />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
                 {view === 'register' && (
                   <div className="w-full h-1 bg-gray-100 rounded-full mt-2 overflow-hidden">
@@ -169,6 +184,7 @@ export default function UnifiedAuthPage() {
               </div>
             </div>
 
+            {/* MANUAL SUBMIT ONLY */}
             <Button 
               type="submit" 
               disabled={loading || socialLoading} 

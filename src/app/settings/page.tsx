@@ -1,14 +1,16 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ChevronLeft, ChevronRight, ShieldAlert, Info, RefreshCw, CreditCard, LogOut, Trash2, Loader2, Ban, ShieldCheck, HelpCircle } from "lucide-react"
+import { ChevronLeft, ChevronRight, ShieldAlert, Info, RefreshCw, CreditCard, LogOut, Trash2, Loader2, Ban, ShieldCheck, Moon, Link as LinkIcon, User } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
 import { deleteUserCompletelyAction } from "@/app/actions/matchflow-actions"
+import { Switch } from "@/components/ui/switch"
 import Link from "next/link"
 import {
   AlertDialog,
@@ -30,9 +32,10 @@ interface SettingItemProps {
   icon: React.ReactNode
   variant?: 'default' | 'destructive'
   hideBorder?: boolean
+  children?: React.ReactNode
 }
 
-function SettingItem({ label, onClick, href, icon, variant = 'default', hideBorder }: SettingItemProps) {
+function SettingItem({ label, onClick, href, icon, variant = 'default', hideBorder, children }: SettingItemProps) {
   const content = (
     <div className={cn(
       "flex items-center justify-between py-5 px-6 active:bg-gray-50 transition-colors cursor-pointer bg-white group",
@@ -50,8 +53,13 @@ function SettingItem({ label, onClick, href, icon, variant = 'default', hideBord
           variant === 'destructive' ? 'text-red-500' : 'text-slate-900'
         )}>{label}</span>
       </div>
-      <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center border border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
-         <ChevronRight className="w-4 h-4 text-gray-300" />
+      <div className="flex items-center gap-2">
+         {children}
+         {!children && (
+           <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center border border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
+              <ChevronRight className="w-4 h-4 text-gray-300" />
+           </div>
+         )}
       </div>
     </div>
   )
@@ -69,16 +77,32 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isDnd, setIsDnd] = useState(false)
 
   useEffect(() => {
     if (!user?.id) return
     const fetchProfile = async () => {
       const { data } = await supabase.from('users').select('*').eq('uid', user.id).single()
-      setProfile(data)
+      if (data) {
+        setProfile(data)
+        setIsDnd(!!data.is_dnd)
+      }
       setLoading(false)
     }
     fetchProfile()
   }, [user?.id])
+
+  const toggleDnd = async (val: boolean) => {
+    if (!user) return
+    setIsDnd(val)
+    const { error } = await supabase.from('users').update({ is_dnd: val }).eq('uid', user.id)
+    if (error) {
+      setIsDnd(!val)
+      toast({ variant: "destructive", title: "Sync failed" })
+    } else {
+      toast({ title: val ? "DND Activated" : "DND Deactivated" })
+    }
+  }
 
   const handleSignOut = async () => {
     try {
@@ -140,8 +164,50 @@ export default function SettingsPage() {
 
       <main className="flex-1 p-6 space-y-8 overflow-y-auto no-scrollbar pb-12">
         <div className="space-y-4">
-          <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] ml-2">Wallet & Billing</h2>
+          <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] ml-2">Communication</h2>
           <div className="bg-white rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm">
+            <SettingItem label="Do Not Disturb" icon={<Moon className="w-5 h-5" />} hideBorder>
+              <Switch checked={isDnd} onCheckedChange={toggleDnd} />
+            </SettingItem>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] ml-2">Account Management</h2>
+          <div className="bg-white rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <div className="flex items-center justify-between py-5 px-6 active:bg-gray-50 transition-colors cursor-pointer bg-white group border-b border-gray-50">
+                  <div className="flex items-center gap-4">
+                    <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-gray-50 text-blue-500 group-active:scale-90 transition-transform">
+                      <LinkIcon className="w-5 h-5" />
+                    </div>
+                    <span className="text-[15px] font-black tracking-tight text-slate-900">Bind Account</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-gray-300" />
+                </div>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="rounded-[3rem] p-10 border-none shadow-2xl">
+                <AlertDialogHeader className="items-center text-center">
+                  <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-6">
+                    <User className="w-10 h-10 text-[#00A2FF]" />
+                  </div>
+                  <AlertDialogTitle className="text-2xl font-black tracking-tight uppercase">Linked Account</AlertDialogTitle>
+                  <AlertDialogDescription className="text-sm font-medium text-gray-400 pt-2 space-y-4">
+                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col items-center">
+                      <span className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-1">Authenticated via</span>
+                      <span className="text-black font-black break-all">{user?.email}</span>
+                      <div className="mt-2 px-3 py-1 bg-[#00A2FF]/10 text-[#00A2FF] text-[9px] font-black uppercase rounded-full border border-[#00A2FF]/20">
+                        {user?.app_metadata?.provider === 'google' ? 'Google Social' : 'Secure Email'}
+                      </div>
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="mt-8">
+                  <AlertDialogCancel className="w-full h-16 rounded-2xl border-none bg-gray-50 text-black font-black uppercase tracking-widest text-sm">Close</AlertDialogCancel>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             <SettingItem label="Charge Settings" href="/pricing" icon={<CreditCard className="w-5 h-5" />} hideBorder />
           </div>
         </div>
@@ -228,7 +294,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="pt-10 text-center space-y-2 opacity-30">
-           <p className="text-[9px] font-black uppercase tracking-[0.5em] text-slate-400">Qivo Native v1.2.1</p>
+           <p className="text-[9px] font-black uppercase tracking-[0.5em] text-slate-400">Qivo Native v1.2.5</p>
            <p className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-300">Nairobi, Kenya</p>
         </div>
       </main>
