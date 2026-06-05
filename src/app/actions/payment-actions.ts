@@ -47,7 +47,6 @@ export async function initiatePesaPalPayment(userId: string, amount: number, coi
       status: 'pending'
     });
 
-    // CRITICAL: Must be exactly https://qivo10.vercel.app in Vercel settings
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://qivo10.vercel.app";
 
     const payload = {
@@ -103,9 +102,10 @@ export async function verifyPaymentAction(orderTrackingId: string, merchantRefer
       let coins = 0;
       const amt = Number(pending.amount);
       
-      if (amt === 1) coins = 5;
-      else if (amt === 80) coins = 500;
+      // MAPPING LOGIC
+      if (amt === 80) coins = 500;
       else if (amt === 120) coins = 1000;
+      else if (amt === 240) coins = 2000;
       else if (amt === 600) coins = 5000;
       else if (amt === 800) coins = 7000;
       else if (amt === 1000) coins = 10000;

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -32,19 +33,23 @@ export default function VisitorsPage() {
       const { data: p } = await supabase.from('users').select('*').eq('uid', user.id).single()
       setProfile(p)
 
-      const { data: vists } = await supabase
-        .from('profile_visits')
-        .select('*')
-        .eq('visited_id', user.id)
-        .order('last_visit_at', { ascending: false })
-        .limit(30)
-      
-      if (vists) {
-        const enriched = await Promise.all(vists.map(async (v) => {
-          const { data: prof } = await supabase.from('users').select('name, photo_url').eq('uid', v.visitor_id).single()
-          return { ...v, profile: prof }
-        }))
-        setVisitors(enriched)
+      if (p?.has_visitor_tracking) {
+        const { data: vists } = await supabase
+          .from('profile_visits')
+          .select('*')
+          .eq('visited_id', user.id)
+          .order('last_visit_at', { ascending: false })
+          .limit(50)
+        
+        if (vists && vists.length > 0) {
+          const enriched = await Promise.all(vists.map(async (v) => {
+            const { data: prof } = await supabase.from('users').select('name, photo_url').eq('uid', v.visitor_id).maybeSingle()
+            return { ...v, profile: prof }
+          }))
+          setVisitors(enriched.filter(v => !!v.profile))
+        } else {
+          setVisitors([])
+        }
       }
       setLoading(false)
     }

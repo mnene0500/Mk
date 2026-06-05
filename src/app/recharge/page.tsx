@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -13,9 +14,9 @@ import { supabase } from "@/lib/supabase"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 const PACKAGES = [
-  { id: "p0", label: "Trial", coins: 5, priceKes: 1 },
   { id: "p1", label: "500", coins: 500, priceKes: 80 },
   { id: "p2", label: "1000", coins: 1000, priceKes: 120, popular: true },
+  { id: "p8", label: "2000", coins: 2000, priceKes: 240 },
   { id: "p3", label: "5000", coins: 5000, priceKes: 600 },
   { id: "p4", label: "7000", coins: 7000, priceKes: 800 },
   { id: "p5", label: "10000", coins: 10000, priceKes: 1000 },
@@ -38,7 +39,7 @@ export default function RechargePage() {
   const { toast } = useToast()
   const { coins: currentBalance } = useBalance()
   
-  const [selectedId, setSelectedId] = useState<string | null>("p2")
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [profile, setProfile] = useState<any>(null)
   const [manualCountry, setManualCountry] = useState<string | null>(null)
