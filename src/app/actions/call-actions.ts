@@ -8,7 +8,7 @@ import { RtcTokenBuilder, RtcRole } from 'agora-token';
  * @fileOverview Hardened Agora Token Generation and Billing Engine.
  * Rates: Audio 70/min, Video 150/min. 
  * Logic: 10s free preview, deduct at 11s, then at the start of every minute.
- * Added: Busy Check with 10-minute expiry and DND support.
+ * Added: Strict Real-time Busy Check with 2-minute expiry and stale ringing cleanup.
  */
 
 export async function generateAgoraTokenAction(channelName: string, uid: string) {
@@ -53,22 +53,40 @@ export async function startCallAction(chatId: string, callerId: string, receiver
       return { success: false, error: `${receiver.name} has activated Do Not Disturb.` };
     }
 
-    // 2. Check if receiver is already in an active call (Filtered to last 10 mins)
-    const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    // 2. Real-time Stale Cleanup
+    // Mark any call older than 2 minutes as ended if it's still 'active'
+    // Mark any call older than 60 seconds as ended if it's still 'calling'
+    const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    const sixtySecsAgo = new Date(Date.now() - 60 * 1000).toISOString();
+
+    await supabase.from('calls').update({ status: 'ended' })
+      .or(`caller_id.eq.${receiverId},receiver_id.eq.${receiverId},caller_id.eq.${callerId}`)
+      .in('status', ['calling', 'active'])
+      .lt('created_at', sixtySecsAgo);
+
+    // 3. Busy Check (Strict 2-minute window)
     const { data: activeCalls } = await supabase
       .from('calls')
-      .select('id')
+      .select('id, status, created_at')
       .or(`caller_id.eq.${receiverId},receiver_id.eq.${receiverId}`)
       .in('status', ['calling', 'active'])
-      .gt('created_at', tenMinsAgo);
+      .gt('created_at', twoMinsAgo);
     
-    if (activeCalls && activeCalls.length > 0) {
+    // Check if there is a TRULY active call or a VERY RECENT calling attempt
+    const validBusyCall = activeCalls?.find(c => {
+      if (c.status === 'active') return true;
+      // Only consider 'calling' status as busy if it's newer than 60 seconds
+      const createdAt = new Date(c.created_at).getTime();
+      return (Date.now() - createdAt) < 60000;
+    });
+
+    if (validBusyCall) {
       return { success: false, error: `${receiver?.name || 'User'} is currently on another call.` };
     }
 
     const cost = type === 'video' ? 150 : 70;
     
-    // 3. Check caller balance
+    // 4. Check caller balance
     const { data: user } = await supabase.from('users').select('is_admin, is_coin_seller').eq('uid', callerId).single();
     if (!user?.is_admin && !user?.is_coin_seller) {
       const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', callerId).single();
@@ -77,9 +95,9 @@ export async function startCallAction(chatId: string, callerId: string, receiver
       }
     }
 
-    // Clean up old calls for this chat or caller
+    // Clean up all previous calls for this caller to ensure fresh session
     await supabase.from('calls').update({ status: 'ended' })
-      .or(`chat_id.eq.${chatId},caller_id.eq.${callerId}`)
+      .eq('caller_id', callerId)
       .neq('status', 'ended');
 
     const { data, error } = await supabase.from('calls').insert({
