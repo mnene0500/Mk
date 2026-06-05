@@ -1,4 +1,3 @@
-
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -497,4 +496,44 @@ export async function savePushSubscriptionAction(userId: string, endpoint: strin
   } catch (err: any) {
     return { success: false };
   }
+}
+
+export async function activateReadReceiptsAction(uid: string) {
+  const supabase = getSupabaseAdmin();
+  try {
+    const cost = 200;
+    const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', uid).single();
+    if ((Number(bal?.coins) || 0) < cost) throw new Error("insufficient_funds");
+
+    await supabase.rpc("increment_coins", { p_user_id: uid, p_amount: -cost });
+    await supabase.from('users').update({ has_read_receipts: true }).eq('uid', uid);
+    await supabase.from('coin_history').insert({ user_id: uid, amount: -cost, type: 'premium', description: 'Read Receipts Activation', timestamp: Date.now() });
+    
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function activateVisitorTrackingAction(uid: string) {
+  const supabase = getSupabaseAdmin();
+  try {
+    const cost = 400;
+    const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', uid).single();
+    if ((Number(bal?.coins) || 0) < cost) throw new Error("insufficient_funds");
+
+    await supabase.rpc("increment_coins", { p_user_id: uid, p_amount: -cost });
+    await supabase.from('users').update({ has_visitor_tracking: true }).eq('uid', uid);
+    await supabase.from('coin_history').insert({ user_id: uid, amount: -cost, type: 'premium', description: 'Visitor Tracking Activation', timestamp: Date.now() });
+    
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function logProfileVisitAction(visitorId: string, visitedId: string) {
+  if (visitorId === visitedId) return;
+  const supabase = getSupabaseAdmin();
+  await supabase.rpc("track_profile_visit", { p_visitor_id: visitorId, p_visited_id: visitedId });
 }

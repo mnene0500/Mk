@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, Suspense, useCallback } from "react"
@@ -7,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Send, ChevronLeft, Gift, BadgeCheck, Loader2, MessageSquare, PlusCircle, Coins, Phone, Video } from "lucide-react"
+import { Send, ChevronLeft, Gift, BadgeCheck, Loader2, MessageSquare, PlusCircle, Coins, Phone, Video, Check, CheckCheck } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
@@ -45,10 +44,12 @@ function ChatsContent() {
   const [chatId, setChatId] = useState<string | null>(null)
   const [messages, setMessages] = useState<any[]>([])
   const [partner, setPartner] = useState<any>(null)
+  const [me, setMe] = useState<any>(null)
   const [newMessage, setNewMessage] = useState("")
   const [chatToDelete, setChatToDelete] = useState<string | null>(null)
   const [isSending, setIsSending] = useState(false)
   const [lastGiftSent, setLastGiftSent] = useState<typeof GIFTS[0] | null>(null)
+  const [chatInfo, setChatInfo] = useState<any>(null)
 
   const fetchSummaries = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -69,6 +70,7 @@ function ChatsContent() {
 
   useEffect(() => {
     if (!currentUser?.id) return;
+    supabase.from('users').select('*').eq('uid', currentUser.id).single().then(({ data }) => setMe(data))
     fetchSummaries();
     const channel = supabase.channel('chats-sync').on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => fetchSummaries()).subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -79,22 +81,30 @@ function ChatsContent() {
     const cid = `direct_${[currentUser.id, startWithId].sort()[0]}_${[currentUser.id, startWithId].sort()[1]}`;
     setChatId(cid);
     supabase.from('users').select('*').eq('uid', startWithId).single().then(({ data }) => setPartner(data));
+    
     const loadMessages = async () => {
-      const { data: chatData } = await supabase.from('chats').select('cleared_at').eq('id', cid).maybeSingle();
+      const { data: chatData } = await supabase.from('chats').select('*').eq('id', cid).maybeSingle();
+      setChatInfo(chatData);
       const clearedAt = (chatData?.cleared_at as any)?.[currentUser.id] || 0;
       const { data: msgs } = await supabase.from('messages').select('*').eq('chat_id', cid).gt('timestamp', clearedAt).order('timestamp', { ascending: false }).limit(50);
       setMessages(msgs || []);
     };
     loadMessages(); markChatAsReadAction(currentUser.id, cid);
-    const channel = supabase.channel(`msgs-${cid}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${cid}` }, (payload) => {
-      // Deduplication: prevent optimistic message showing twice
-      setMessages(prev => {
-        const isDuplicate = prev.some(m => m.timestamp === payload.new.timestamp && m.sender_id === payload.new.sender_id);
-        if (isDuplicate) return prev;
-        return [payload.new, ...prev];
-      });
-      markChatAsReadAction(currentUser.id, cid);
-    }).subscribe();
+    
+    const channel = supabase.channel(`msgs-${cid}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${cid}` }, (payload) => {
+        setMessages(prev => {
+          const isDuplicate = prev.some(m => m.timestamp === payload.new.timestamp && m.sender_id === payload.new.sender_id);
+          if (isDuplicate) return prev;
+          return [payload.new, ...prev];
+        });
+        markChatAsReadAction(currentUser.id, cid);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chats', filter: `id=eq.${cid}` }, (payload) => {
+        setChatInfo(payload.new);
+      })
+      .subscribe();
+
     return () => { supabase.removeChannel(channel); };
   }, [startWithId, currentUser?.id]);
 
@@ -102,7 +112,6 @@ function ChatsContent() {
     if (!newMessage.trim() || !chatId || !currentUser?.id || !startWithId || isSending) return;
     setIsSending(true); const text = newMessage; setNewMessage("");
     
-    // Optimistic Update
     const optimisticMsg = { id: Date.now(), sender_id: currentUser.id, text, timestamp: Date.now(), is_optimistic: true };
     setMessages(prev => [optimisticMsg, ...prev]);
 
@@ -173,13 +182,27 @@ function ChatsContent() {
           const isGiftMsg = m.is_gift || m.text?.startsWith('[Gift:');
           const giftName = m.text?.match(/\[Gift: (.*)\]/)?.[1];
           const giftEmoji = GIFTS.find(g => g.name === giftName)?.icon || '🎁';
+          const isMe = m.sender_id === currentUser?.id;
+          
+          // Seen Logic
+          const partnerSeenAt = (chatInfo?.last_seen_at as any)?.[startWithId!] || 0;
+          const isSeen = m.timestamp <= partnerSeenAt && !m.is_optimistic;
+
           return (
-            <div key={m.id} className={cn("max-w-[85%] p-4 rounded-2xl text-sm font-medium shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300 flex flex-col gap-2", m.sender_id === currentUser?.id ? "bg-[#00A2FF] text-white self-end rounded-br-none" : "bg-white text-black self-start rounded-bl-none border border-black/5")}>
-              <div className="flex items-center gap-2">{isGiftMsg && <span className="text-xl">{giftEmoji}</span>}<span className="break-words">{m.text}</span></div>
-              {isGiftMsg && m.sender_id === currentUser?.id && idx === 0 && (
-                <Button onClick={() => { const g = GIFTS.find(gf => gf.name === giftName); if (g) handleSendGift(g); }} disabled={isSending} variant="ghost" className="h-8 rounded-xl bg-white/20 hover:bg-white/30 text-white text-[9px] font-black uppercase tracking-widest border border-white/20 self-start mt-1">
-                  {isSending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Send One More"}
-                </Button>
+            <div key={m.id} className={cn("max-w-[85%] flex flex-col gap-1", isMe ? "self-end items-end" : "self-start items-start")}>
+              <div className={cn("p-4 rounded-2xl text-sm font-medium shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300 flex flex-col gap-2", isMe ? "bg-[#00A2FF] text-white rounded-br-none" : "bg-white text-black rounded-bl-none border border-black/5")}>
+                <div className="flex items-center gap-2">{isGiftMsg && <span className="text-xl">{giftEmoji}</span>}<span className="break-words">{m.text}</span></div>
+                {isGiftMsg && isMe && idx === 0 && (
+                  <Button onClick={() => { const g = GIFTS.find(gf => gf.name === giftName); if (g) handleSendGift(g); }} disabled={isSending} variant="ghost" className="h-8 rounded-xl bg-white/20 hover:bg-white/30 text-white text-[9px] font-black uppercase tracking-widest border border-white/20 self-start mt-1">
+                    {isSending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Send One More"}
+                  </Button>
+                )}
+              </div>
+              {isMe && me?.has_read_receipts && !m.is_optimistic && (
+                <div className="flex items-center gap-1 px-1">
+                   {isSeen ? <CheckCheck className="w-3 h-3 text-blue-500" /> : <Check className="w-3 h-3 text-gray-300" />}
+                   <span className="text-[8px] font-black uppercase text-gray-400 tracking-widest">{isSeen ? 'Seen' : 'Sent'}</span>
+                </div>
               )}
             </div>
           )

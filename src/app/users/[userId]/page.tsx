@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { reportUserAction } from "@/app/actions/matchflow-actions"
+import { reportUserAction, logProfileVisitAction } from "@/app/actions/matchflow-actions"
 
 export default function UserDetailPage({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = use(params)
@@ -38,7 +38,12 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
       setProfile(data)
       setLoading(false)
     })
-  }, [userId])
+    
+    // Log visit
+    if (currentUser?.id && userId && currentUser.id !== userId) {
+      logProfileVisitAction(currentUser.id, userId);
+    }
+  }, [userId, currentUser?.id])
 
   const handleCopyId = () => {
     if (!profile?.match_flow_id) return

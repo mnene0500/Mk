@@ -1,15 +1,14 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ChevronLeft, ChevronRight, ShieldAlert, Info, RefreshCw, CreditCard, LogOut, Trash2, Loader2, Ban, ShieldCheck, Moon, Link as LinkIcon, User } from "lucide-react"
+import { ChevronLeft, ChevronRight, ShieldAlert, Info, RefreshCw, CreditCard, LogOut, Trash2, Loader2, Ban, ShieldCheck, Moon, Link as LinkIcon, User, Eye, EyeOff, Coins, Zap } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
-import { deleteUserCompletelyAction } from "@/app/actions/matchflow-actions"
+import { deleteUserCompletelyAction, activateReadReceiptsAction, activateVisitorTrackingAction } from "@/app/actions/matchflow-actions"
 import { Switch } from "@/components/ui/switch"
 import Link from "next/link"
 import {
@@ -78,6 +77,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isDnd, setIsDnd] = useState(false)
+  const [isActivating, setIsActivating] = useState(false)
 
   useEffect(() => {
     if (!user?.id) return
@@ -102,6 +102,32 @@ export default function SettingsPage() {
     } else {
       toast({ title: val ? "DND Activated" : "DND Deactivated" })
     }
+  }
+
+  const handleActivateReadReceipts = async () => {
+    if (!user) return
+    setIsActivating(true)
+    const res = await activateReadReceiptsAction(user.id)
+    if (res.success) {
+      toast({ title: "Read Receipts Activated!" })
+      setProfile({ ...profile, has_read_receipts: true })
+    } else {
+      toast({ variant: "destructive", title: "Activation Failed", description: res.error === 'insufficient_funds' ? "You need 200 coins." : "Error occurred." })
+    }
+    setIsActivating(false)
+  }
+
+  const handleActivateVisitors = async () => {
+    if (!user) return
+    setIsActivating(true)
+    const res = await activateVisitorTrackingAction(user.id)
+    if (res.success) {
+      toast({ title: "Visitor Tracking Activated!" })
+      setProfile({ ...profile, has_visitor_tracking: true })
+    } else {
+      toast({ variant: "destructive", title: "Activation Failed", description: res.error === 'insufficient_funds' ? "You need 400 coins." : "Error occurred." })
+    }
+    setIsActivating(false)
   }
 
   const handleSignOut = async () => {
@@ -166,9 +192,95 @@ export default function SettingsPage() {
         <div className="space-y-4">
           <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] ml-2">Communication</h2>
           <div className="bg-white rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm">
-            <SettingItem label="Do Not Disturb" icon={<Moon className="w-5 h-5" />} hideBorder>
+            <SettingItem label="Do Not Disturb" icon={<Moon className="w-5 h-5" />}>
               <Switch checked={isDnd} onCheckedChange={toggleDnd} />
             </SettingItem>
+            {profile && !profile.has_read_receipts ? (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <div className="flex items-center justify-between py-5 px-6 active:bg-gray-50 transition-colors cursor-pointer bg-white group hideBorder">
+                    <div className="flex items-center gap-4">
+                      <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-blue-50 text-blue-500">
+                        <Eye className="w-5 h-5" />
+                      </div>
+                      <span className="text-[15px] font-black tracking-tight text-slate-900">Read Receipts</span>
+                    </div>
+                    <span className="px-3 py-1 bg-[#00A2FF] text-white text-[8px] font-black uppercase rounded-full">Unlock</span>
+                  </div>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="rounded-[3rem] p-10 border-none shadow-2xl">
+                  <AlertDialogHeader className="items-center text-center">
+                    <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-6">
+                      <Eye className="w-10 h-10 text-[#00A2FF]" />
+                    </div>
+                    <AlertDialogTitle className="text-2xl font-black tracking-tight uppercase">Sent & Seen</AlertDialogTitle>
+                    <AlertDialogDescription className="text-sm font-medium text-gray-400 pt-2">Enable real-time message status updates. Pay once and see when your messages are delivered and read.</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <div className="flex flex-col gap-4 mt-10">
+                    <Button onClick={handleActivateReadReceipts} disabled={isActivating} className="w-full h-16 rounded-2xl bg-[#00A2FF] text-white font-black uppercase tracking-widest text-sm shadow-xl">
+                      {isActivating ? <Loader2 className="animate-spin" /> : <><Coins className="w-4 h-4 mr-2" /> Pay 200 Coins</>}
+                    </Button>
+                    <AlertDialogCancel className="w-full h-14 rounded-2xl border-none bg-gray-50 text-gray-400 font-black uppercase tracking-widest text-xs">Maybe Later</AlertDialogCancel>
+                  </div>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : (
+              <div className="flex items-center justify-between py-5 px-6 bg-white group hideBorder">
+                <div className="flex items-center gap-4">
+                  <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-green-50 text-green-500">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <span className="text-[15px] font-black tracking-tight text-slate-900">Read Receipts</span>
+                </div>
+                <span className="text-[9px] font-black text-green-500 uppercase tracking-widest">Active</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] ml-2">Premium Features</h2>
+          <div className="bg-white rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm">
+            {profile && !profile.has_visitor_tracking ? (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <div className="flex items-center justify-between py-5 px-6 active:bg-gray-50 transition-colors cursor-pointer bg-white group hideBorder">
+                    <div className="flex items-center gap-4">
+                      <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-purple-50 text-purple-500">
+                        <Zap className="w-5 h-5" />
+                      </div>
+                      <span className="text-[15px] font-black tracking-tight text-slate-900">Profile Visitors</span>
+                    </div>
+                    <span className="px-3 py-1 bg-purple-500 text-white text-[8px] font-black uppercase rounded-full">Unlock</span>
+                  </div>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="rounded-[3rem] p-10 border-none shadow-2xl">
+                  <AlertDialogHeader className="items-center text-center">
+                    <div className="w-20 h-20 bg-purple-50 rounded-full flex items-center justify-center mb-6">
+                      <Zap className="w-10 h-10 text-purple-500" />
+                    </div>
+                    <AlertDialogTitle className="text-2xl font-black tracking-tight uppercase">Who Visited?</AlertDialogTitle>
+                    <AlertDialogDescription className="text-sm font-medium text-gray-400 pt-2">See exactly who has been checking out your profile. Get notified about your admirers with a one-time activation.</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <div className="flex flex-col gap-4 mt-10">
+                    <Button onClick={handleActivateVisitors} disabled={isActivating} className="w-full h-16 rounded-2xl bg-purple-600 text-white font-black uppercase tracking-widest text-sm shadow-xl">
+                      {isActivating ? <Loader2 className="animate-spin" /> : <><Coins className="w-4 h-4 mr-2" /> Pay 400 Coins</>}
+                    </Button>
+                    <AlertDialogCancel className="w-full h-14 rounded-2xl border-none bg-gray-50 text-gray-400 font-black uppercase tracking-widest text-xs">Maybe Later</AlertDialogCancel>
+                  </div>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : (
+              <div className="flex items-center justify-between py-5 px-6 bg-white group hideBorder">
+                <div className="flex items-center gap-4">
+                  <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-green-50 text-green-500">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <span className="text-[15px] font-black tracking-tight text-slate-900">Visitor Tracking</span>
+                </div>
+                <span className="text-[9px] font-black text-green-500 uppercase tracking-widest">Active</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -294,7 +406,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="pt-10 text-center space-y-2 opacity-30">
-           <p className="text-[9px] font-black uppercase tracking-[0.5em] text-slate-400">Qivo Native v1.2.5</p>
+           <p className="text-[9px] font-black uppercase tracking-[0.5em] text-slate-400">Qivo Native v1.2.6</p>
            <p className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-300">Nairobi, Kenya</p>
         </div>
       </main>

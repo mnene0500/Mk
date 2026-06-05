@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Settings, ChevronRight, Copy, Check, BadgeCheck, Headphones, Pencil, Gem, Award, Briefcase, UserPlus, Wallet, Shield, PlusCircle, UserCheck, Flag, Gamepad2, Coins } from "lucide-react"
+import { Settings, ChevronRight, Copy, Check, BadgeCheck, Headphones, Pencil, Gem, Award, Briefcase, UserPlus, Wallet, Shield, PlusCircle, UserCheck, Flag, Gamepad2, Coins, Users } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
@@ -121,6 +121,15 @@ export default function MePage() {
       
       <div className="relative z-10">
         <header className="pt-16 pb-12 px-6 flex flex-col items-center text-center">
+          <div className="absolute top-12 right-6">
+            <button 
+              onClick={() => router.push('/visitors')}
+              className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 flex items-center justify-center shadow-xl active:scale-90 transition-all text-white"
+            >
+              <Users className="w-5 h-5" />
+            </button>
+          </div>
+
           <div className="relative mb-6">
             <div className="relative w-32 h-32 rounded-full overflow-hidden bg-white/20 backdrop-blur-xl p-1 shadow-2xl hover:scale-105 transition-transform duration-500">
               <div className="w-full h-full rounded-full overflow-hidden bg-gray-100">

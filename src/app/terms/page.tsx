@@ -2,62 +2,69 @@
 
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft } from "lucide-react"
+import { ChevronLeft, Scale } from "lucide-react"
 
 export default function TermsOfServicePage() {
   const router = useRouter()
 
   return (
-    <div className="flex-1 bg-white min-h-screen flex flex-col">
+    <div className="flex-1 bg-white min-h-screen flex flex-col select-none">
       <header className="px-4 h-16 flex items-center border-b sticky top-0 bg-white z-50">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full">
           <ChevronLeft className="w-6 h-6 text-black" />
         </Button>
-        <h1 className="text-lg font-bold text-black ml-2">Terms of Service</h1>
+        <h1 className="text-sm font-black text-black uppercase tracking-widest ml-2">Terms of Service</h1>
       </header>
 
-      <main className="flex-1 p-6 space-y-6 overflow-y-auto">
+      <main className="flex-1 p-8 space-y-8 overflow-y-auto no-scrollbar">
+        <div className="flex items-center gap-4 mb-8">
+           <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center border border-black/5">
+              <Scale className="w-6 h-6 text-black" />
+           </div>
+           <div>
+             <h2 className="text-xl font-black uppercase tracking-tight">Legal Protocol</h2>
+             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Effective Jan 1, 2024</p>
+           </div>
+        </div>
+
         <section className="space-y-3">
-          <h2 className="text-base font-bold text-black">1. Acceptance of Terms</h2>
-          <p className="text-sm text-gray-600 leading-relaxed">
-            By accessing or using QIVO, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the application.
+          <h2 className="text-xs font-black text-black uppercase tracking-widest border-l-4 border-[#00A2FF] pl-3">1. Binding Agreement</h2>
+          <p className="text-[13px] text-gray-600 font-bold leading-relaxed">
+            By accessing QIVO, you enter a binding legal contract. You agree to utilize the platform exclusively for genuine social networking and abide by all local and international laws.
           </p>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-base font-bold text-black">2. Eligibility</h2>
-          <p className="text-sm text-gray-600 leading-relaxed">
-            You must be at least 18 years of age to create an account on QIVO. By using the service, you represent and warrant that you have the right, authority, and capacity to enter into this agreement.
+          <h2 className="text-xs font-black text-black uppercase tracking-widest border-l-4 border-[#00A2FF] pl-3">2. Virtual Assets</h2>
+          <p className="text-[13px] text-gray-600 font-bold leading-relaxed">
+            Coins and Diamonds are digital tokens with no intrinsic monetary value. They are non-refundable and non-transferable outside the QIVO ecosystem. QIVO reserves the right to manage and regulate these assets.
           </p>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-base font-bold text-black">3. User Conduct</h2>
-          <p className="text-sm text-gray-600 leading-relaxed">
-            You are solely responsible for your interactions with other users. You agree to treat others with respect and refrain from harassment, hate speech, or sharing explicit or illegal content.
+          <h2 className="text-xs font-black text-black uppercase tracking-widest border-l-4 border-[#00A2FF] pl-3">3. Interaction Ethics</h2>
+          <p className="text-[13px] text-gray-600 font-bold leading-relaxed">
+            We enforce a Zero-Tolerance Policy for harassment, fraud, and explicit content. Violations will result in immediate permanent suspension and forfeiture of all virtual balances.
           </p>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-base font-bold text-black">4. Virtual Currency</h2>
-          <p className="text-sm text-gray-600 leading-relaxed">
-            QIVO uses "Coins" and "Diamonds." Coins are purchased and used for interactions. Diamonds are earned through engagement and can be converted to Coins. These virtual currencies have no monetary value outside the app and are non-refundable.
+          <h2 className="text-xs font-black text-black uppercase tracking-widest border-l-4 border-[#00A2FF] pl-3">4. Profile Integrity</h2>
+          <p className="text-[13px] text-gray-600 font-bold leading-relaxed">
+            Users must be 18+ years of age. Misrepresentation of identity or age is a primary violation. AI verification is mandatory for several features to ensure a trusted community.
           </p>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-base font-bold text-black">5. Account Safety</h2>
-          <p className="text-sm text-gray-600 leading-relaxed">
-            You are responsible for maintaining the confidentiality of your login credentials. We recommend binding your account to an email to prevent loss of data or virtual currency.
+          <h2 className="text-xs font-black text-black uppercase tracking-widest border-l-4 border-[#00A2FF] pl-3">5. Termination</h2>
+          <p className="text-[13px] text-gray-600 font-bold leading-relaxed">
+            QIVO reserves the unilateral right to terminate accounts that compromise platform stability or user safety. Terminated users lose all access to data and virtual currency.
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-black">6. Termination</h2>
-          <p className="text-sm text-gray-600 leading-relaxed">
-            We reserve the right to terminate or suspend your account at any time, without notice, for conduct that we believe violates these Terms or is harmful to other users of the app.
-          </p>
-        </section>
+        <div className="pt-10 border-t border-gray-50 text-center opacity-30">
+          <p className="text-[9px] font-black uppercase tracking-widest">Governed by Laws of the Republic of Kenya</p>
+        </div>
       </main>
     </div>
   )
