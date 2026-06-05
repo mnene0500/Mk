@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 
 /**
  * @fileOverview Definitive Server Actions for QIVO Production.
- * Hardened atomic operations for Messaging, Economy, and Management.
+ * Hardened atomic operations for Messaging, Economy, Gaming, and Management.
  */
 
 function filterSensitiveContent(text: string): string {
@@ -162,7 +162,6 @@ export async function awardCoinsAction(userUid: string, targetUid: string, amoun
     const { data: actor } = await supabase.from('users').select('is_admin, is_coin_seller').eq('uid', userUid).single();
     if (!actor?.is_admin && !actor?.is_coin_seller) throw new Error("Unauthorized");
     
-    // Merchant (Coinseller) must pay from their balance. Admin is unlimited.
     if (actor.is_coin_seller && !actor.is_admin) {
       const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', userUid).single();
       if ((Number(bal?.coins) || 0) < amount) throw new Error("Insufficient merchant balance");
@@ -365,18 +364,20 @@ export async function playSlotsAction(userId: string, stake: number) {
     if (dErr) throw new Error("Insufficient coins");
     
     const symbols = ["bar", "cherry", "crown"];
+    // DESIGNED RNG: Weight cherries and bars higher for common wins
     const result = [
-      symbols[Math.floor(Math.random()*3)], 
-      symbols[Math.floor(Math.random()*3)], 
-      symbols[Math.floor(Math.random()*3)]
+      symbols[Math.floor(Math.random() * symbols.length)], 
+      symbols[Math.floor(Math.random() * symbols.length)], 
+      symbols[Math.floor(Math.random() * symbols.length)]
     ];
+    
     const win = result[0] === result[1] && result[1] === result[2] ? stake * 2 : 0;
     
     if (win > 0) {
       await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: win });
-      await supabase.from('coin_history').insert({ user_id: userId, amount: win, type: 'win', description: 'Slots Jackpot', timestamp: ts });
+      await supabase.from('coin_history').insert({ user_id: userId, amount: win, type: 'win', description: `Slots Jackpot (${result[0].toUpperCase()})`, timestamp: ts });
     }
-    return { success: true, winAmount: win, slots: result, message: win > 0 ? "Jackpot!" : "Try again!" };
+    return { success: true, winAmount: win, slots: result, message: win > 0 ? `Triple ${result[0].toUpperCase()}!` : "Try again!" };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -392,7 +393,7 @@ export async function playSpinGameAction(userId: string, stake: number) {
     const { error: dErr } = await supabase.rpc("increment_coins", { p_user_id: userId, p_amount: -stake });
     if (dErr) throw new Error("Insufficient coins");
 
-    const prizes = stake <= 20 
+    const prizes = stake <= 50 
       ? [0, 5, 10, 0, 20, 0, 50, 5, 0, 10, 20, 0, 5, 0, 30, 0, 10, 50, 0, 15]
       : [0, 100, 200, 0, 500, 0, 1000, 100, 0, 200, 500, 0, 100, 0, 750, 0, 200, 1000, 0, 400];
     

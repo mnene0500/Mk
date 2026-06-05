@@ -30,7 +30,6 @@ export default function SlotMachinePage() {
   const [reels, setReels] = useState(["cherry", "bar", "crown"])
   const [lastWin, setLastWin] = useState<number | null>(null)
   
-  // Animation interval refs
   const spinInterval = useRef<NodeJS.Timeout | null>(null)
 
   const stopAnimation = (finalSlots: string[], winAmount: number, message: string) => {
@@ -44,16 +43,15 @@ export default function SlotMachinePage() {
     
     if (winAmount > 0) {
       setLastWin(winAmount)
-      toast({ title: "WINNER!", description: message || "Winnings added to your wallet." })
+      toast({ title: "WINNER!", description: message })
     } else {
-      toast({ title: "No Win", description: message || "Try again!" })
+      toast({ title: "No Win", description: "Almost there! Try again." })
     }
   }
 
   const handleSpin = async () => {
     if (!user || isSpinning) return
     
-    // Client-side quick check (server action will still validate)
     if (coins < selectedStake) {
       toast({ variant: "destructive", title: "Insufficient Coins" })
       return
@@ -62,7 +60,7 @@ export default function SlotMachinePage() {
     setIsSpinning(true)
     setLastWin(null)
 
-    // START ANIMATION IMMEDIATELY (ZERO LAG)
+    // START ANIMATION
     spinInterval.current = setInterval(() => {
       setReels([
         SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)],
@@ -74,11 +72,10 @@ export default function SlotMachinePage() {
     const startTime = Date.now()
 
     try {
-      // Run server action in parallel with animation
       const res = await playSlotsAction(user.id, selectedStake)
       
       const elapsedTime = Date.now() - startTime
-      const minSpinTime = 1200 // Guaranteed 1.2 seconds of animation for "feel"
+      const minSpinTime = 1500 
       const remainingTime = Math.max(0, minSpinTime - elapsedTime)
 
       if (res.success && res.slots) {
@@ -95,7 +92,6 @@ export default function SlotMachinePage() {
     }
   }
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (spinInterval.current) clearInterval(spinInterval.current)
@@ -130,8 +126,8 @@ export default function SlotMachinePage() {
              {reels.map((symbol, i) => (
                <div key={i} className="flex-1 aspect-[3/4] bg-black rounded-2xl border-4 border-zinc-800 flex items-center justify-center shadow-inner overflow-hidden">
                   <div className={cn(
-                    "text-5xl transition-transform",
-                    isSpinning && "animate-bounce"
+                    "text-5xl transition-all duration-300",
+                    isSpinning && "animate-bounce scale-110"
                   )}>
                     {ICON_MAP[symbol]}
                   </div>
@@ -176,7 +172,7 @@ export default function SlotMachinePage() {
           <div className="grid grid-cols-1 gap-4">
              <div className="p-3 bg-white/5 rounded-2xl border border-white/5 flex flex-col items-center">
                 <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Match Any 3 Symbols</span>
-                <span className="text-xs font-black text-green-400">WIN 2.0x STAKE</span>
+                <span className="text-xs font-black text-green-400 uppercase">WIN 2.0x STAKE</span>
              </div>
           </div>
         </div>
