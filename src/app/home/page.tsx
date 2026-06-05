@@ -127,7 +127,7 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col w-full bg-white select-none min-h-screen">
-      <div className="bg-[#00A2FF] pt-2 pb-3 shadow-xl rounded-b-[2.5rem] sticky top-0 z-50">
+      <div className="bg-[#00A2FF] pt-2 pb-3 shadow-xl sticky top-0 z-50">
         <div className="px-4 grid grid-cols-2 gap-3 py-4">
           <button onClick={() => router.push('/mystery-note')} className="h-28 bg-gradient-to-br from-orange-400 to-orange-600 rounded-[2rem] p-5 flex flex-col items-start justify-center text-white shadow-lg active:scale-95 transition-all relative overflow-hidden group">
             <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
