@@ -66,7 +66,6 @@ function ChatsContent() {
   const fetchSummaries = useCallback(async () => {
     if (!currentUser?.id) return;
     
-    // Select ONLY necessary summary fields
     const { data: chats } = await supabase
       .from('chats')
       .select('id, participant_ids, last_message, last_message_at, cleared_at, last_seen_at, last_sender_id')
@@ -79,7 +78,6 @@ function ChatsContent() {
     const filtered = chats.filter(c => (c.last_message_at || 0) > ((c.cleared_at as any)?.[currentUser.id] || 0));
     const partnerIds = filtered.map(c => c.participant_ids.find((id: string) => id !== currentUser.id));
     
-    // Batch fetch partner profiles with explicit columns
     const { data: profiles } = await supabase
       .from('users')
       .select('uid, name, photo_url, is_verified, blocking, blocked_by')
@@ -90,7 +88,7 @@ function ChatsContent() {
     const enhanced = filtered.map(c => {
       const pId = c.participant_ids.find((id: string) => id !== currentUser.id);
       const p = pMap.get(pId);
-      if (!p) return null; // Skip blocked summaries
+      if (!p) return null;
 
       const seenAt = (c.last_seen_at as any)?.[currentUser.id] || 0;
       return { 
@@ -114,7 +112,7 @@ function ChatsContent() {
     fetchSummaries();
     
     const channel = supabase.channel('chats-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => fetchSummaries())
+      .on('postgres_changes', { event: '*', table: 'chats' }, () => fetchSummaries())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [currentUser?.id, fetchSummaries]);
@@ -349,12 +347,12 @@ function ChatsContent() {
       </footer>
 
       {isBlocked && (
-        <div className="absolute inset-0 z-[150] bg-white/80 backdrop-blur-md flex flex-col items-center justify-center p-10 text-center animate-in fade-in">
+        <div className="fixed inset-0 z-[200] bg-white/80 backdrop-blur-2xl flex flex-col items-center justify-center p-10 text-center animate-in fade-in">
            <div className="w-20 h-20 bg-red-50 rounded-[2.5rem] flex items-center justify-center mb-6 text-red-500">
              <ShieldAlert className="w-10 h-10" />
            </div>
            <h3 className="text-xl font-black text-black tracking-tight uppercase">Interaction Blocked</h3>
-           <p className="text-xs font-bold text-gray-400 mt-2 leading-relaxed max-w-[240px]">This user is currently blocked. You cannot read messages or interact further.</p>
+           <p className="text-xs font-bold text-gray-400 mt-2 leading-relaxed max-w-[240px]">This user is currently blocked. You cannot interact with them at this time.</p>
            <Button onClick={() => router.back()} className="mt-8 rounded-full h-14 px-10 bg-black text-white font-black uppercase tracking-widest text-[10px]">Go Back</Button>
         </div>
       )}

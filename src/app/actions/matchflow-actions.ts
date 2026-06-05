@@ -70,6 +70,29 @@ export async function completeOnboardingAction(payload: {
   }
 }
 
+export async function claimVerificationRewardAction(uid: string) {
+  const supabase = getSupabaseAdmin();
+  try {
+    const { data: user } = await supabase.from('users').select('is_verified, claimed_verification_reward').eq('uid', uid).single();
+    if (!user?.is_verified) throw new Error("User not verified.");
+    if (user.claimed_verification_reward) throw new Error("Already claimed.");
+
+    const amount = 50;
+    await supabase.rpc("increment_coins", { p_user_id: uid, p_amount: amount });
+    await supabase.from('users').update({ claimed_verification_reward: true }).eq('uid', uid);
+    await supabase.from('coin_history').insert({
+      user_id: uid,
+      amount: amount,
+      type: 'reward',
+      description: 'Identity Verification Bonus',
+      timestamp: Date.now()
+    });
+    return { success: true, amount };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function sendMessageAction(payload: { chatId: string; senderId: string; recipientId: string; text: string; imageUrl?: string; }) {
   const supabase = getSupabaseAdmin();
   const timestamp = Date.now();
@@ -79,7 +102,6 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
   try {
     const { data: sender } = await supabase.from('users').select('gender, is_admin, is_coin_seller, blocking, blocked_by').eq('uid', payload.senderId).maybeSingle();
     
-    // Check if interaction is allowed (Blocking check)
     if (sender?.blocking?.includes(payload.recipientId) || sender?.blocked_by?.includes(payload.recipientId)) {
       return { success: false, error: "interaction_blocked" };
     }
@@ -217,7 +239,6 @@ export async function sendMysteryNoteAction(userId: string, text: string, recipi
     const { data: balance } = await supabase.from('balances').select('coins').eq('user_id', userId).maybeSingle();
     if ((Number(balance?.coins) || 0) < cost) throw new Error("insufficient_funds");
 
-    // Fetch pool of eligible recipients
     let query = supabase.from('users')
       .select('uid')
       .neq('uid', userId)
@@ -281,30 +302,16 @@ export async function savePushSubscriptionAction(userId: string, endpoint: strin
   return { success: true };
 }
 
-export async function activateReadReceiptsAction(uid: string) {
+export async function reportUserAction(payload: { reporterId: string; reportedId: string; reason: string; description: string; proofPhotoUrl?: string; }) {
   const supabase = getSupabaseAdmin();
-  const cost = 200;
-  const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', uid).single();
-  if ((Number(bal?.coins) || 0) < cost) throw new Error("insufficient_funds");
-  await supabase.rpc("increment_coins", { p_user_id: uid, p_amount: -cost });
-  await supabase.from('users').update({ has_read_receipts: true }).eq('uid', uid);
-  await supabase.from('coin_history').insert({ user_id: uid, amount: -cost, type: 'premium', description: 'Read Receipts Activation', timestamp: Date.now() });
+  const { error } = await supabase.from('reports').insert({
+    reporter_id: payload.reporterId,
+    reported_id: payload.reportedId,
+    reason: payload.reason,
+    description: payload.description,
+    proof_photo_url: payload.proofPhotoUrl,
+    timestamp: Date.now()
+  });
+  if (error) return { success: false, error: error.message };
   return { success: true };
-}
-
-export async function activateVisitorTrackingAction(uid: string) {
-  const supabase = getSupabaseAdmin();
-  const cost = 400;
-  const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', uid).single();
-  if ((Number(bal?.coins) || 0) < cost) throw new Error("insufficient_funds");
-  await supabase.rpc("increment_coins", { p_user_id: uid, p_amount: -cost });
-  await supabase.from('users').update({ has_visitor_tracking: true }).eq('uid', uid);
-  await supabase.from('coin_history').insert({ user_id: uid, amount: -cost, type: 'premium', description: 'Visitor Tracking Activation', timestamp: Date.now() });
-  return { success: true };
-}
-
-export async function logProfileVisitAction(visitorId: string, visitedId: string) {
-  if (visitorId === visitedId) return;
-  const supabase = getSupabaseAdmin();
-  await supabase.rpc("track_profile_visit", { p_visitor_id: visitorId, p_visited_id: visitedId });
 }

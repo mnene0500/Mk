@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { ChevronLeft, Coins, Trophy, CheckCircle2, Loader2, Target, Zap, Gift, ShieldCheck } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
-import { dailyCheckInAction } from "@/app/actions/matchflow-actions"
+import { dailyCheckInAction, claimVerificationRewardAction } from "@/app/actions/matchflow-actions"
 
 export default function TaskCenterPage() {
   const router = useRouter()
@@ -45,6 +45,21 @@ export default function TaskCenterPage() {
         toast({ title: "Daily Bonus Received!" })
         const { data } = await supabase.from('users').select('*').eq('uid', user.id).single();
         setProfile(data);
+      }
+    } finally { setIsProcessing(false) }
+  }
+
+  const handleClaimVerification = async () => {
+    if (!user || isProcessing) return
+    setIsProcessing(true)
+    try {
+      const res = await claimVerificationRewardAction(user.id)
+      if (res.success) {
+        toast({ title: "50 Coins Received!", description: "Identity verification bonus credited." })
+        const { data } = await supabase.from('users').select('*').eq('uid', user.id).single();
+        setProfile(data);
+      } else {
+        toast({ variant: "destructive", title: "Claim Failed", description: res.error })
       }
     } finally { setIsProcessing(false) }
   }
@@ -92,9 +107,21 @@ export default function TaskCenterPage() {
         </section>
 
         <section className="space-y-4">
-          <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest px-2">One-Time Missions</h3>
+          <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest px-2">Mission Center</h3>
           <div className="space-y-3">
-            <TaskItem icon={ShieldCheck} title="Identity Check" reward="Trust Badge" desc="Verify your face with AI" onClick={() => router.push('/verify-identity')} color="text-[#00A2FF]" />
+            {profile?.is_verified && !profile?.claimed_verification_reward && (
+              <TaskItem 
+                icon={ShieldCheck} 
+                title="Identity Bonus" 
+                reward="+50 Coins" 
+                desc="Claim your verification reward" 
+                onClick={handleClaimVerification} 
+                color="text-green-500" 
+              />
+            )}
+            {!profile?.is_verified && (
+              <TaskItem icon={ShieldCheck} title="Identity Check" reward="Trust Badge" desc="Verify your face with AI" onClick={() => router.push('/verify-identity')} color="text-[#00A2FF]" />
+            )}
             <TaskItem icon={Gift} title="First Recharge" reward="Bonus Coins" desc="Make any purchase" onClick={() => router.push('/recharge')} color="text-pink-500" />
           </div>
         </section>

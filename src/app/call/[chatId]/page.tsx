@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useRef, use } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { PhoneOff, Mic, MicOff, Video, VideoOff, User, Loader2, AlertCircle, Minimize2, Volume2, VolumeX, RefreshCw } from "lucide-react"
+import { PhoneOff, Mic, MicOff, Video, VideoOff, User, Loader2, AlertCircle, Volume2, VolumeX, RefreshCw } from "lucide-react"
 import { useUser } from "@/firebase/auth/use-user"
 import { supabase } from "@/lib/supabase"
 import { generateAgoraTokenAction, deductCallCoinsAction, endCallAction } from "@/app/actions/call-actions"
@@ -36,7 +36,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   const [duration, setDuration] = useState(0)
   const [isRinging, setIsRinging] = useState(true)
   const [permissionError, setPermissionError] = useState<string | null>(null)
-  const [isMinimized, setIsMinimized] = useState(false)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
 
   const localVideoRef = useRef<HTMLDivElement>(null)
@@ -162,8 +161,18 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
 
   const switchCamera = async () => {
     if (!rtc.current.localVideoTrack || type !== 'video') return;
+    const AgoraRTC = (await import('agora-rtc-sdk-ng')).default;
     const newMode = facingMode === 'user' ? 'environment' : 'user';
-    await rtc.current.localVideoTrack.setFacingMode(newMode);
+    
+    // Hard restart camera track for stability
+    await rtc.current.client.unpublish(rtc.current.localVideoTrack);
+    rtc.current.localVideoTrack.stop();
+    rtc.current.localVideoTrack.close();
+    
+    const newVideoTrack = await AgoraRTC.createCameraVideoTrack({ facingMode: newMode });
+    rtc.current.localVideoTrack = newVideoTrack;
+    if (localVideoRef.current) newVideoTrack.play(localVideoRef.current);
+    await rtc.current.client.publish(newVideoTrack);
     setFacingMode(newMode);
   };
 
@@ -174,7 +183,12 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   }
 
   const handleEndCall = async (manual = true, overrideReason?: string) => {
-    await shutdownAgora()
+    // 1. Immediate UI cleanup
+    mounted.current = false;
+    router.replace(`/chats?startWith=${partnerId}`);
+
+    // 2. Background cleanup
+    await shutdownAgora();
     
     if (manual && callId) {
       let reason = overrideReason || 'Call Ended';
@@ -187,8 +201,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
       }
       await endCallAction(callId, reason);
     }
-    
-    if (mounted.current) router.replace(`/chats?startWith=${partnerId}`);
   }
 
   if (permissionError) return (

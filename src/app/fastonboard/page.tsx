@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Heart, Loader2, Camera, ChevronLeft, User, MapPin, Calendar, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { completeOnboardingAction } from "@/app/actions/matchflow-actions"
+import * as Actions from "@/app/actions/matchflow-actions"
 
 const AFRICAN_COUNTRIES = [
   "Kenya", "Tanzania", "Uganda", "Rwanda", "Burundi", "South Sudan", "Ethiopia", "Somalia", "Eritrea", "Djibouti", "South Africa", "Nigeria", "Ghana", "Egypt"
@@ -75,7 +75,7 @@ export default function FastOnboardingPage() {
         finalPhotoUrl = await uploadProfilePhoto(blob, user.id);
       }
 
-      const res = await completeOnboardingAction({
+      const res = await Actions.completeOnboardingAction({
         uid: user.id,
         email: user.email!,
         name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || "User",
