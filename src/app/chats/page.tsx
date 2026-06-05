@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useState, Suspense, useCallback } from "react"
+import { useEffect, useState, Suspense, useCallback, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { supabase, base64ToBlob, uploadPostPhoto } from "@/lib/supabase"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Send, ChevronLeft, Gift, BadgeCheck, Loader2, MessageSquare, PlusCircle, Coins, Phone, Video, Check, CheckCheck } from "lucide-react"
+import { Send, ChevronLeft, Gift, BadgeCheck, Loader2, MessageSquare, PlusCircle, Coins, Phone, Video, Check, CheckCheck, Camera, Image as ImageIcon, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase/auth/use-user"
 import { format } from "date-fns"
@@ -15,6 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { useBalance } from "@/lib/providers/BalanceProvider"
 import { startCallAction } from "@/app/actions/call-actions"
+import Image from "next/image"
 
 interface ChatSummary {
   id: string; 
@@ -50,6 +51,9 @@ function ChatsContent() {
   const [isSending, setIsSending] = useState(false)
   const [lastGiftSent, setLastGiftSent] = useState<typeof GIFTS[0] | null>(null)
   const [chatInfo, setChatInfo] = useState<any>(null)
+  
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fetchSummaries = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -109,19 +113,57 @@ function ChatsContent() {
   }, [startWithId, currentUser?.id]);
 
   const handleSend = async () => {
-    if (!newMessage.trim() || !chatId || !currentUser?.id || !startWithId || isSending) return;
-    setIsSending(true); const text = newMessage; setNewMessage("");
-    
-    const optimisticMsg = { id: Date.now(), sender_id: currentUser.id, text, timestamp: Date.now(), is_optimistic: true };
-    setMessages(prev => [optimisticMsg, ...prev]);
+    if (!chatId || !currentUser?.id || !startWithId || isSending) return;
+    const text = newMessage.trim();
+    if (!text && !selectedImage) return;
 
-    const res = await sendMessageAction({ chatId, senderId: currentUser.id, recipientId: startWithId, text });
-    if (!res.success) {
-      toast({ variant: "destructive", title: "Failed", description: res.error === 'insufficient_funds' ? "You need coins." : "Error." });
-      setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id));
+    setIsSending(true);
+    let finalImageUrl = undefined;
+
+    try {
+      if (selectedImage) {
+        if (coins < 30 && me?.gender === 'male' && !me?.is_admin && !me?.is_coin_seller) {
+           toast({ variant: "destructive", title: "Insufficient Coins", description: "Sharing images costs 30 coins." });
+           setIsSending(false);
+           return;
+        }
+        const { blob } = base64ToBlob(selectedImage);
+        finalImageUrl = await uploadPostPhoto(blob, currentUser.id, 'photos');
+      }
+
+      const res = await sendMessageAction({ 
+        chatId, 
+        senderId: currentUser.id, 
+        recipientId: startWithId, 
+        text, 
+        imageUrl: finalImageUrl 
+      });
+
+      if (!res.success) {
+        toast({ 
+          variant: "destructive", 
+          title: "Failed", 
+          description: res.error === 'insufficient_funds' ? "You need more coins." : "Network Error." 
+        });
+      } else {
+        setNewMessage("");
+        setSelectedImage(null);
+      }
+    } catch (e) {
+      toast({ variant: "destructive", title: "Upload Failed" });
+    } finally {
+      setIsSending(false);
     }
-    setIsSending(false);
   };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setSelectedImage(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  }
 
   const handleCall = async (type: 'video' | 'voice') => {
     if (!currentUser?.id || !startWithId || !chatId) return;
@@ -191,6 +233,11 @@ function ChatsContent() {
           return (
             <div key={m.id} className={cn("max-w-[85%] flex flex-col gap-1", isMe ? "self-end items-end" : "self-start items-start")}>
               <div className={cn("p-4 rounded-2xl text-sm font-medium shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300 flex flex-col gap-2", isMe ? "bg-[#00A2FF] text-white rounded-br-none" : "bg-white text-black rounded-bl-none border border-black/5")}>
+                {m.image_url && (
+                  <div className="relative aspect-square w-full min-w-[200px] rounded-xl overflow-hidden mb-2">
+                    <Image src={m.image_url} alt="Shared Photo" fill className="object-cover" sizes="250px" />
+                  </div>
+                )}
                 <div className="flex items-center gap-2">{isGiftMsg && <span className="text-xl">{giftEmoji}</span>}<span className="break-words">{m.text}</span></div>
                 {isGiftMsg && isMe && idx === 0 && (
                   <Button onClick={() => { const g = GIFTS.find(gf => gf.name === giftName); if (g) handleSendGift(g); }} disabled={isSending} variant="ghost" className="h-8 rounded-xl bg-white/20 hover:bg-white/30 text-white text-[9px] font-black uppercase tracking-widest border border-white/20 self-start mt-1">
@@ -210,22 +257,32 @@ function ChatsContent() {
       </main>
 
       <footer className="p-4 border-t bg-white shrink-0 pb-[calc(env(safe-area-inset-bottom,20px)+8px)]">
+        {selectedImage && (
+          <div className="mb-4 relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-[#00A2FF] animate-in zoom-in-95">
+             <Image src={selectedImage} alt="Preview" fill className="object-cover" />
+             <button onClick={() => setSelectedImage(null)} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1"><X className="w-3 h-3" /></button>
+          </div>
+        )}
         <div className="flex items-center gap-2 max-w-5xl mx-auto w-full">
-          <Sheet onOpenChange={(open) => !open && setLastGiftSent(null)}>
-            <SheetTrigger asChild><Button size="icon" variant="ghost" className="rounded-full text-pink-500 shrink-0"><Gift className="w-6 h-6" /></Button></SheetTrigger>
-            <SheetContent side="bottom" className="rounded-t-[3rem] p-6 border-none bg-black text-white h-[70vh] flex flex-col overflow-hidden">
-               <SheetHeader className="shrink-0 mb-6"><div className="flex items-center justify-between px-4"><div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/5"><Coins className="w-3.5 h-3.5 text-yellow-500 fill-current" /><span className="text-xs font-black">{coins}</span></div><SheetTitle className="text-center font-black uppercase text-[10px] tracking-[0.2em] text-gray-400">Gifts</SheetTitle><Button onClick={() => router.push('/recharge')} variant="ghost" size="sm" className="h-8 rounded-full bg-[#00A2FF] text-white text-[9px] font-black uppercase px-4 shadow-lg shadow-blue-500/20"><PlusCircle className="w-3 h-3 mr-1" /> Top Up</Button></div></SheetHeader>
-               <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
-                 {lastGiftSent ? (
-                   <div className="flex flex-col items-center justify-center p-8 space-y-6 animate-in zoom-in-95"><div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center text-5xl shadow-xl border border-white/5">{lastGiftSent.icon}</div><div className="text-center"><p className="text-lg font-black text-white uppercase tracking-tight">Gift Sent!</p></div><Button onClick={() => handleSendGift(lastGiftSent)} disabled={isSending} className="w-full h-14 rounded-full bg-pink-500 text-white font-black uppercase tracking-widest text-[10px] shadow-lg active:scale-95">{isSending ? <Loader2 className="animate-spin" /> : <div className="flex items-center gap-2">Send One More</div>}</Button><Button variant="ghost" onClick={() => setLastGiftSent(null)} className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Send different</Button></div>
-                 ) : (
-                   <div className="grid grid-cols-3 gap-3">{GIFTS.map(g => (<button key={g.name} onClick={() => handleSendGift(g)} className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all border border-transparent hover:border-white/10 active:scale-95 group"><span className="text-3xl mb-2 group-hover:scale-110 transition-transform">{g.icon}</span><span className="text-[8px] font-black uppercase text-gray-400 truncate w-full text-center">{g.name}</span><div className="flex items-center gap-1 mt-1"><span className="text-[10px] font-bold text-yellow-500">{g.cost}</span><Coins className="w-2.5 h-2.5 text-yellow-500 fill-current" /></div></button>))}</div>
-                 )}
-               </div>
-            </SheetContent>
-          </Sheet>
+          <div className="flex items-center gap-1">
+            <Sheet onOpenChange={(open) => !open && setLastGiftSent(null)}>
+              <SheetTrigger asChild><Button size="icon" variant="ghost" className="rounded-full text-pink-500 shrink-0"><Gift className="w-6 h-6" /></Button></SheetTrigger>
+              <SheetContent side="bottom" className="rounded-t-[3rem] p-6 border-none bg-black text-white h-[70vh] flex flex-col overflow-hidden">
+                <SheetHeader className="shrink-0 mb-6"><div className="flex items-center justify-between px-4"><div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/5"><Coins className="w-3.5 h-3.5 text-yellow-500 fill-current" /><span className="text-xs font-black">{coins}</span></div><SheetTitle className="text-center font-black uppercase text-[10px] tracking-[0.2em] text-gray-400">Gifts</SheetTitle><Button onClick={() => router.push('/recharge')} variant="ghost" size="sm" className="h-8 rounded-full bg-[#00A2FF] text-white text-[9px] font-black uppercase px-4 shadow-lg shadow-blue-500/20"><PlusCircle className="w-3 h-3 mr-1" /> Top Up</Button></div></SheetHeader>
+                <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
+                  {lastGiftSent ? (
+                    <div className="flex flex-col items-center justify-center p-8 space-y-6 animate-in zoom-in-95"><div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center text-5xl shadow-xl border border-white/5">{lastGiftSent.icon}</div><div className="text-center"><p className="text-lg font-black text-white uppercase tracking-tight">Gift Sent!</p></div><Button onClick={() => handleSendGift(lastGiftSent)} disabled={isSending} className="w-full h-14 rounded-full bg-pink-500 text-white font-black uppercase tracking-widest text-[10px] shadow-lg active:scale-95">{isSending ? <Loader2 className="animate-spin" /> : <div className="flex items-center gap-2">Send One More</div>}</Button><Button variant="ghost" onClick={() => setLastGiftSent(null)} className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Send different</Button></div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-3">{GIFTS.map(g => (<button key={g.name} onClick={() => handleSendGift(g)} className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all border border-transparent hover:border-white/10 active:scale-95 group"><span className="text-3xl mb-2 group-hover:scale-110 transition-transform">{g.icon}</span><span className="text-[8px] font-black uppercase text-gray-400 truncate w-full text-center">{g.name}</span><div className="flex items-center gap-1 mt-1"><span className="text-[10px] font-bold text-yellow-500">{g.cost}</span><Coins className="w-2.5 h-2.5 text-yellow-500 fill-current" /></div></button>))}</div>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+            <Button size="icon" variant="ghost" className="rounded-full text-blue-500 shrink-0" onClick={() => fileInputRef.current?.click()}><Camera className="w-6 h-6" /></Button>
+            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
+          </div>
           <input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === 'Enter' && !isSending && handleSend()} className="flex-1 bg-gray-50 rounded-2xl px-4 py-3 outline-none font-medium text-sm border border-black/5 focus:bg-white transition-all" placeholder="Type message..." />
-          <Button onClick={handleSend} size="icon" disabled={!newMessage.trim() || isSending} className="rounded-full h-12 w-12 bg-[#00A2FF] text-white shrink-0 shadow-lg active:scale-90 transition-all">{isSending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}</Button>
+          <Button onClick={handleSend} size="icon" disabled={(!newMessage.trim() && !selectedImage) || isSending} className="rounded-full h-12 w-12 bg-[#00A2FF] text-white shrink-0 shadow-lg active:scale-90 transition-all">{isSending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}</Button>
         </div>
       </footer>
     </div>

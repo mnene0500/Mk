@@ -45,6 +45,7 @@ export default function ManageRolesPage() {
   const [roleUsers, setRoleUsers] = useState<TargetUser[]>([])
   const [loading, setLoading] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [banConfirm, setBanConfirm] = useState("")
 
   const handleSearch = async () => {
     if (!targetId.trim()) return
@@ -90,12 +91,17 @@ export default function ManageRolesPage() {
   }
 
   const handleRemoveAccount = async (uid: string) => {
+    if (banConfirm.toUpperCase() !== "BAN") {
+      toast({ variant: "destructive", title: "Invalid Confirmation", description: "You must type BAN to confirm." });
+      return;
+    }
     setLoading(true)
     try {
       const res = await deleteUserCompletelyAction(uid)
       if (res.success) {
-        toast({ title: "Account Removed" })
+        toast({ title: "User Banned & Account Purged" })
         if (targetUser?.uid === uid) setTargetUser(null)
+        setBanConfirm("");
         fetchRoleUsers()
       }
     } finally { setLoading(false) }
@@ -130,7 +136,38 @@ export default function ManageRolesPage() {
                   <Avatar className="w-20 h-20 border-4 border-white shadow-xl"><AvatarImage src={targetUser.photo_url} className="object-cover" /><AvatarFallback><Users /></AvatarFallback></Avatar>
                   <div className="text-center"><p className="text-sm font-black text-black">{targetUser.name}</p><p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">ID: {targetUser.match_flow_id}</p></div>
                   {targetUser.uid !== user?.id && !targetUser.is_admin && (
-                    <AlertDialog><AlertDialogTrigger asChild><Button variant="ghost" className="h-9 px-6 rounded-full text-red-500 bg-red-50 text-[9px] font-black uppercase">Remove Account</Button></AlertDialogTrigger><AlertDialogContent className="rounded-3xl p-8 border-none shadow-2xl"><AlertDialogHeader className="items-center"><AlertCircle className="w-12 h-12 text-red-500 mb-2" /><AlertDialogTitle className="font-black uppercase">Confirm Removal</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter className="gap-3 mt-6"><AlertDialogCancel className="h-12 rounded-xl font-black text-[10px] uppercase">Keep</AlertDialogCancel><AlertDialogAction onClick={() => handleRemoveAccount(targetUser.uid)} className="h-12 rounded-xl bg-red-500 font-black text-[10px] uppercase">Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" className="h-9 px-6 rounded-full text-red-500 bg-red-50 text-[9px] font-black uppercase">Ban User</Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="rounded-[2.5rem] p-10 border-none shadow-2xl">
+                        <AlertDialogHeader className="items-center">
+                          <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
+                          <AlertDialogTitle className="font-black uppercase tracking-tight text-center">Permanently Ban?</AlertDialogTitle>
+                          <AlertDialogDescription className="text-center text-xs font-bold text-gray-400 leading-relaxed uppercase tracking-widest">
+                            This will instantly delete this user's profile, messages, and wallet from the database. Type <span className="text-red-600">BAN</span> to execute.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <div className="py-6">
+                          <Input 
+                            placeholder="Type BAN" 
+                            value={banConfirm} 
+                            onChange={(e) => setBanConfirm(e.target.value)} 
+                            className="rounded-2xl h-16 text-center font-black bg-gray-50 border-gray-100 text-xl tracking-[0.4em] uppercase" 
+                          />
+                        </div>
+                        <AlertDialogFooter className="flex flex-col gap-3">
+                          <AlertDialogAction 
+                            onClick={() => handleRemoveAccount(targetUser.uid)} 
+                            disabled={banConfirm.toUpperCase() !== "BAN"}
+                            className="h-16 rounded-2xl bg-red-600 font-black text-sm uppercase tracking-widest shadow-xl shadow-red-100"
+                          >
+                            Execute Ban
+                          </AlertDialogAction>
+                          <AlertDialogCancel className="h-14 rounded-2xl font-black text-[10px] uppercase border-none bg-gray-50">Cancel</AlertDialogCancel>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   )}
                 </div>
                 <div className="space-y-4">

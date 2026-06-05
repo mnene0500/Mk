@@ -60,10 +60,11 @@ export async function completeOnboardingAction(payload: {
   }
 }
 
-export async function sendMessageAction(payload: { chatId: string; senderId: string; recipientId: string; text: string; }) {
+export async function sendMessageAction(payload: { chatId: string; senderId: string; recipientId: string; text: string; imageUrl?: string; }) {
   const supabase = getSupabaseAdmin();
   const timestamp = Date.now();
-  const safeText = filterSensitiveContent(payload.text);
+  const isImage = !!payload.imageUrl;
+  const safeText = filterSensitiveContent(payload.text || (isImage ? "[Photo]" : ""));
 
   try {
     const { data: sender, error: senderErr } = await supabase.from('users').select('gender, is_admin, is_coin_seller').eq('uid', payload.senderId).maybeSingle();
@@ -72,7 +73,7 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
     const { data: balance, error: balErr } = await supabase.from('balances').select('coins').eq('user_id', payload.senderId).maybeSingle();
     if (balErr) throw balErr;
     
-    const cost = 15;
+    const cost = isImage ? 30 : 15;
     const isFree = !!(sender?.is_admin || sender?.is_coin_seller);
 
     if (sender?.gender === 'male' && !isFree) {
@@ -83,7 +84,13 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
       const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: payload.senderId, p_amount: -cost });
       if (deductErr) return { success: false, error: "insufficient_funds" };
       
-      await supabase.from('coin_history').insert({ user_id: payload.senderId, amount: -cost, type: 'fee', description: 'Message Cost', timestamp });
+      await supabase.from('coin_history').insert({ 
+        user_id: payload.senderId, 
+        amount: -cost, 
+        type: 'fee', 
+        description: isImage ? 'Image Message Cost' : 'Message Cost', 
+        timestamp 
+      });
       await trimHistory(supabase, payload.senderId, 'coin_history');
     }
     
@@ -102,7 +109,8 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
       chat_id: payload.chatId, 
       text: safeText, 
       sender_id: payload.senderId, 
-      timestamp 
+      timestamp,
+      image_url: payload.imageUrl || null
     });
 
     if (msgErr) throw msgErr;
