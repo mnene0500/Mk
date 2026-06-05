@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, useRef, use } from "react"
@@ -38,7 +37,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   const [permissionError, setPermissionError] = useState<string | null>(null)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
   
-  // Aggregate cost tracking
   const totalCostRef = useRef(0)
   const totalDiamondsRef = useRef(0)
 
@@ -85,7 +83,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         
         setDuration(prev => {
           const next = prev + 1
-          // Deduction points: 11s, 61s, 121s...
           const isDeductionPoint = next === 11 || (next > 60 && (next - 1) % 60 === 0);
           
           if (isDeductionPoint) {
@@ -94,7 +91,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
                 totalCostRef.current += (res.cost || 0);
                 totalDiamondsRef.current += (res.diamondReward || 0);
               } else if (mounted.current) {
-                handleEndCall(true, 'Insufficient Balance');
+                handleEndCall(true, 'Insufficient Coins');
               }
             })
           }
@@ -173,12 +170,10 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     const newMode = facingMode === 'user' ? 'environment' : 'user';
     
     try {
-      // STOP and UNPUBLISH current track
       await rtc.current.client.unpublish(rtc.current.localVideoTrack);
       rtc.current.localVideoTrack.stop();
       rtc.current.localVideoTrack.close();
       
-      // START NEW track with different facingMode
       const newVideoTrack = await AgoraRTC.createCameraVideoTrack({ facingMode: newMode });
       rtc.current.localVideoTrack = newVideoTrack;
       if (localVideoRef.current) newVideoTrack.play(localVideoRef.current);
@@ -196,11 +191,9 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
   }
 
   const handleEndCall = async (manual = true, overrideReason?: string) => {
-    // 1. Immediate UI cleanup
     mounted.current = false;
     router.replace(`/chats?startWith=${partnerId}`);
 
-    // 2. Background cleanup
     await shutdownAgora();
     
     if (manual && callId) {
@@ -213,7 +206,6 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
         reason = `Duration: ${m}:${s.toString().padStart(2, '0')}`;
       }
       
-      // Pass aggregate costs for a single history entry
       await endCallAction({
         callId,
         logReason: reason,

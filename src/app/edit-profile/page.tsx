@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { ChevronLeft, Loader2, Camera, Plus, X, MapPin, Calendar, Heart, GraduationCap, Sparkles } from "lucide-react"
+import { ChevronLeft, Loader2, Camera, Plus, X, MapPin, Calendar, Heart, GraduationCap } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Cropper from "react-easy-crop"
@@ -253,7 +253,7 @@ export default function EditProfilePage() {
           disabled={saving} 
           className="w-full h-16 rounded-2xl bg-black text-white font-black uppercase tracking-[0.2em] text-sm shadow-xl active:scale-95 transition-all"
         >
-          {saving ? <Loader2 className="animate-spin w-5 h-5" /> : <div className="flex items-center gap-3"><Sparkles className="w-5 h-5 text-blue-400" /> Save Profile</div>}
+          {saving ? <Loader2 className="animate-spin w-5 h-5" /> : "Save Profile"}
         </Button>
       </footer>
 

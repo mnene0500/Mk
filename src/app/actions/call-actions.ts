@@ -1,4 +1,3 @@
-
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -6,7 +5,7 @@ import { RtcTokenBuilder, RtcRole } from 'agora-token';
 
 /**
  * @fileOverview Hardened Agora Token Generation and Billing Engine.
- * Fixed: Sanitizes channelName and handles aggregated coin history.
+ * Fixed: Shortened error messages for better UI presentation.
  */
 
 export async function generateAgoraTokenAction(chatId: string, uid: string) {
@@ -14,7 +13,7 @@ export async function generateAgoraTokenAction(chatId: string, uid: string) {
   const appCertificate = process.env.AGORA_APP_CERTIFICATE;
 
   if (!appId || !appCertificate) {
-    throw new Error("Agora Credentials missing in Vercel Settings.");
+    throw new Error("Agora Credentials missing.");
   }
 
   const sanitizedChannelName = chatId.length > 64 
@@ -50,10 +49,9 @@ export async function startCallAction(chatId: string, callerId: string, receiver
   try {
     const { data: receiver } = await supabase.from('users').select('is_dnd, name').eq('uid', receiverId).single();
     if (receiver?.is_dnd) {
-      return { success: false, error: `${receiver.name} has activated Do Not Disturb.` };
+      return { success: false, error: `${receiver.name} is Busy.` };
     }
 
-    // REAL-TIME BUSY CHECK: Only look at calls from the last 2 minutes
     const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
     const { data: activeCalls } = await supabase
       .from('calls')
@@ -62,7 +60,6 @@ export async function startCallAction(chatId: string, callerId: string, receiver
       .in('status', ['calling', 'active'])
       .gt('created_at', twoMinsAgo);
     
-    // Ignore ringing calls older than 45 seconds
     const validBusyCall = activeCalls?.find(c => {
       if (c.status === 'active') return true;
       const createdAt = new Date(c.created_at).getTime();
@@ -70,7 +67,7 @@ export async function startCallAction(chatId: string, callerId: string, receiver
     });
 
     if (validBusyCall) {
-      return { success: false, error: `${receiver?.name || 'User'} is currently on another call.` };
+      return { success: false, error: "User is on another call." };
     }
 
     const cost = type === 'video' ? 150 : 70;
@@ -79,11 +76,10 @@ export async function startCallAction(chatId: string, callerId: string, receiver
     if (!user?.is_admin && !user?.is_coin_seller) {
       const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', callerId).single();
       if ((Number(bal?.coins) || 0) < cost) {
-        return { success: false, error: "Insufficient coins for the first minute." };
+        return { success: false, error: "Insufficient Coins" };
       }
     }
 
-    // Force end any stale calls by the caller
     await supabase.from('calls').update({ status: 'ended' }).eq('caller_id', callerId).neq('status', 'ended');
 
     const { data, error } = await supabase.from('calls').insert({
@@ -121,7 +117,6 @@ export async function endCallAction(payload: {
       const timestamp = Date.now();
       const text = payload.logReason ? `[${payload.logReason}]` : '[Call Ended]';
       
-      // 1. Log to Chat History
       await supabase.from('chats').upsert({ 
         id: call.chat_id,
         last_message: text, 
@@ -138,7 +133,6 @@ export async function endCallAction(payload: {
         timestamp 
       });
 
-      // 2. Aggregate Coin History (One entry for the whole call)
       if (payload.totalCost && payload.totalCost > 0) {
         await supabase.from('coin_history').insert({
           user_id: call.caller_id,
@@ -149,7 +143,6 @@ export async function endCallAction(payload: {
         });
       }
 
-      // 3. Aggregate Diamond History
       if (payload.totalDiamonds && payload.totalDiamonds > 0) {
         await supabase.from('diamond_history').insert({
           user_id: call.receiver_id,
@@ -174,9 +167,8 @@ export async function deductCallCoinsAction(uid: string, type: 'video' | 'voice'
 
     const cost = type === 'video' ? 150 : 70;
     
-    // Deduct coins silently (No history record here, history is aggregated in endCallAction)
     const { error: deductError } = await supabase.rpc("increment_coins", { p_user_id: uid, p_amount: -cost });
-    if (deductError) return { success: false, error: "insufficient_funds" };
+    if (deductError) return { success: false, error: "Insufficient Coins" };
 
     const { data: recipient } = await supabase.from('users').select('gender').eq('uid', partnerId).single();
     let diamondReward = 0;
