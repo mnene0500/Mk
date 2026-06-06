@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useRef } from "react"
@@ -45,6 +46,7 @@ export default function EditProfilePage() {
     education_level: ""
   })
 
+  const [photoModified, setPhotoModified] = useState(false)
   const [cropOpen, setCropOpen] = useState(false)
   const [tempImage, setTempImage] = useState<string | null>(null)
   const [crop, setCrop] = useState({ x: 0, y: 0 }); 
@@ -104,9 +106,23 @@ export default function EditProfilePage() {
     setSaving(true)
     try {
       let finalPhotoUrl = formData.photo_url;
-      if (formData.photo_url.startsWith('data:image')) {
+      let updatePayload: any = { 
+        name: formData.name, 
+        interests: formData.interests, 
+        country: formData.country,
+        dob: formData.dob,
+        looking_for: formData.looking_for,
+        education_level: formData.education_level,
+        updated_at: new Date().toISOString() 
+      };
+
+      if (photoModified || formData.photo_url.startsWith('data:image')) {
         const { blob } = base64ToBlob(formData.photo_url);
         finalPhotoUrl = await uploadProfilePhoto(blob, user.id);
+        updatePayload.photo_url = finalPhotoUrl;
+        // Identity Integrity: Revoke verification if photo changes
+        updatePayload.is_verified = false;
+        updatePayload.claimed_verification_reward = false; 
       }
       
       const finalGallery = await Promise.all(formData.additional_photos.map(async (p) => {
@@ -117,21 +133,16 @@ export default function EditProfilePage() {
         return p;
       }))
 
-      const { error } = await supabase.from('users').update({ 
-        name: formData.name, 
-        interests: formData.interests, 
-        photo_url: finalPhotoUrl, 
-        additional_photos: finalGallery,
-        country: formData.country,
-        dob: formData.dob,
-        looking_for: formData.looking_for,
-        education_level: formData.education_level,
-        updated_at: new Date().toISOString() 
-      }).eq('uid', user.id)
+      updatePayload.additional_photos = finalGallery;
+
+      const { error } = await supabase.from('users').update(updatePayload).eq('uid', user.id)
 
       if (error) throw error
 
-      toast({ title: "Profile Updated" }); 
+      toast({ 
+        title: "Profile Updated", 
+        description: photoModified ? "Identity badge revoked. Please re-verify your new photo." : undefined 
+      }); 
       router.replace('/profile')
     } catch (e: any) { 
       toast({ variant: "destructive", title: "Failed", description: e.message }); 
@@ -272,7 +283,9 @@ export default function EditProfilePage() {
               const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); const img = new (window as any).Image(); img.src = tempImage;
               await new Promise(r => img.onload = r); canvas.width = (croppedAreaPixels as any).width; canvas.height = (croppedAreaPixels as any).height;
               ctx?.drawImage(img, (croppedAreaPixels as any).x, (croppedAreaPixels as any).y, (croppedAreaPixels as any).width, (croppedAreaPixels as any).height, 0, 0, canvas.width, canvas.height);
-              setFormData({ ...formData, photo_url: canvas.toDataURL('image/jpeg', 0.85) }); setCropOpen(false);
+              setFormData({ ...formData, photo_url: canvas.toDataURL('image/jpeg', 0.85) }); 
+              setPhotoModified(true);
+              setCropOpen(false);
             }} className="w-full h-16 rounded-2xl bg-white text-black font-black uppercase tracking-[0.2em] shadow-xl">Apply View</Button>
           </DialogFooter>
         </DialogContent>

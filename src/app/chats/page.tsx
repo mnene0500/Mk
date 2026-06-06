@@ -250,7 +250,24 @@ function ChatsContent() {
       <header className="px-6 h-16 flex items-center border-b sticky top-0 bg-white/90 backdrop-blur-md z-50"><h1 className="text-2xl font-black text-[#00A2FF] tracking-tight">Chats</h1></header>
       <main className="flex flex-col pb-24">
         {loading ? (<div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#00A2FF]" /></div>) : summaries.length === 0 ? (<div className="flex flex-col items-center justify-center py-40 opacity-40 space-y-4"><MessageSquare className="w-12 h-12 text-gray-200" /><p className="uppercase font-black text-[10px] tracking-widest">No conversations</p></div>) : (
-          summaries.map(s => (<div key={s.id} onContextMenu={(e) => { e.preventDefault(); setChatToDelete(s.id); }} onClick={() => router.push(`/chats?startWith=${s.partner_id}`)} className="p-4 flex items-center gap-4 active:bg-gray-50 border-b border-gray-50 transition-colors cursor-pointer"><div className="relative"><Avatar className="w-14 h-14 border"><AvatarImage src={s.partner_photo} /><AvatarFallback>{s.partner_name[0]}</AvatarFallback></Avatar>{s.unread_count > 0 && <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-sm">{s.unread_count}</div>}</div><div className="flex-1 min-w-0"><div className="flex justify-between mb-1"><div className="flex items-center gap-1.5 min-w-0"><p className="text-sm font-black truncate">{s.partner_name}</p>{s.partner_is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-blue-50" />}</div><span className="text-[9px] font-bold text-gray-300 uppercase shrink-0">{s.last_message_at ? format(s.last_message_at, "HH:mm") : ""}</span></div><p className="text-xs truncate text-gray-400 font-medium">{s.last_message}</p></div></div>))
+          summaries.map(s => (
+            <div key={s.id} onContextMenu={(e) => { e.preventDefault(); setChatToDelete(s.id); }} onClick={() => router.push(`/chats?startWith=${s.partner_id}`)} className="p-4 flex items-center gap-4 active:bg-gray-50 border-b border-gray-50 transition-colors cursor-pointer">
+              <div 
+                className="relative" 
+                onClick={(e) => { e.stopPropagation(); router.push(`/users/${s.partner_id}`); }}
+              >
+                <Avatar className="w-14 h-14 border"><AvatarImage src={s.partner_photo} /><AvatarFallback>{s.partner_name[0]}</AvatarFallback></Avatar>
+                {s.unread_count > 0 && <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-sm">{s.unread_count}</div>}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between mb-1">
+                  <div className="flex items-center gap-1.5 min-w-0"><p className="text-sm font-black truncate">{s.partner_name}</p>{s.partner_is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-blue-50" />}</div>
+                  <span className="text-[9px] font-bold text-gray-300 uppercase shrink-0">{s.last_message_at ? format(s.last_message_at, "HH:mm") : ""}</span>
+                </div>
+                <p className="text-xs truncate text-gray-400 font-medium">{s.last_message}</p>
+              </div>
+            </div>
+          ))
         )}
       </main>
       <AlertDialog open={!!chatToDelete} onOpenChange={() => setChatToDelete(null)}><AlertDialogContent className="rounded-[2rem] p-8 max-w-[85vw]"><AlertDialogHeader><AlertDialogTitle className="font-black text-center uppercase tracking-tight">Delete Chat?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter className="gap-3 mt-4"><AlertDialogCancel className="h-12 rounded-xl font-black text-[10px] uppercase tracking-widest border-none bg-gray-50">Keep</AlertDialogCancel><AlertDialogAction onClick={() => { if (chatToDelete) { clearChatAction(currentUser!.id, chatToDelete); setSummaries(prev => prev.filter(s => s.id !== chatToDelete)); setChatToDelete(null); } }} className="h-12 rounded-xl bg-red-500 font-black text-[10px] uppercase tracking-widest border-none text-white shadow-lg shadow-red-100">Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
@@ -262,7 +279,13 @@ function ChatsContent() {
       <header className="h-16 border-b flex items-center px-4 gap-4 bg-white z-50 shrink-0">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="w-6 h-6 text-black" /></Button>
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <Avatar className="w-10 h-10 border"><AvatarImage src={partner?.photo_url} /><AvatarFallback>{partner?.name?.[0]}</AvatarFallback></Avatar>
+          <Avatar 
+            className="w-10 h-10 border cursor-pointer active:scale-95 transition-transform" 
+            onClick={() => router.push(`/users/${startWithId}`)}
+          >
+            <AvatarImage src={partner?.photo_url} />
+            <AvatarFallback>{partner?.name?.[0]}</AvatarFallback>
+          </Avatar>
           <div className="min-w-0"><p className="font-black text-sm truncate text-black">{partner?.name || 'Loading...'}</p><p className="text-[8px] font-bold text-green-500 uppercase tracking-widest">Online</p></div>
         </div>
         <div className="flex items-center gap-1">
@@ -346,16 +369,14 @@ function ChatsContent() {
         </div>
       </footer>
 
-      {isBlocked && (
-        <div className="fixed inset-0 z-[200] bg-white/80 backdrop-blur-2xl flex flex-col items-center justify-center p-10 text-center animate-in fade-in">
-           <div className="w-20 h-20 bg-red-50 rounded-[2.5rem] flex items-center justify-center mb-6 text-red-500">
+      <div className={cn("fixed inset-0 z-[200] bg-white/80 backdrop-blur-2xl flex flex-col items-center justify-center p-10 text-center transition-all duration-500", isBlocked ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")}>
+           <div className="w-20 h-20 bg-red-50 rounded-[2.5rem] flex items-center justify-center mb-6 text-red-500 shadow-xl">
              <ShieldAlert className="w-10 h-10" />
            </div>
            <h3 className="text-xl font-black text-black tracking-tight uppercase">Interaction Blocked</h3>
            <p className="text-xs font-bold text-gray-400 mt-2 leading-relaxed max-w-[240px]">This user is currently blocked. You cannot interact with them at this time.</p>
-           <Button onClick={() => router.back()} className="mt-8 rounded-full h-14 px-10 bg-black text-white font-black uppercase tracking-widest text-[10px]">Go Back</Button>
-        </div>
-      )}
+           <Button onClick={() => router.back()} className="mt-8 rounded-full h-14 px-10 bg-black text-white font-black uppercase tracking-widest text-[10px] shadow-xl">Go Back</Button>
+      </div>
 
       {previewImage && (
         <div className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center animate-in fade-in" onClick={() => setPreviewImage(null)}>
