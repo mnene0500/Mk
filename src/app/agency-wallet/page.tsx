@@ -13,7 +13,7 @@ import { requestWithdrawalAction } from "@/app/actions/matchflow-actions"
 
 /**
  * @fileOverview Agency Member Payout Portal.
- * Economic Protocol: 1 Diamond = 0.10 KES Cash (Raised from 0.08).
+ * Economic Protocol: 1 Diamond = 0.10 KES Cash.
  * Payouts limited to Saturdays.
  */
 
@@ -35,7 +35,7 @@ export default function AgencyMemberPage() {
       const { data: p } = await supabase.from('users').select('*').eq('uid', user.id).single()
       const { data: b } = await supabase.from('balances').select('*').eq('user_id', user.id).single()
       if (p) setProfile(p)
-      if (b) setBalances({ coins: b.coins || 0, diamonds: Number(b.diamonds) || 0 })
+      if (b) setBalances({ coins: Number(b.coins) || 0, diamonds: Number(b.diamonds) || 0 })
       setLoading(false)
     }
     fetchData()
@@ -44,7 +44,7 @@ export default function AgencyMemberPage() {
   const isSaturday = useMemo(() => new Date().getDay() === 6, []);
   const diamondBalance = balances.diamonds
   
-  // Economic Lock: 1 Diamond = 0.10 KES (Updated Rate)
+  // Economic Lock: 1 Diamond = 0.10 KES
   const cashRate = 0.10 
   const minDiamondsForCash = 10000 // = 1,000 KES
   const expectedKes = (Number(diamondsToUse) * cashRate).toFixed(0)
@@ -52,15 +52,31 @@ export default function AgencyMemberPage() {
   const handleWithdraw = async () => {
     if (!isSaturday) { toast({ variant: "destructive", title: "Only on Saturdays" }); return; }
     const amount = Number(diamondsToUse)
-    if (isNaN(amount) || amount < minDiamondsForCash || amount > diamondBalance) { toast({ variant: "destructive", title: "Invalid Amount" }); return; }
-    if (!mpesaNumber || mpesaNumber.length < 10) { toast({ variant: "destructive", title: "Valid M-Pesa required" }); return; }
+    if (isNaN(amount) || amount < minDiamondsForCash || amount > diamondBalance) { 
+      toast({ variant: "destructive", title: "Invalid Amount", description: amount > diamondBalance ? "Insufficient balance" : "Min 10k Diamonds" }); 
+      return; 
+    }
+    if (!mpesaNumber || mpesaNumber.length < 10) { 
+      toast({ variant: "destructive", title: "Valid M-Pesa required" }); 
+      return; 
+    }
+
     setIsProcessing(true)
     try {
       const res = await requestWithdrawalAction(user!.id, amount, Number(expectedKes), profile.agency_id, mpesaNumber)
       if (res.success) {
-        setBalances({ ...balances, diamonds: balances.diamonds - amount }); toast({ title: "Payout Requested" }); setDiamondsToUse(""); setMpesaNumber("")
+        setBalances({ ...balances, diamonds: balances.diamonds - amount }); 
+        toast({ title: "Payout Requested", description: "You can track status in History." }); 
+        setDiamondsToUse(""); 
+        setMpesaNumber("")
+      } else {
+        toast({ variant: "destructive", title: "Action Failed", description: res.error });
       }
-    } finally { setIsProcessing(false) }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "System Error", description: e.message });
+    } finally { 
+      setIsProcessing(false) 
+    }
   }
 
   if (loading) return <div className="flex-1 flex items-center justify-center min-h-screen bg-white"><Loader2 className="animate-spin text-[#00A2FF] w-8 h-8" /></div>

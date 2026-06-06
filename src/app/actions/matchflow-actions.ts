@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 /**
  * @fileOverview Definitive Server Actions for QIVO Production.
  * Optimized atomic operations for Messaging, Economy, Gaming, and Social.
+ * All sensitive operations now use the Admin Client (Service Role) to bypass RLS and triggers.
  */
 
 function filterSensitiveContent(text: string): string {
@@ -360,53 +361,6 @@ export async function activateReadReceiptsAction(uid: string) {
   }
 }
 
-export async function activateVisitorTrackingAction(uid: string) {
-  const supabase = getSupabaseAdmin();
-  try {
-    const cost = 400;
-    const { data: balance } = await supabase.from('balances').select('coins').eq('user_id', uid).single();
-    if ((Number(balance?.coins) || 0) < cost) return { success: false, error: "insufficient_funds" };
-
-    const { error: deductErr } = await supabase.rpc("increment_coins", { p_user_id: uid, p_amount: -cost });
-    if (deductErr) throw deductErr;
-
-    await supabase.from('users').update({ has_visitor_tracking: true }).eq('uid', uid);
-    await supabase.from('coin_history').insert({
-      user_id: uid,
-      amount: -cost,
-      type: 'feature_unlock',
-      description: 'Activated Visitor Tracking',
-      timestamp: Date.now()
-    });
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
-export async function logProfileVisitAction(visitorId: string, visitedId: string) {
-  if (visitorId === visitedId) return;
-  const supabase = getSupabaseAdmin();
-  try {
-    const { data: existing } = await supabase
-      .from('profile_visits')
-      .select('count')
-      .eq('visitor_id', visitorId)
-      .eq('visited_id', visitedId)
-      .maybeSingle();
-
-    if (existing) {
-      await supabase.from('profile_visits')
-        .update({ count: (existing.count || 0) + 1, last_visit_at: new Date().toISOString() })
-        .eq('visitor_id', visitorId)
-        .eq('visited_id', visitedId);
-    } else {
-      await supabase.from('profile_visits')
-        .insert({ visitor_id: visitorId, visited_id: visitedId, count: 1 });
-    }
-  } catch (e) {}
-}
-
 export async function toggleUserRoleAction(adminUid: string, targetMatchFlowId: string, role: string, value: boolean) {
   const supabase = getSupabaseAdmin();
   try {
@@ -547,9 +501,11 @@ export async function playSlotsAction(uid: string, stake: number) {
 export async function requestWithdrawalAction(uid: string, diamonds: number, amountKes: number, agencyId: string, mpesaNumber: string) {
   const supabase = getSupabaseAdmin();
   try {
+    // 1. Atomically deduct diamonds (Admin RPC bypasses lockdown)
     const { error: dErr } = await supabase.rpc("increment_diamonds", { p_user_id: uid, p_amount: -diamonds });
     if (dErr) throw dErr;
     
+    // 2. Insert into withdrawals (Admin INSERT bypasses RLS lockdown)
     const { error } = await supabase.from('withdrawals').insert({ 
       user_id: uid, 
       agency_id: agencyId, 
@@ -562,6 +518,7 @@ export async function requestWithdrawalAction(uid: string, diamonds: number, amo
 
     if (error) throw error;
 
+    // 3. Log history
     await supabase.from('diamond_history').insert({ 
       user_id: uid, 
       amount: -diamonds, 
