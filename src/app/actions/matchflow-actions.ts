@@ -79,7 +79,8 @@ export async function completeOnboardingAction(payload: {
 
     if (error) throw error;
 
-    const bonus = 10;
+    // INCREASED REWARD: 300 COINS
+    const bonus = 300;
     await supabase.rpc("increment_coins", { p_user_id: payload.uid, p_amount: bonus });
     await supabase.from('coin_history').insert({
       user_id: payload.uid,
