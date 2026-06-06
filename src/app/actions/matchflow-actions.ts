@@ -2,12 +2,40 @@
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase';
+import webpush from 'web-push';
 
 /**
  * @fileOverview Definitive Server Actions for QIVO Production.
  * Optimized atomic operations for Messaging, Economy, Gaming, and Social.
  * All sensitive operations now use the Admin Client (Service Role) to bypass RLS and triggers.
  */
+
+// Configure Web Push with Vercel Variables
+if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    'mailto:support@qivo.com',
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+}
+
+async function sendPushToUser(userId: string, payload: { title: string; body: string; url: string }) {
+  const supabase = getSupabaseAdmin();
+  const { data: subs } = await supabase.from('push_subscriptions').select('subscription_json').eq('user_id', userId);
+  
+  if (!subs || subs.length === 0) return;
+
+  const pushPromises = subs.map(sub => 
+    webpush.sendNotification(sub.subscription_json as any, JSON.stringify(payload)).catch(err => {
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        // Remove expired subscription
+        return supabase.from('push_subscriptions').delete().eq('endpoint', (sub.subscription_json as any).endpoint);
+      }
+    })
+  );
+
+  await Promise.all(pushPromises);
+}
 
 function filterSensitiveContent(text: string): string {
   const sensitivePatterns = [
@@ -97,7 +125,7 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
   const safeText = filterSensitiveContent(payload.text || (isImage ? "[Photo]" : ""));
 
   try {
-    const { data: sender } = await supabase.from('users').select('gender, is_admin, is_coin_seller, blocking, blocked_by').eq('uid', payload.senderId).maybeSingle();
+    const { data: sender } = await supabase.from('users').select('name, gender, is_admin, is_coin_seller, blocking, blocked_by').eq('uid', payload.senderId).maybeSingle();
     
     if (sender?.blocking?.includes(payload.recipientId) || sender?.blocked_by?.includes(payload.recipientId)) {
       return { success: false, error: "interaction_blocked" };
@@ -119,6 +147,13 @@ export async function sendMessageAction(payload: { chatId: string; senderId: str
     await supabase.from('chats').upsert({ id: payload.chatId, last_message: safeText.slice(0, 100), last_message_at: timestamp, participant_ids: [payload.senderId, payload.recipientId], last_sender_id: payload.senderId, updated_at: new Date().toISOString() });
     await supabase.from('messages').insert({ chat_id: payload.chatId, text: safeText, sender_id: payload.senderId, timestamp, image_url: payload.imageUrl || null });
 
+    // Send Push Notification
+    sendPushToUser(payload.recipientId, {
+      title: sender?.name || "New Message",
+      body: safeText,
+      url: `/chats?startWith=${payload.senderId}`
+    });
+
     return { success: true };
   } catch (err: any) {
     return { success: false, error: "system_error" };
@@ -129,7 +164,7 @@ export async function sendGiftAction(senderUid: string, recipientUid: string, co
   const supabase = getSupabaseAdmin();
   try {
     const ts = Date.now();
-    const { data: sender } = await supabase.from('users').select('is_admin, is_coin_seller').eq('uid', senderUid).single();
+    const { data: sender } = await supabase.from('users').select('name, is_admin, is_coin_seller').eq('uid', senderUid).single();
     const isFree = !!(sender?.is_admin || sender?.is_coin_seller);
 
     if (!isFree) {
@@ -158,6 +193,13 @@ export async function sendGiftAction(senderUid: string, recipientUid: string, co
     await supabase.from('chats').upsert({ id: chatId, last_message: text, last_message_at: ts, participant_ids: [senderUid, recipientUid], last_sender_id: senderUid, updated_at: new Date().toISOString() });
     await supabase.from('messages').insert({ chat_id: chatId, sender_id: senderUid, text: text, is_gift: true, timestamp: ts });
 
+    // Send Push Notification
+    sendPushToUser(recipientUid, {
+      title: "New Gift! 🎁",
+      body: `${sender?.name || 'Someone'} sent you a ${giftName}`,
+      url: `/chats?startWith=${senderUid}`
+    });
+
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -180,6 +222,14 @@ export async function awardCoinsAction(userUid: string, targetUid: string, amoun
     
     await supabase.rpc("increment_coins", { p_user_id: targetUid, p_amount: amount });
     await supabase.from('coin_history').insert({ user_id: targetUid, amount, type: 'awarded', description: historyDesc, timestamp: Date.now() });
+    
+    // Notify Recipient
+    sendPushToUser(targetUid, {
+      title: "Coins Received! 🪙",
+      body: `Your wallet was credited with ${amount} coins.`,
+      url: '/recharge'
+    });
+
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -233,7 +283,7 @@ export async function sendMysteryNoteAction(userId: string, text: string, recipi
   const safeText = filterSensitiveContent(text);
   
   try {
-    const { data: sender } = await supabase.from('users').select('gender, blocking, blocked_by').eq('uid', userId).single();
+    const { data: sender } = await supabase.from('users').select('name, gender, blocking, blocked_by').eq('uid', userId).single();
     if (!sender) throw new Error("Sender not found");
 
     const targetGender = sender.gender === 'male' ? 'female' : 'male';
@@ -272,6 +322,13 @@ export async function sendMysteryNoteAction(userId: string, text: string, recipi
         updated_at: new Date().toISOString() 
       });
       await supabase.from('messages').insert({ chat_id: chatId, sender_id: userId, text: safeText, timestamp: Date.now() });
+      
+      // Notify Recipients
+      sendPushToUser(r.uid, {
+        title: "Mystery Note! ✨",
+        body: safeText,
+        url: `/chats?startWith=${userId}`
+      });
     }
 
     await supabase.from('coin_history').insert({
@@ -426,11 +483,9 @@ export async function createAgencyAction(uid: string, name: string) {
 export async function deleteAgencyAction(uid: string, agencyCode: string) {
   const supabase = getSupabaseAdmin();
   try {
-    // This will trigger tr_sync_agent_status and tr_on_agency_delete SQL firewalls
     const { error } = await supabase.from('agencies').delete().eq('code', agencyCode).eq('agent_uid', uid);
     if (error) throw error;
     
-    // Also remove the agent role from the user
     await supabase.from('users').update({ is_agent: false, agency_id: null, agency_status: null }).eq('uid', uid);
     
     return { success: true };
@@ -476,7 +531,6 @@ export async function leaveAgencyAction(uid: string) {
 export async function convertDiamondsToCoinsAction(uid: string, diamondAmount: number, coinAmount: number) {
   const supabase = getSupabaseAdmin();
   try {
-    // PASSING NEGATIVE diamondAmount to subtract from current balance
     const { error: dErr } = await supabase.rpc("increment_diamonds", { p_user_id: uid, p_amount: -diamondAmount });
     if (dErr) throw dErr;
     const { error: cErr } = await supabase.rpc("increment_coins", { p_user_id: uid, p_amount: coinAmount });
@@ -534,11 +588,9 @@ export async function playSlotsAction(uid: string, stake: number) {
 export async function requestWithdrawalAction(uid: string, diamonds: number, amountKes: number, agencyId: string, mpesaNumber: string) {
   const supabase = getSupabaseAdmin();
   try {
-    // 1. Atomically deduct diamonds (Admin RPC bypasses lockdown)
     const { error: dErr } = await supabase.rpc("increment_diamonds", { p_user_id: uid, p_amount: -diamonds });
     if (dErr) throw dErr;
     
-    // 2. Insert into withdrawals (Admin INSERT bypasses RLS lockdown)
     const { error } = await supabase.from('withdrawals').insert({ 
       user_id: uid, 
       agency_id: agencyId, 
@@ -551,7 +603,6 @@ export async function requestWithdrawalAction(uid: string, diamonds: number, amo
 
     if (error) throw error;
 
-    // 3. Log history
     await supabase.from('diamond_history').insert({ 
       user_id: uid, 
       amount: -diamonds, 

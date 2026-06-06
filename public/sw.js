@@ -1,6 +1,7 @@
+
 /**
  * QIVO Service Worker v1.0
- * Handles background push notifications for messages and calls.
+ * Handles background push notifications.
  */
 
 self.addEventListener('push', function(event) {
@@ -8,45 +9,38 @@ self.addEventListener('push', function(event) {
     try {
       const data = event.data.json();
       const options = {
-        body: data.body || 'You have a new notification on QIVO.',
+        body: data.body,
         icon: '/icon-192.png',
-        badge: '/notification.png',
-        vibrate: [200, 100, 200],
+        badge: '/icon-192.png',
+        vibrate: [100, 50, 100],
         data: {
           url: data.url || '/'
-        },
-        actions: [
-          { action: 'open', title: 'Open QIVO' }
-        ]
+        }
       };
 
       event.waitUntil(
-        self.registration.showNotification(data.title || 'QIVO Social', options)
+        self.registration.showNotification(data.title, options)
       );
     } catch (e) {
-      console.error('Push data parse error:', e);
+      console.error("Push Event Parse Error:", e);
     }
   }
 });
 
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-  const urlToOpen = event.notification.data.url;
-
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
-      for (let i = 0; i < clientList.length; i++) {
-        const client = clientList[i];
-        if (client.url === urlToOpen && 'focus' in client) {
-          return client.focus();
+      if (clientList.length > 0) {
+        let client = clientList[0];
+        for (let i = 0; i < clientList.length; i++) {
+          if (clientList[i].focused) {
+            client = clientList[i];
+          }
         }
+        return client.focus();
       }
-      if (clients.openWindow) {
-        return clients.openWindow(urlToOpen);
-      }
+      return clients.openWindow(event.notification.data.url);
     })
   );
 });
-
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', () => self.clients.claim());

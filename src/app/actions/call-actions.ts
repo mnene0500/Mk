@@ -1,13 +1,38 @@
+
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { RtcTokenBuilder, RtcRole } from 'agora-token';
+import webpush from 'web-push';
 
 /**
  * @fileOverview Hardened Agora Token Generation and Billing Engine.
- * Economic Protocol: 40% Diamond Reward to Female Recipients.
- * Platform Margin: ~60% per call minute.
  */
+
+if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    'mailto:support@qivo.com',
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+}
+
+async function sendPushToUser(userId: string, payload: { title: string; body: string; url: string }) {
+  const supabase = getSupabaseAdmin();
+  const { data: subs } = await supabase.from('push_subscriptions').select('subscription_json').eq('user_id', userId);
+  
+  if (!subs || subs.length === 0) return;
+
+  const pushPromises = subs.map(sub => 
+    webpush.sendNotification(sub.subscription_json as any, JSON.stringify(payload)).catch(err => {
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        return supabase.from('push_subscriptions').delete().eq('endpoint', (sub.subscription_json as any).endpoint);
+      }
+    })
+  );
+
+  await Promise.all(pushPromises);
+}
 
 export async function generateAgoraTokenAction(chatId: string, uid: string) {
   const appId = process.env.AGORA_APP_ID;
@@ -48,7 +73,9 @@ export async function generateAgoraTokenAction(chatId: string, uid: string) {
 export async function startCallAction(chatId: string, callerId: string, receiverId: string, type: 'video' | 'voice') {
   const supabase = getSupabaseAdmin();
   try {
+    const { data: caller } = await supabase.from('users').select('name').eq('uid', callerId).single();
     const { data: receiver } = await supabase.from('users').select('is_dnd, name').eq('uid', receiverId).single();
+    
     if (receiver?.is_dnd) {
       return { success: false, error: `${receiver.name} is Busy.` };
     }
@@ -92,6 +119,14 @@ export async function startCallAction(chatId: string, callerId: string, receiver
     }).select().single();
 
     if (error) throw error;
+
+    // Send Push Notification for Incoming Call
+    sendPushToUser(receiverId, {
+      title: `Incoming ${type === 'video' ? 'Video' : 'Voice'} Call`,
+      body: `${caller?.name || 'Someone'} is calling you on QIVO...`,
+      url: `/chats?startWith=${callerId}`
+    });
+
     return { success: true, callId: data.id };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -174,7 +209,6 @@ export async function deductCallCoinsAction(uid: string, type: 'video' | 'voice'
     const { data: recipient } = await supabase.from('users').select('gender').eq('uid', partnerId).single();
     let diamondReward = 0;
     if (user?.gender === 'male' && recipient?.gender === 'female') {
-      // Economic Lock: 40% of coin value converted to Diamonds
       diamondReward = Math.floor(cost * 0.4); 
       await supabase.rpc("increment_diamonds", { p_user_id: partnerId, p_amount: diamondReward });
     }
