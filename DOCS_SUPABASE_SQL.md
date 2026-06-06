@@ -1,13 +1,18 @@
 
-# QIVO FINAL HARDENED PRODUCTION SQL (v7 - Security Focus)
+# QIVO FINAL HARDENED PRODUCTION SQL (v8 - Economy Lockdown)
 
 Run this entire script in the **Supabase SQL Editor** to initialize all tables and lock down role-based security.
 
 ```sql
--- 1. SETUP ATOMIC ECONOMY HELPERS
+-- 1. SETUP ATOMIC ECONOMY HELPERS (PROTECTED)
 CREATE OR REPLACE FUNCTION public.increment_diamonds(p_user_id UUID, p_amount NUMERIC)
 RETURNS VOID AS $$
 BEGIN
+  -- Security Gate: Only allow Service Role (Admin Key) execution
+  IF (current_setting('role') != 'service_role') THEN
+    RAISE EXCEPTION 'Security Violation: Direct client-side balance modification is prohibited.';
+  END IF;
+
   INSERT INTO public.balances (user_id, diamonds)
   VALUES (p_user_id, p_amount)
   ON CONFLICT (user_id)
@@ -18,6 +23,11 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION public.increment_coins(p_user_id UUID, p_amount BIGINT)
 RETURNS VOID AS $$
 BEGIN
+  -- Security Gate: Only allow Service Role (Admin Key) execution
+  IF (current_setting('role') != 'service_role') THEN
+    RAISE EXCEPTION 'Security Violation: Direct client-side balance modification is prohibited.';
+  END IF;
+
   INSERT INTO public.balances (user_id, coins)
   VALUES (p_user_id, p_amount)
   ON CONFLICT (user_id)
@@ -58,18 +68,16 @@ CREATE TABLE IF NOT EXISTS public.users (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. ROLE PROTECTION TRIGGER (ANTI-HACK)
+-- 3. ROLE PROTECTION TRIGGER (FIREWALL)
 CREATE OR REPLACE FUNCTION public.protect_user_roles()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- Check if the update is trying to change sensitive flags
   IF (OLD.is_admin IS DISTINCT FROM NEW.is_admin OR 
       OLD.is_coin_seller IS DISTINCT FROM NEW.is_coin_seller OR 
       OLD.is_agent IS DISTINCT FROM NEW.is_agent) THEN
     
-    -- Only allow the change if the database is being accessed via the Service Role (Admin Key)
     IF (current_setting('role') != 'service_role') THEN
-      RAISE EXCEPTION 'Security Violation: You do not have permission to modify administrative roles.';
+      RAISE EXCEPTION 'Security Violation: Administrative roles can only be modified by the System.';
     END IF;
   END IF;
   RETURN NEW;
@@ -140,6 +148,7 @@ DROP POLICY IF EXISTS "Users view own balance" ON public.balances;
 CREATE POLICY "Users view own balance" ON public.balances FOR SELECT USING (auth.uid() = user_id);
 
 -- 7. GRANT PERMISSIONS
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated;
