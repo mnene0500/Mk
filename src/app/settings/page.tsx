@@ -176,7 +176,7 @@ export default function SettingsPage() {
         <div className="w-10" />
       </header>
 
-      <main className="flex-1 p-6 space-y-6 overflow-y-auto no-scrollbar pb-12">
+      <main className="flex-1 p-6 space-y-6 overflow-y-auto no-scrollbar pb-32">
         <div className="space-y-3">
           <h2 className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] ml-2">Communication</h2>
           <div className="bg-white rounded-[1.5rem] overflow-hidden border border-gray-100 shadow-sm">
