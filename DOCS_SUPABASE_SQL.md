@@ -1,7 +1,7 @@
 
-# QIVO FINAL HARDENED PRODUCTION SQL (v8 - Economy Lockdown)
+# QIVO FINAL HARDENED PRODUCTION SQL (v9 - Total Lockdown)
 
-Run this entire script in the **Supabase SQL Editor** to initialize all tables and lock down role-based security.
+Run this entire script in the **Supabase SQL Editor** to initialize all tables and lock down role-based security, economy, and payouts.
 
 ```sql
 -- 1. SETUP ATOMIC ECONOMY HELPERS (PROTECTED)
@@ -98,27 +98,6 @@ CREATE TABLE IF NOT EXISTS public.balances (
   CONSTRAINT non_negative_balances CHECK (coins >= 0 AND diamonds >= 0)
 );
 
-CREATE TABLE IF NOT EXISTS public.chats (
-  id TEXT PRIMARY KEY,
-  participant_ids UUID[] NOT NULL,
-  last_message TEXT,
-  last_message_at BIGINT,
-  cleared_at JSONB DEFAULT '{}'::jsonb,
-  last_seen_at JSONB DEFAULT '{}'::jsonb,
-  last_sender_id UUID,
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.messages (
-  id BIGSERIAL PRIMARY KEY,
-  chat_id TEXT REFERENCES public.chats(id) ON DELETE CASCADE,
-  sender_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
-  text TEXT,
-  timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000),
-  is_gift BOOLEAN DEFAULT FALSE,
-  image_url TEXT
-);
-
 CREATE TABLE IF NOT EXISTS public.withdrawals (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID REFERENCES public.users(uid) ON DELETE CASCADE,
@@ -126,18 +105,34 @@ CREATE TABLE IF NOT EXISTS public.withdrawals (
   diamonds NUMERIC,
   amount_kes NUMERIC,
   mpesa_number TEXT,
-  status TEXT DEFAULT 'pending',
+  status TEXT DEFAULT 'pending', -- pending, paid, rejected
   timestamp BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
--- 5. ENABLE RLS
+-- 5. WITHDRAWAL PROTECTION TRIGGER (FIREWALL)
+CREATE OR REPLACE FUNCTION public.protect_withdrawal_status()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF (OLD.status IS DISTINCT FROM NEW.status) THEN
+    IF (current_setting('role') != 'service_role') THEN
+      RAISE EXCEPTION 'Security Violation: Payout status can only be modified by the System.';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS tr_protect_withdrawal_status ON public.withdrawals;
+CREATE TRIGGER tr_protect_withdrawal_status
+BEFORE UPDATE ON public.withdrawals
+FOR EACH ROW EXECUTE FUNCTION public.protect_withdrawal_status();
+
+-- 6. ENABLE RLS
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.balances ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.chats ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.withdrawals ENABLE ROW LEVEL SECURITY;
 
--- 6. POLICIES
+-- 7. POLICIES
 DROP POLICY IF EXISTS "Public profiles viewable" ON public.users;
 CREATE POLICY "Public profiles viewable" ON public.users FOR SELECT USING (true);
 
@@ -147,7 +142,10 @@ CREATE POLICY "Users update own profile" ON public.users FOR UPDATE USING (auth.
 DROP POLICY IF EXISTS "Users view own balance" ON public.balances;
 CREATE POLICY "Users view own balance" ON public.balances FOR SELECT USING (auth.uid() = user_id);
 
--- 7. GRANT PERMISSIONS
+DROP POLICY IF EXISTS "Users view own withdrawals" ON public.withdrawals;
+CREATE POLICY "Users view own withdrawals" ON public.withdrawals FOR SELECT USING (auth.uid() = user_id);
+
+-- 8. GRANT PERMISSIONS
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
