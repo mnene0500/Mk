@@ -1,17 +1,15 @@
-
 "use client"
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, MessageSquare, User } from "lucide-react"
+import { MessageSquare, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/firebase/auth/use-user"
 
 /**
- * @fileOverview Strictly Fixed Global Navigation.
- * Refined: Hydration safe and unread count badge.
+ * @fileOverview Redesigned Bottom Navigation to match screenshot exactly.
  */
 export function BottomNav() {
   const pathname = usePathname()
@@ -59,15 +57,36 @@ export function BottomNav() {
   }
 
   const navItems = [
-    { label: "Home", icon: Home, href: "/home" },
-    { label: "Chat", icon: MessageSquare, href: "/chats", badge: totalUnread },
-    { label: "Me", icon: User, href: "/profile" },
+    { 
+      label: "HOME", 
+      icon: (active: boolean) => (
+        <svg className={cn("w-7 h-7", active ? "text-[#00A2FF] fill-[#00A2FF]" : "text-gray-300")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill={active ? "currentColor" : "none"} />
+        </svg>
+      ), 
+      href: "/home" 
+    },
+    { 
+      label: "CHAT", 
+      icon: (active: boolean) => (
+        <MessageSquare className={cn("w-7 h-7", active ? "text-[#00A2FF]" : "text-gray-300")} strokeWidth={2.5} />
+      ), 
+      href: "/chats", 
+      badge: totalUnread 
+    },
+    { 
+      label: "ME", 
+      icon: (active: boolean) => (
+        <User className={cn("w-7 h-7", active ? "text-[#00A2FF]" : "text-gray-300")} strokeWidth={2.5} />
+      ), 
+      href: "/profile" 
+    },
   ]
 
   if (!mounted) return null
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-white/95 backdrop-blur-xl border-t h-16 flex items-center justify-around px-2 pb-[env(safe-area-inset-bottom,4px)] shadow-[0_-10px_30px_rgba(0,0,0,0.06)]">
+    <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-white border-t border-gray-100 h-20 flex items-center justify-around px-4 pb-[env(safe-area-inset-bottom,8px)] shadow-[0_-5px_20px_rgba(0,0,0,0.02)]">
       {navItems.map((item) => {
         const isActive = pathname === item.href
         
@@ -76,23 +95,20 @@ export function BottomNav() {
             key={item.href}
             href={item.href}
             onClick={(e) => handleNavClick(e, item.href)}
-            className={cn(
-              "flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-all relative",
-              isActive ? "text-[#00A2FF]" : "text-gray-300"
-            )}
+            className="flex flex-col items-center justify-center flex-1 h-full gap-1.5 transition-all"
           >
-            <div className={cn(
-              "relative w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300",
-              isActive && "bg-blue-50/50"
-            )}>
-              <item.icon className={cn("w-5 h-5", isActive ? "text-[#00A2FF] fill-current" : "text-gray-400")} />
+            <div className="relative flex items-center justify-center">
+              {item.icon(isActive)}
               {item.badge > 0 && (
-                <div className="absolute top-0 right-0 bg-red-500 text-white text-[7px] font-bold min-w-[14px] h-3.5 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black min-w-[15px] h-4 rounded-full flex items-center justify-center border-2 border-white">
                   {item.badge > 9 ? '9+' : item.badge}
                 </div>
               )}
             </div>
-            <span className={cn("text-[9px] font-bold tracking-tight", isActive ? "opacity-100" : "opacity-60")}>
+            <span className={cn(
+              "text-[10px] font-black tracking-widest transition-colors", 
+              isActive ? "text-[#00A2FF]" : "text-gray-300"
+            )}>
               {item.label}
             </span>
           </Link>

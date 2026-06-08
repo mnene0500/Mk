@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
@@ -25,7 +24,7 @@ const PAGE_SIZE = 12;
 export default function HomePage() {
   const router = useRouter()
   const { user: currentUser, isInitialized } = useUser()
-  const [activeTab, setActiveTab] = useState<'recommend' | 'nearby'>('recommend')
+  const [activeTab, setActiveTab] = useState<'Recommend' | 'Nearby'>('Recommend')
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [users, setUsers] = useState<UserProfile[]>([])
@@ -69,10 +68,10 @@ export default function HomePage() {
       .neq('uid', currentUser.id);
 
     if (blockedList.length > 0) {
-       query = query.not('uid', 'in', `(${blockedList.join(',')})`);
+       query = query.not('uid', 'in', `(${[...blockedList].join(',')})`);
     }
 
-    if (activeTab === 'nearby') query = query.eq('country', myProfile.country);
+    if (activeTab === 'Nearby') query = query.eq('country', myProfile.country);
     
     const { data } = await query
       .order('updated_at', { ascending: false })
@@ -102,11 +101,9 @@ export default function HomePage() {
 
   useEffect(() => {
     if (isInitialized) {
-      if (users.length === 0 || page === 0) {
-        fetchUsers(0);
-      }
+      fetchUsers(0);
     }
-  }, [isInitialized, activeTab]);
+  }, [isInitialized, activeTab, fetchUsers]);
 
   const handleManualRefresh = () => {
     setPage(0);
@@ -122,47 +119,47 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col w-full bg-white select-none min-h-screen">
-      <div className="bg-[#00A2FF] pt-1 pb-3 relative overflow-hidden">
-        {/* QIVO BRAND STAMP BACKGROUND */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
-           <span className="text-[120px] font-black text-white/5 uppercase tracking-tighter select-none rotate-12">QIVO</span>
-        </div>
+      {/* STATUS BAR AREA (MATCHING MOBILE THEME) */}
+      <div className="h-2 bg-[#00A2FF] w-full shrink-0" />
 
-        <div className="px-4 grid grid-cols-2 gap-3 py-3 relative z-10">
-          <button 
-            onClick={() => router.push('/mystery-note')} 
-            className="h-28 bg-white/10 backdrop-blur-md rounded-[2rem] p-5 flex flex-col items-start justify-center text-white border border-white/20 active:scale-95 transition-all relative overflow-hidden group shadow-xl"
-          >
-            <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-            <FileText className="w-5 h-5 mb-2 relative z-10" />
-            <p className="text-[12px] font-black uppercase tracking-widest leading-tight relative z-10 drop-shadow-sm">Message<br/>Blast</p>
-          </button>
-          <button 
-            onClick={() => router.push('/tasks')} 
-            className="h-28 bg-white/10 backdrop-blur-md rounded-[2rem] p-5 flex flex-col items-start justify-center text-white border border-white/20 active:scale-95 transition-all relative overflow-hidden group shadow-xl"
-          >
-            <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-            <Target className="w-5 h-5 mb-2 relative z-10" />
-            <p className="text-[12px] font-black uppercase tracking-widest leading-tight relative z-10 drop-shadow-sm">Task<br/>Center</p>
-          </button>
-        </div>
+      {/* TOP ACTION CARDS */}
+      <div className="px-4 grid grid-cols-2 gap-4 py-6 bg-white">
+        <button 
+          onClick={() => router.push('/mystery-note')} 
+          className="aspect-square bg-gradient-to-br from-blue-600 to-blue-500 rounded-[2.5rem] p-6 flex flex-col items-start justify-between text-white active:scale-95 transition-all shadow-xl shadow-blue-200"
+        >
+          <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
+            <FileText className="w-6 h-6 text-white" />
+          </div>
+          <p className="text-base font-black leading-tight text-left">Message<br/>blast</p>
+        </button>
+        <button 
+          onClick={() => router.push('/tasks')} 
+          className="aspect-square bg-gradient-to-br from-purple-600 to-fuchsia-500 rounded-[2.5rem] p-6 flex flex-col items-start justify-between text-white active:scale-95 transition-all shadow-xl shadow-purple-200"
+        >
+          <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
+            <Target className="w-6 h-6 text-white" />
+          </div>
+          <p className="text-base font-black leading-tight text-left">Task<br/>center</p>
+        </button>
       </div>
 
-      <div className="sticky top-0 z-[60] bg-[#00A2FF] shadow-lg border-none">
-        <div className="px-5 h-14 flex items-center justify-between">
+      {/* TABS & REFRESH */}
+      <div className="sticky top-0 z-[60] bg-white border-b border-gray-50">
+        <div className="px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-8">
-            {['recommend', 'nearby'].map((t) => (
+            {['Recommend', 'Nearby'].map((t) => (
               <button 
                 key={t} 
-                onClick={() => { setPage(0); setUsers([]); setActiveTab(t as any); }} 
+                onClick={() => { setPage(page => 0); setUsers([]); setActiveTab(t as any); }} 
                 className={cn(
-                  "text-[10px] font-black uppercase tracking-[0.2em] transition-all relative py-2", 
-                  activeTab === t ? "text-white" : "text-white/40"
+                  "text-sm font-black transition-all relative py-2", 
+                  activeTab === t ? "text-[#00A2FF]" : "text-gray-300"
                 )}
               >
                 {t}
                 {activeTab === t && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white rounded-full animate-in fade-in" />
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#00A2FF] rounded-full" />
                 )}
               </button>
             ))}
@@ -170,51 +167,46 @@ export default function HomePage() {
           <button 
             onClick={handleManualRefresh} 
             disabled={loading}
-            className="w-9 h-9 flex items-center justify-center text-white/80 active:bg-white/10 rounded-full transition-all"
+            className="w-9 h-9 flex items-center justify-center text-gray-200 active:bg-gray-50 rounded-full transition-all"
           >
-            <RotateCw className={cn("w-4 h-4", loading && "animate-spin")} />
+            <RotateCw className={cn("w-5 h-5", loading && "animate-spin")} />
           </button>
         </div>
       </div>
 
+      {/* USER GRID */}
       <main className="px-4 pt-6 pb-24">
         {loading && users.length === 0 ? (
-          <div className="grid grid-cols-2 gap-3">
-            {[1,2,3,4,5,6].map(i => <div key={i} className="aspect-[1/1.3] bg-gray-50 rounded-[2rem] animate-pulse" />)}
+          <div className="grid grid-cols-2 gap-4">
+            {[1,2,3,4].map(i => <div key={i} className="aspect-[3/4] bg-gray-50 rounded-[2.5rem] animate-pulse" />)}
           </div>
         ) : users.length === 0 ? (
-          <div className="py-40 text-center opacity-40 uppercase font-black text-xs tracking-[0.3em]">No profiles found</div>
+          <div className="py-40 text-center opacity-40 uppercase font-black text-xs tracking-widest">No profiles found</div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             {users.map((u) => {
               if (!u) return null;
-              const isOnline = u.updated_at && (new Date(u.updated_at).getTime() > Date.now() - 5 * 60 * 1000);
               return (
-                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[1/1.3] rounded-[2rem] shadow-xl active:scale-[0.98] transition-all" onClick={() => router.push(`/users/${u.uid}`)}>
-                  <Image src={u.photo_url} alt={u.name} fill className="object-cover" sizes="50vw" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[3/4] rounded-[2.5rem] shadow-lg active:scale-[0.98] transition-all" onClick={() => router.push(`/users/${u.uid}`)}>
+                  <Image src={u.photo_url} alt={u.name} fill className="object-cover" sizes="50vw" priority />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                   
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); router.push(`/chats?startWith=${u.uid}`); }}
-                    className="absolute top-4 right-4 bg-[#00A2FF] text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg border border-white/20 active:scale-90 transition-transform z-20"
-                  >
-                    CHAT
-                  </button>
-
-                  {isOnline && (
-                    <div className="absolute top-4 left-4 flex items-center gap-1.5 bg-black/20 backdrop-blur-md px-2 py-1 rounded-full border border-white/10">
-                       <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                       <span className="text-[7px] font-black text-white uppercase tracking-widest">Active</span>
+                  <div className="absolute top-4 right-4">
+                    <div className="bg-black/30 backdrop-blur-md text-white text-[9px] font-black uppercase px-4 py-2 rounded-full border border-white/20">
+                      CHAT
                     </div>
-                  )}
-                  <div className="absolute bottom-4 left-4 right-4 text-white">
-                    <div className="flex items-center gap-1 mb-1">
-                      <h4 className="font-black text-sm truncate">{u.name}</h4>
-                      {u.is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-white" />}
+                  </div>
+
+                  <div className="absolute bottom-4 left-5 right-5 text-white">
+                    <div className="flex items-center gap-1 mb-1.5">
+                      <h4 className="font-black text-lg truncate leading-none">{u.name}</h4>
+                      {u.is_verified && <BadgeCheck className="w-4 h-4 text-[#00A2FF] fill-white" />}
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="bg-[#006400] text-[9px] font-black px-1.5 py-0.5 rounded-md">{calculateAge(u.dob)}</span>
-                      <span className="text-[9px] font-bold opacity-60 uppercase truncate">{u.country}</span>
+                      <div className="bg-[#00D1FF] text-white px-2 py-0.5 rounded-md flex items-center justify-center min-w-[24px]">
+                        <span className="text-[10px] font-black">{calculateAge(u.dob)}</span>
+                      </div>
+                      <span className="text-[10px] font-bold opacity-80 uppercase truncate">{u.country}</span>
                     </div>
                   </div>
                 </Card>
