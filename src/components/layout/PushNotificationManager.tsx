@@ -13,50 +13,38 @@ export function PushNotificationManager() {
   const { user } = useUser()
 
   useEffect(() => {
-    // Only run if user is logged in and browser supports push
     if (!user?.id || typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
       return
     }
 
     const initPush = async () => {
       try {
-        // 1. Check/Request Permission
         if (Notification.permission === 'default') {
-          console.log("[Push Manager]: Requesting permission...");
           await Notification.requestPermission();
         }
         
-        if (Notification.permission !== 'granted') {
-          console.warn("[Push Manager]: Permission denied. Notifications will not show.");
-          return;
-        }
+        if (Notification.permission !== 'granted') return;
 
-        // 2. Wait for Service Worker registration
         const registration = await navigator.serviceWorker.ready;
-        console.log("[Push Manager]: Service Worker ready.");
-        
-        // 3. Get/Create Subscription
         const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+        
         if (!vapidPublicKey) {
-          console.error("[Push Manager]: NEXT_PUBLIC_VAPID_PUBLIC_KEY missing in Environment Variables.");
+          console.warn("[Push Manager]: NEXT_PUBLIC_VAPID_PUBLIC_KEY missing.");
           return;
         }
 
         let subscription = await registration.pushManager.getSubscription();
 
         if (!subscription) {
-          console.log("[Push Manager]: Creating new subscription...");
           subscription = await registration.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
           });
         }
 
-        // 4. Update Server
         const subJson = subscription.toJSON();
         if (subJson.endpoint) {
           await savePushSubscriptionAction(user.id, subJson.endpoint, subJson);
-          console.log("[Push Manager]: Subscription synchronized with production database.");
         }
       } catch (err) {
         console.error("[Push Manager]: Registration failed:", err);

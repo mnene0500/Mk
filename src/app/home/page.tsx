@@ -49,7 +49,6 @@ export default function HomePage() {
   const fetchUsers = useCallback(async (pageNum = 0, isManualRefresh = false) => {
     if (!currentUser?.id) return;
     
-    // Only show loading if we have no cached data or it's a manual refresh
     if (pageNum === 0 && (cachedUsers.length === 0 || isManualRefresh)) {
       setLoading(true);
     } else if (pageNum > 0) {
@@ -88,10 +87,7 @@ export default function HomePage() {
 
     if (data) {
       let finalData = data as any;
-      
-      if (isManualRefresh) {
-        finalData = shuffleArray(finalData);
-      }
+      if (isManualRefresh) finalData = shuffleArray(finalData);
 
       if (pageNum === 0) {
         setUsers(finalData);
@@ -114,7 +110,6 @@ export default function HomePage() {
 
   useEffect(() => {
     if (isInitialized) {
-      // ONLY FETCH IF CACHE IS EMPTY OR TAB CHANGED
       if (cachedUsers.length === 0 || activeTab !== cachedActiveTab) {
         fetchUsers(0);
         cachedActiveTab = activeTab;
@@ -135,10 +130,8 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col w-full bg-white select-none min-h-screen">
-      {/* SCROLLABLE TOP PART (Primary Blue Header) */}
       <div className="bg-[#00A2FF] pt-5 pb-6 px-4">
         <div className="grid grid-cols-2 gap-3 relative">
-          {/* QIVO STAMP */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[100px] font-black text-white/10 pointer-events-none select-none italic tracking-tighter z-0">
             QIVO
           </div>
@@ -165,7 +158,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* STICKY TAB BAR */}
       <div className="sticky top-0 z-[60] bg-[#00A2FF] backdrop-blur-md border-b border-white/10">
         <div className="px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-8">
@@ -202,7 +194,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* USER GRID */}
       <main className="px-4 pt-2 pb-24 bg-white">
         {loading && users.length === 0 ? (
           <div className="grid grid-cols-2 gap-1.5">
@@ -221,7 +212,6 @@ export default function HomePage() {
                   onClick={() => router.push(`/users/${u.uid}`)}
                 >
                   <Image src={u.photo_url} alt={u.name} fill className="object-cover" sizes="50vw" priority />
-                  
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                   
                   <div className="absolute top-3 right-3 z-20">
