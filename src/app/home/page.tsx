@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
@@ -120,8 +119,8 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col w-full bg-white select-none min-h-screen">
-      {/* SCROLLABLE TOP PART (Primary Blue Header synced with status bar) */}
-      <div className="bg-[#00A2FF] pt-8 pb-6 px-4">
+      {/* SCROLLABLE TOP PART (Primary Blue Header) */}
+      <div className="bg-[#00A2FF] pt-5 pb-6 px-4">
         <div className="grid grid-cols-2 gap-3 relative">
           {/* QIVO STAMP */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[100px] font-black text-white/10 pointer-events-none select-none italic tracking-tighter z-0">
@@ -130,27 +129,27 @@ export default function HomePage() {
 
           <button 
             onClick={() => router.push('/mystery-note')} 
-            className="relative z-10 h-32 bg-white/15 backdrop-blur-md rounded-[1.5rem] p-5 flex flex-col items-start justify-between text-white active:scale-95 transition-all border border-white/10 shadow-lg"
+            className="relative z-10 h-32 bg-gradient-to-br from-blue-600 to-purple-600 rounded-[1.5rem] p-5 flex flex-col items-start justify-between text-white active:scale-95 transition-all border border-white/10 shadow-lg"
           >
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
               <FileText className="w-5 h-5 text-white" />
             </div>
-            <p className="text-[13px] font-black leading-tight text-left uppercase tracking-widest">Message<br/>blast</p>
+            <p className="text-[13px] font-black leading-tight text-left uppercase tracking-widest text-white">Message<br/>blast</p>
           </button>
 
           <button 
             onClick={() => router.push('/tasks')} 
-            className="relative z-10 h-32 bg-white/15 backdrop-blur-md rounded-[1.5rem] p-5 flex flex-col items-start justify-between text-white active:scale-95 transition-all border border-white/10 shadow-lg"
+            className="relative z-10 h-32 bg-gradient-to-br from-orange-500 to-yellow-400 rounded-[1.5rem] p-5 flex flex-col items-start justify-between text-white active:scale-95 transition-all border border-white/10 shadow-lg"
           >
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
               <Target className="w-5 h-5 text-white" />
             </div>
-            <p className="text-[13px] font-black leading-tight text-left uppercase tracking-widest">Task<br/>center</p>
+            <p className="text-[13px] font-black leading-tight text-left uppercase tracking-widest text-white">Task<br/>center</p>
           </button>
         </div>
       </div>
 
-      {/* STICKY TAB BAR (Primary Blue synced with status bar) */}
+      {/* STICKY TAB BAR */}
       <div className="sticky top-0 z-[60] bg-[#00A2FF] backdrop-blur-md border-b border-white/10">
         <div className="px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-8">
@@ -180,7 +179,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* USER GRID (Aligned with Buttons) */}
+      {/* USER GRID */}
       <main className="px-4 pt-2 pb-24 bg-white">
         {loading && users.length === 0 ? (
           <div className="grid grid-cols-2 gap-1.5">

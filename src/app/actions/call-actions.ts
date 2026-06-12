@@ -1,4 +1,3 @@
-
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -7,7 +6,7 @@ import webpush from 'web-push';
 
 /**
  * @fileOverview Hardened Agora Token Generation and Billing Engine.
- * Optimized: Proactive balance checks and atomic per-minute deductions.
+ * Optimized: Consolidated billing and detailed history logging.
  */
 
 if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
@@ -135,7 +134,7 @@ export async function startCallAction(chatId: string, callerId: string, receiver
 
 export async function endCallAction(payload: {
   callId: string;
-  logReason?: 'Cancelled' | 'Rejected' | 'No Answer' | string;
+  logReason?: string;
   totalCost?: number;
   totalDiamonds?: number;
   partnerName?: string;
@@ -169,12 +168,13 @@ export async function endCallAction(payload: {
         timestamp 
       });
 
+      // CONSOLIDATED BILLING LOG
       if (payload.totalCost && payload.totalCost > 0) {
         await supabase.from('coin_history').insert({
           user_id: call.caller_id,
           amount: -payload.totalCost,
           type: 'call_cost',
-          description: `Call with ${payload.partnerName || 'User'}`,
+          description: `${call.type === 'video' ? 'Video' : 'Voice'} Call: ${payload.partnerName || 'User'}`,
           timestamp: Date.now()
         });
       }
@@ -184,7 +184,7 @@ export async function endCallAction(payload: {
           user_id: call.receiver_id,
           amount: payload.totalDiamonds,
           type: 'call_earning',
-          description: `Call from ${payload.partnerName || 'Admirer'}`,
+          description: `Received ${call.type === 'video' ? 'Video' : 'Voice'} Call`,
           timestamp: Date.now()
         });
       }
@@ -195,20 +195,13 @@ export async function endCallAction(payload: {
   }
 }
 
-/**
- * Hardened Coin Deduction for Active Calls.
- * Proactively checks balance BEFORE attempting atomic transaction.
- * If balance is even 1 coin less than required, it returns an error.
- */
 export async function deductCallCoinsAction(uid: string, type: 'video' | 'voice', partnerId: string) {
   const supabase = getSupabaseAdmin();
   try {
     const { data: user } = await supabase.from('users').select('is_admin, is_coin_seller, gender, name').eq('uid', uid).single();
-    if (user?.is_admin || user?.is_coin_seller) return { success: true };
+    if (user?.is_admin || user?.is_coin_seller) return { success: true, cost: 0, diamondReward: 0 };
 
     const cost = type === 'video' ? 150 : 70;
-    
-    // 1. Proactive Strict Balance Check
     const { data: bal } = await supabase.from('balances').select('coins').eq('user_id', uid).single();
     const currentCoins = Number(bal?.coins) || 0;
     
@@ -216,7 +209,6 @@ export async function deductCallCoinsAction(uid: string, type: 'video' | 'voice'
       return { success: false, error: "Insufficient Coins" };
     }
 
-    // 2. Atomic Transaction (Locked to fail if balance constraint is hit)
     const { error: deductError } = await supabase.rpc("increment_coins", { p_user_id: uid, p_amount: -cost });
     if (deductError) return { success: false, error: "Insufficient Coins" };
 
