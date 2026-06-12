@@ -111,7 +111,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
             </div>
             <div className="flex flex-wrap gap-2">
               <div className="bg-black text-white px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest">{profile.gender === 'female' ? '♀' : '♂'} • {age} Years</div>
-              <button onClick={handleCopyId} className="bg-gray-50 text-gray-500 px-4 py-1.5 rounded-full text-[11px] font-bold border border-gray-100 flex items-center gap-2">ID: {profile.match_flow_id} {idCopied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}</button>
+              <button onClick={handleCopyId} className="bg-gray-50 text-gray-500 px-4 py-1.5 rounded-full text-[11px] font-bold border border-gray-100 flex items-center gap-2">ID: {profile.match_flow_id} {idCopied ? <Check className="w-3 text-green-500" /> : <Copy className="w-3" />}</button>
             </div>
           </div>
 
@@ -141,7 +141,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
         </div>
       </div>
 
-      <div className="fixed bottom-0 inset-x-0 p-6 bg-white/90 backdrop-blur-xl border-t border-black/5 z-[60] pb-[env(safe-area-inset-bottom,24px)]">
+      <div className="fixed bottom-0 inset-x-0 p-6 bg-white/90 backdrop-blur-xl border-t border-black/5 z-[60] pb-[calc(env(safe-area-inset-bottom,24px)+16px)]">
         <Button className="w-full h-16 rounded-2xl bg-[#00A2FF] hover:bg-[#0081CC] text-white text-sm font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-blue-100" onClick={() => router.push(`/chats?startWith=${profile.uid}`)}><MessageSquare className="w-5 h-5 fill-white" /> Send Message</Button>
       </div>
 
