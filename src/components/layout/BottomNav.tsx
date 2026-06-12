@@ -1,4 +1,3 @@
-
 "use client"
 
 import Link from "next/link"
@@ -61,7 +60,7 @@ export function BottomNav() {
     { 
       label: "HOME", 
       icon: (active: boolean) => (
-        <svg className={cn("w-6 h-6", active ? "text-[#00A2FF] fill-[#00A2FF]" : "text-gray-300")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg className={cn("w-6 h-6", active ? "text-[#8B0000] fill-[#8B0000]" : "text-gray-300")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill={active ? "currentColor" : "none"} />
         </svg>
       ), 
@@ -70,7 +69,7 @@ export function BottomNav() {
     { 
       label: "CHAT", 
       icon: (active: boolean) => (
-        <MessageSquare className={cn("w-6 h-6", active ? "text-[#00A2FF]" : "text-gray-300")} strokeWidth={2.5} />
+        <MessageSquare className={cn("w-6 h-6", active ? "text-[#8B0000]" : "text-gray-300")} strokeWidth={2.5} />
       ), 
       href: "/chats", 
       badge: totalUnread 
@@ -78,7 +77,7 @@ export function BottomNav() {
     { 
       label: "ME", 
       icon: (active: boolean) => (
-        <User className={cn("w-6 h-6", active ? "text-[#00A2FF]" : "text-gray-300")} strokeWidth={2.5} />
+        <User className={cn("w-6 h-6", active ? "text-[#8B0000]" : "text-gray-300")} strokeWidth={2.5} />
       ), 
       href: "/profile" 
     },
@@ -101,14 +100,14 @@ export function BottomNav() {
             <div className="relative flex items-center justify-center">
               {item.icon(isActive)}
               {item.badge > 0 && (
-                <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-black min-w-[14px] h-3.5 rounded-full flex items-center justify-center border-2 border-white">
+                <div className="absolute -top-1 -right-1 bg-red-800 text-white text-[7px] font-black min-w-[14px] h-3.5 rounded-full flex items-center justify-center border-2 border-white">
                   {item.badge > 9 ? '9+' : item.badge}
                 </div>
               )}
             </div>
             <span className={cn(
               "text-[9px] font-black tracking-widest transition-colors", 
-              isActive ? "text-[#00A2FF]" : "text-gray-300"
+              isActive ? "text-[#8B0000]" : "text-gray-300"
             )}>
               {item.label}
             </span>

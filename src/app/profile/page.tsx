@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
@@ -117,7 +116,7 @@ export default function MePage() {
 
   return (
     <div className="flex-1 pb-24 bg-[#F8FAFC] min-h-screen relative select-none animate-in fade-in duration-300">
-      <div className="absolute top-0 left-0 w-full h-72 bg-gradient-to-b from-[#00A2FF] to-[#0081CC]" />
+      <div className="absolute top-0 left-0 w-full h-72 bg-gradient-to-b from-[#8B0000] to-[#5a0000]" />
       
       <div className="relative z-10">
         <header className="pt-12 pb-8 px-6 flex flex-col items-center text-center">
@@ -135,15 +134,15 @@ export default function MePage() {
               className="absolute -bottom-0.5 right-1.5 bg-white p-2 rounded-full shadow-xl active:scale-90 transition-transform border border-gray-50" 
               onClick={() => router.push('/edit-profile')}
             >
-              <Pencil className="w-3.5 h-3.5 text-[#00A2FF]" />
+              <Pencil className="w-3.5 h-3.5 text-[#8B0000]" />
             </button>
           </div>
           
           <div className="space-y-0.5">
             <h2 className="text-xl font-black text-white tracking-tight flex items-center justify-center gap-2">
               {profile?.name || "User"} 
-              {isVerified && <BadgeCheck className="w-4 h-4 text-white fill-[#00A2FF]" />}
-              {isAdmin && <Shield className="w-4 h-4 text-indigo-200 fill-current" />}
+              {isVerified && <BadgeCheck className="w-4 h-4 text-white fill-[#8B0000]" />}
+              {isAdmin && <Shield className="w-4 h-4 text-red-200 fill-current" />}
             </h2>
             <button 
               onClick={() => copyToClipboard(profile?.match_flow_id, setIdCopied)} 
@@ -161,10 +160,10 @@ export default function MePage() {
               className="group relative h-28 bg-white rounded-[2rem] shadow-lg flex flex-col items-center justify-center overflow-hidden border border-white active:scale-95 transition-all"
               onClick={() => router.push('/recharge')}
             >
-              <div className="absolute top-0 right-0 w-12 h-12 bg-[#00A2FF]/5 rounded-bl-[2rem]" />
+              <div className="absolute top-0 right-0 w-12 h-12 bg-[#8B0000]/5 rounded-bl-[2rem]" />
               <div className="flex items-center gap-2 mb-0.5">
-                <div className="p-1.5 bg-blue-50 rounded-lg group-hover:bg-[#00A2FF] group-hover:text-white transition-colors">
-                  <Coins className="w-4 h-4 text-[#00A2FF] group-hover:text-white" />
+                <div className="p-1.5 bg-red-50 rounded-lg group-hover:bg-[#8B0000] group-hover:text-white transition-colors">
+                  <Coins className="w-4 h-4 text-[#8B0000] group-hover:text-white" />
                 </div>
                 <span className="text-xl font-black text-black tracking-tighter">{coins.toLocaleString()}</span>
               </div>
@@ -175,10 +174,10 @@ export default function MePage() {
               className="group relative h-28 bg-white rounded-[2rem] shadow-lg flex flex-col items-center justify-center overflow-hidden border border-white active:scale-95 transition-all"
               onClick={() => router.push("/income")}
             >
-              <div className="absolute top-0 right-0 w-12 h-12 bg-purple-500/5 rounded-bl-[2rem]" />
+              <div className="absolute top-0 right-0 w-12 h-12 bg-red-500/5 rounded-bl-[2rem]" />
               <div className="flex items-center gap-2 mb-0.5">
-                <div className="p-1.5 bg-purple-50 rounded-lg group-hover:bg-purple-500 group-hover:text-white transition-colors">
-                  <Gem className="w-4 h-4 text-purple-500 group-hover:text-white" />
+                <div className="p-1.5 bg-red-50 rounded-lg group-hover:bg-red-800 group-hover:text-white transition-colors">
+                  <Gem className="w-4 h-4 text-red-800 group-hover:text-white" />
                 </div>
                 <span className="text-xl font-black text-black tracking-tighter">{Number(diamonds || 0).toFixed(0)}</span>
               </div>
@@ -212,14 +211,14 @@ export default function MePage() {
               <div className="bg-white rounded-[1.5rem] p-1.5 shadow-sm border border-slate-200/60 flex flex-col overflow-hidden">
                 {isAdmin && (
                   <>
-                    <RoleAction icon={Shield} color="bg-indigo-50 text-indigo-600" label="Authority Manager" href="/manage-roles" />
+                    <RoleAction icon={Shield} color="bg-red-50 text-red-900" label="Authority Manager" href="/manage-roles" />
                     <RoleAction icon={UserX} color="bg-red-50 text-red-600" label="Account Control" href="/manage-roles?tab=search" />
                     <RoleAction icon={Flag} color="bg-orange-50 text-orange-600" label="Report Queue" href="/manage-reports" />
                   </>
                 )}
                 {isMerchant && <RoleAction icon={Award} color="bg-yellow-50 text-yellow-600" label="Award Coins" href="/award-coins" />}
-                {isAgent && profile?.agency_id && <RoleAction icon={Briefcase} color="bg-purple-50 text-purple-600" label="Agency Center" href="/agency-manage" />}
-                {!isVerified && <RoleAction icon={UserCheck} color="bg-blue-50 text-[#00A2FF]" label="Verify Identity" href="/verify-identity" subtitle="Get Trusted Badge" />}
+                {isAgent && profile?.agency_id && <RoleAction icon={Briefcase} color="bg-red-50 text-red-800" label="Agency Center" href="/agency-manage" />}
+                {!isVerified && <RoleAction icon={UserCheck} color="bg-red-50 text-[#8B0000]" label="Verify Identity" href="/verify-identity" subtitle="Get Trusted Badge" />}
               </div>
             </section>
           )}
@@ -234,7 +233,7 @@ export default function MePage() {
                     <div className="h-16 flex items-center justify-between px-4 border-t border-slate-50">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center"><Briefcase className="w-5 h-5 text-slate-400" /></div>
-                        <div className="flex flex-col"><span className="font-black text-xs text-slate-900 uppercase">{isAgent ? "Agency Leader" : "Member"}</span><span className="text-[8px] font-bold text-[#00A2FF] uppercase">{profile.agency_status}</span></div>
+                        <div className="flex flex-col"><span className="font-black text-xs text-slate-900 uppercase">{isAgent ? "Agency Leader" : "Member"}</span><span className="text-[8px] font-bold text-[#8B0000] uppercase">{profile.agency_status}</span></div>
                       </div>
                       {!isAgent && (
                         <AlertDialog>
@@ -248,11 +247,11 @@ export default function MePage() {
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button variant="ghost" className="h-16 justify-between px-4 rounded-none group">
-                        <div className="flex items-center gap-4"><div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform"><UserPlus className="w-5 h-5 text-blue-600" /></div><span className="font-black text-xs tracking-tight text-slate-900">Join Agency</span></div>
+                        <div className="flex items-center gap-4"><div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform"><UserPlus className="w-5 h-5 text-red-900" /></div><span className="font-black text-xs tracking-tight text-slate-900">Join Agency</span></div>
                         <div className="w-7 h-7 bg-slate-50 rounded-full flex items-center justify-center"><ChevronRight className="w-3.5 h-3.5 text-slate-300" /></div>
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="rounded-[2.5rem] p-8 border-none shadow-2xl w-[90vw] max-w-sm"><DialogHeader><DialogTitle className="text-xl font-black tracking-tight uppercase text-center">Agency Portal</DialogTitle></DialogHeader><div className="space-y-4 py-4"><div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Invite Code</label><Input placeholder="5-digit code" value={agencyCode} onChange={(e) => setAgencyCode(e.target.value)} className="rounded-xl h-14 font-black text-lg text-center border-slate-100 bg-slate-50" /></div><Button onClick={handleJoinAgency} disabled={isProcessing || !agencyCode} className="w-full h-14 rounded-xl bg-[#00A2FF] font-black text-xs tracking-[0.1em] uppercase">Join Now</Button>{isAgent && !profile?.agency_id && (<div className="pt-6 border-t mt-4 space-y-4"><div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Establish New Agency</label><Input placeholder="Agency Name" value={agencyName} onChange={(e) => setAgencyName(e.target.value)} className="rounded-xl h-12 font-bold border-slate-100 bg-slate-50" /></div><Button onClick={handleCreateAgency} disabled={isProcessing || !agencyName} variant="outline" className="w-full h-14 rounded-xl border-purple-200 text-purple-600 font-black text-xs uppercase">Create Agency</Button></div>)}</div></DialogContent>
+                    <DialogContent className="rounded-[2.5rem] p-8 border-none shadow-2xl w-[90vw] max-w-sm"><DialogHeader><DialogTitle className="text-xl font-black tracking-tight uppercase text-center">Agency Portal</DialogTitle></DialogHeader><div className="space-y-4 py-4"><div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Invite Code</label><Input placeholder="5-digit code" value={agencyCode} onChange={(e) => setAgencyCode(e.target.value)} className="rounded-xl h-14 font-black text-lg text-center border-slate-100 bg-slate-50" /></div><Button onClick={handleJoinAgency} disabled={isProcessing || !agencyCode} className="w-full h-14 rounded-xl bg-[#8B0000] font-black text-xs tracking-[0.1em] uppercase">Join Now</Button>{isAgent && !profile?.agency_id && (<div className="pt-6 border-t mt-4 space-y-4"><div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Establish New Agency</label><Input placeholder="Agency Name" value={agencyName} onChange={(e) => setAgencyName(e.target.value)} className="rounded-xl h-12 font-bold border-slate-100 bg-slate-50" /></div><Button onClick={handleCreateAgency} disabled={isProcessing || !agencyName} variant="outline" className="w-full h-14 rounded-xl border-red-200 text-red-900 font-black text-xs uppercase">Create Agency</Button></div>)}</div></DialogContent>
                   </Dialog>
                 )}
               </div>
@@ -262,7 +261,7 @@ export default function MePage() {
           <section className="space-y-3 pb-20">
             <h3 className="text-[10px] font-black text-slate-400 tracking-[0.2em] ml-2 uppercase">Account</h3>
             <div className="bg-white rounded-[1.5rem] p-1.5 shadow-sm border border-slate-200/60 flex flex-col overflow-hidden">
-              <RoleAction icon={Headphones} color="bg-blue-50 text-blue-600" label="Support Center" href="/support" />
+              <RoleAction icon={Headphones} color="bg-red-50 text-red-800" label="Support Center" href="/support" />
               <RoleAction icon={Settings} color="bg-slate-50 text-slate-600" label="Settings" href="/settings" hideBorder />
             </div>
           </section>
@@ -289,7 +288,7 @@ function RoleAction({ icon: Icon, color, label, href, subtitle, hideBorder }: { 
         </div>
         <div className="flex flex-col items-start">
           <span className="font-black text-xs tracking-tight text-slate-900">{label}</span>
-          {subtitle && <span className="text-[8px] font-bold text-[#00A2FF] uppercase">{subtitle}</span>}
+          {subtitle && <span className="text-[8px] font-bold text-[#8B0000] uppercase">{subtitle}</span>}
         </div>
       </div>
       <div className="w-7 h-7 bg-slate-50 rounded-full flex items-center justify-center">

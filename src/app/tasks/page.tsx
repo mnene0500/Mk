@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -65,7 +64,7 @@ export default function TaskCenterPage() {
   }
 
   return (
-    <div className="flex-1 bg-blue-50 min-h-screen flex flex-col select-none animate-in fade-in duration-500">
+    <div className="flex-1 bg-red-50 min-h-screen flex flex-col select-none animate-in fade-in duration-500">
       <header className="px-4 h-16 flex items-center justify-between border-b bg-white sticky top-0 z-50 shadow-sm">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full text-black"><ChevronLeft className="w-6 h-6" /></Button>
         <h1 className="text-sm font-black text-black uppercase tracking-widest">Task Center</h1>
@@ -73,7 +72,7 @@ export default function TaskCenterPage() {
       </header>
 
       <main className="flex-1 p-6 space-y-8 overflow-y-auto no-scrollbar pb-32">
-        <div className="p-8 bg-[#00A2FF] rounded-[3rem] text-white shadow-xl relative overflow-hidden">
+        <div className="p-8 bg-[#8B0000] rounded-[3rem] text-white shadow-xl relative overflow-hidden">
           <Target className="absolute -right-4 -top-4 w-32 h-32 text-white/10" />
           <div className="relative z-10 space-y-1">
             <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-60">Quest Progress</p>
@@ -84,7 +83,7 @@ export default function TaskCenterPage() {
         <section className="space-y-4">
           <div className="flex items-center justify-between px-2">
             <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Daily Attendance</h3>
-            {hasCheckedInToday && <span className="text-[9px] font-black text-green-500 uppercase tracking-widest">Completed</span>}
+            {hasCheckedInToday && <span className="text-[9px] font-black text-green-600 uppercase tracking-widest">Completed</span>}
           </div>
           
           <div className="grid grid-cols-4 gap-3">
@@ -116,13 +115,13 @@ export default function TaskCenterPage() {
                 reward="+50 Coins" 
                 desc="Claim your verification reward" 
                 onClick={handleClaimVerification} 
-                color="text-green-500" 
+                color="text-green-600" 
               />
             )}
             {!profile?.is_verified && (
-              <TaskItem icon={ShieldCheck} title="Identity Check" reward="Trust Badge" desc="Verify your face with AI" onClick={() => router.push('/verify-identity')} color="text-[#00A2FF]" />
+              <TaskItem icon={ShieldCheck} title="Identity Check" reward="Trust Badge" desc="Verify your face with AI" onClick={() => router.push('/verify-identity')} color="text-[#8B0000]" />
             )}
-            <TaskItem icon={Gift} title="First Recharge" reward="Bonus Coins" desc="Make any purchase" onClick={() => router.push('/recharge')} color="text-pink-500" />
+            <TaskItem icon={Gift} title="First Recharge" reward="Bonus Coins" desc="Make any purchase" onClick={() => router.push('/recharge')} color="text-red-900" />
           </div>
         </section>
       </main>
@@ -137,7 +136,7 @@ function TaskItem({ icon: Icon, title, reward, desc, onClick, color }: any) {
         <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center shadow-inner"><Icon className={cn("w-6 h-6", color)} /></div>
         <div className="space-y-0.5"><p className="text-sm font-black text-black">{title}</p><p className="text-[10px] font-medium text-gray-400">{desc}</p></div>
       </div>
-      <div className="text-right"><p className="text-[9px] font-black text-[#00A2FF] uppercase tracking-tighter">{reward}</p></div>
+      <div className="text-right"><p className="text-[9px] font-black text-[#8B0000] uppercase tracking-tighter">{reward}</p></div>
     </div>
   )
 }

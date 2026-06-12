@@ -1,4 +1,3 @@
-
 "use client"
 
 import { use, useState, useEffect, useRef, useCallback } from "react"
@@ -78,7 +77,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
     } catch (e) { toast({ variant: "destructive", title: "Error" }) }
   }
 
-  if (loading) return <div className="fixed inset-0 bg-white flex items-center justify-center select-none z-[9999]"><h1 className="text-7xl font-logo font-black text-[#00A2FF] tracking-tight animate-pulse uppercase">QIVO</h1></div>
+  if (loading) return <div className="fixed inset-0 bg-white flex items-center justify-center select-none z-[9999]"><h1 className="text-7xl font-logo font-black text-[#8B0000] tracking-tight animate-pulse uppercase">QIVO</h1></div>
   if (!profile) return <div className="min-h-screen flex items-center justify-center p-8 text-black font-bold">Not found.</div>
 
   const age = Math.floor((Date.now() - new Date(profile.dob).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
@@ -108,7 +107,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-black text-black tracking-tight">{profile.name}</h1>
-              {profile.is_verified && <BadgeCheck className="w-6 h-6 text-[#00A2FF] fill-blue-50" />}
+              {profile.is_verified && <BadgeCheck className="w-6 h-6 text-[#8B0000] fill-red-50" />}
             </div>
             <div className="flex flex-wrap gap-2">
               <div className="bg-black text-white px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest">{profile.gender === 'female' ? '♀' : '♂'} • {age} Years</div>
@@ -117,7 +116,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
           </div>
 
           <section className="space-y-4">
-            <div className="flex items-center gap-2 text-gray-400 uppercase text-[10px] font-black tracking-widest ml-1"><Quote className="w-3 h-3 text-[#00A2FF]" /> About</div>
+            <div className="flex items-center gap-2 text-gray-400 uppercase text-[10px] font-black tracking-widest ml-1"><Quote className="w-3 h-3 text-[#8B0000]" /> About</div>
             <div className="bg-gray-50/50 p-6 rounded-[2rem] border border-black/5 italic text-gray-600 text-[13px] leading-relaxed">"{profile.interests || "No bio yet."}"</div>
           </section>
 
@@ -135,15 +134,15 @@ export default function UserDetailPage({ params }: { params: Promise<{ userId: s
           )}
 
           <div className="grid grid-cols-1 gap-2 pb-10">
-            <DetailItem icon={MapPin} label="Location" value={profile.country || "Global"} color="bg-blue-50 text-[#00A2FF]" />
-            <DetailItem icon={GraduationCap} label="Academic" value={profile.education_level || "Not specified"} color="bg-purple-50 text-purple-600" />
+            <DetailItem icon={MapPin} label="Location" value={profile.country || "Global"} color="bg-red-50 text-[#8B0000]" />
+            <DetailItem icon={GraduationCap} label="Academic" value={profile.education_level || "Not specified"} color="bg-red-50 text-red-950" />
             <DetailItem icon={Heart} label="Intentions" value={profile.looking_for || "Exploring"} color="bg-rose-50 text-rose-600" />
           </div>
         </div>
       </div>
 
       <div className="fixed bottom-0 inset-x-0 p-6 bg-white/90 backdrop-blur-xl border-t border-black/5 z-[60] pb-[calc(env(safe-area-inset-bottom,24px)+16px)]">
-        <Button className="w-full h-16 rounded-2xl bg-[#00A2FF] hover:bg-[#0081CC] text-white text-sm font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-blue-100" onClick={() => router.push(`/chats?startWith=${profile.uid}`)}><MessageSquare className="w-5 h-5 fill-white" /> Send Message</Button>
+        <Button className="w-full h-16 rounded-2xl bg-[#8B0000] hover:bg-[#5a0000] text-white text-sm font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-red-100" onClick={() => router.push(`/chats?startWith=${profile.uid}`)}><MessageSquare className="w-5 h-5 fill-white" /> Send Message</Button>
       </div>
 
       {selectedImage && (

@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
@@ -130,7 +129,7 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col w-full bg-white select-none min-h-screen">
-      <div className="bg-[#00A2FF] pt-5 pb-6 px-4">
+      <div className="bg-[#8B0000] pt-5 pb-6 px-4">
         <div className="grid grid-cols-2 gap-3 relative">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[100px] font-black text-white/10 pointer-events-none select-none italic tracking-tighter z-0">
             QIVO
@@ -138,7 +137,7 @@ export default function HomePage() {
 
           <button 
             onClick={() => router.push('/mystery-note')} 
-            className="relative z-10 h-32 bg-gradient-to-br from-blue-600 to-purple-600 rounded-[1.5rem] p-5 flex flex-col items-start justify-between text-white active:scale-95 transition-all border border-white/10 shadow-lg"
+            className="relative z-10 h-32 bg-gradient-to-br from-red-950 to-red-800 rounded-[1.5rem] p-5 flex flex-col items-start justify-between text-white active:scale-95 transition-all border border-white/10 shadow-lg"
           >
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
               <FileText className="w-5 h-5 text-white" />
@@ -148,7 +147,7 @@ export default function HomePage() {
 
           <button 
             onClick={() => router.push('/tasks')} 
-            className="relative z-10 h-32 bg-gradient-to-br from-orange-500 to-yellow-400 rounded-[1.5rem] p-5 flex flex-col items-start justify-between text-white active:scale-95 transition-all border border-white/10 shadow-lg"
+            className="relative z-10 h-32 bg-gradient-to-br from-orange-600 to-red-600 rounded-[1.5rem] p-5 flex flex-col items-start justify-between text-white active:scale-95 transition-all border border-white/10 shadow-lg"
           >
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
               <Target className="w-5 h-5 text-white" />
@@ -158,7 +157,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <div className="sticky top-0 z-[60] bg-[#00A2FF] backdrop-blur-md border-b border-white/10">
+      <div className="sticky top-0 z-[60] bg-[#8B0000] backdrop-blur-md border-b border-white/10">
         <div className="px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-8">
             {['Recommend', 'Nearby'].map((t) => (
@@ -220,7 +219,7 @@ export default function HomePage() {
                         e.stopPropagation();
                         router.push(`/chats?startWith=${u.uid}`);
                       }}
-                      className="bg-[#00A2FF] text-white text-[12px] font-black uppercase px-3 py-1.5 rounded-full shadow-lg border border-white/20 tracking-widest active:scale-90 transition-transform"
+                      className="bg-[#8B0000] text-white text-[12px] font-black uppercase px-3 py-1.5 rounded-full shadow-lg border border-white/20 tracking-widest active:scale-90 transition-transform"
                     >
                       CHAT
                     </button>
@@ -229,10 +228,10 @@ export default function HomePage() {
                   <div className="absolute bottom-3 left-4 right-4 text-white">
                     <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
                       <h4 className="font-semibold text-[15px] truncate leading-none tracking-tight">{u.name}</h4>
-                      {u.is_verified && <BadgeCheck className="w-4 h-4 text-[#00A2FF] fill-white shrink-0" />}
+                      {u.is_verified && <BadgeCheck className="w-4 h-4 text-[#8B0000] fill-white shrink-0" />}
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="bg-[#00D1FF] text-white px-1.5 py-0.5 rounded-md flex items-center justify-center min-w-[20px]">
+                      <div className="bg-[#B22222] text-white px-1.5 py-0.5 rounded-md flex items-center justify-center min-w-[20px]">
                         <span className="text-[10px] font-black">{calculateAge(u.dob)}</span>
                       </div>
                       <span className="text-[10px] font-black opacity-80 uppercase truncate tracking-widest">{u.country}</span>
@@ -245,7 +244,7 @@ export default function HomePage() {
         )}
         {(loadingMore || (loading && users.length > 0)) && (
           <div className="py-10 flex justify-center w-full">
-            <Loader2 className="w-5 h-5 animate-spin text-[#00A2FF]" />
+            <Loader2 className="w-5 h-5 animate-spin text-[#8B0000]" />
           </div>
         )}
       </main>

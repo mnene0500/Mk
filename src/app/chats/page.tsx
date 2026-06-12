@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, Suspense, useCallback, useRef } from "react"
@@ -276,9 +275,9 @@ function ChatsContent() {
 
   if (!startWithId) return (
     <div className="flex-1 bg-white min-h-screen relative select-none">
-      <header className="px-6 h-16 flex items-center border-b sticky top-0 bg-white/90 backdrop-blur-md z-50"><h1 className="text-2xl font-black text-[#00A2FF] tracking-tight">Chats</h1></header>
+      <header className="px-6 h-16 flex items-center border-b sticky top-0 bg-white/90 backdrop-blur-md z-50"><h1 className="text-2xl font-black text-[#8B0000] tracking-tight">Chats</h1></header>
       <main className="flex flex-col pb-24">
-        {loading ? (<div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#00A2FF]" /></div>) : summaries.length === 0 ? (<div className="flex flex-col items-center justify-center py-40 opacity-40 space-y-4"><MessageSquare className="w-12 h-12 text-gray-200" /><p className="uppercase font-black text-[10px] tracking-widest">No conversations</p></div>) : (
+        {loading ? (<div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#8B0000]" /></div>) : summaries.length === 0 ? (<div className="flex flex-col items-center justify-center py-40 opacity-40 space-y-4"><MessageSquare className="w-12 h-12 text-gray-200" /><p className="uppercase font-black text-[10px] tracking-widest">No conversations</p></div>) : (
           summaries.map(s => (
             <div key={s.id} onContextMenu={(e) => { e.preventDefault(); setChatToDelete(s.id); }} onClick={() => router.push(`/chats?startWith=${s.partner_id}`)} className="p-4 flex items-center gap-4 active:bg-gray-50 border-b border-gray-50 transition-colors cursor-pointer">
               <div 
@@ -286,11 +285,11 @@ function ChatsContent() {
                 onClick={(e) => { e.stopPropagation(); router.push(`/users/${s.partner_id}`); }}
               >
                 <Avatar className="w-14 h-14 border"><AvatarImage src={s.partner_photo} /><AvatarFallback>{s.partner_name[0]}</AvatarFallback></Avatar>
-                {s.unread_count > 0 && <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-sm">{s.unread_count}</div>}
+                {s.unread_count > 0 && <div className="absolute -top-1 -right-1 bg-red-800 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-sm">{s.unread_count}</div>}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between mb-1">
-                  <div className="flex items-center gap-1.5 min-w-0"><p className="text-sm font-black truncate">{s.partner_name}</p>{s.partner_is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#00A2FF] fill-blue-50" />}</div>
+                  <div className="flex items-center gap-1.5 min-w-0"><p className="text-sm font-black truncate">{s.partner_name}</p>{s.partner_is_verified && <BadgeCheck className="w-3.5 h-3.5 text-[#8B0000] fill-red-50" />}</div>
                   <span className="text-[9px] font-bold text-gray-300 uppercase shrink-0">{s.last_message_at ? format(s.last_message_at, "HH:mm") : ""}</span>
                 </div>
                 <p className="text-xs truncate text-gray-400 font-medium">{s.last_message}</p>
@@ -304,7 +303,7 @@ function ChatsContent() {
           <AlertDialogHeader><AlertDialogTitle className="font-black text-center uppercase tracking-tight">Delete Chat?</AlertDialogTitle></AlertDialogHeader>
           <AlertDialogFooter className="gap-3 mt-4">
             <AlertDialogCancel className="h-12 rounded-xl font-black text-[10px] uppercase tracking-widest border-none bg-gray-50">Keep</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { if (chatToDelete) { clearChatAction(currentUser!.id, chatToDelete); setSummaries(prev => prev.filter(s => s.id !== chatToDelete)); setChatToDelete(null); } }} className="h-12 rounded-xl bg-red-500 font-black text-[10px] uppercase tracking-widest border-none text-white shadow-lg shadow-red-100">Delete</AlertDialogAction>
+            <AlertDialogAction onClick={() => { if (chatToDelete) { clearChatAction(currentUser!.id, chatToDelete); setSummaries(prev => prev.filter(s => s.id !== chatToDelete)); setChatToDelete(null); } }} className="h-12 rounded-xl bg-red-900 font-black text-[10px] uppercase tracking-widest border-none text-white shadow-lg shadow-red-100">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -323,11 +322,11 @@ function ChatsContent() {
             <AvatarImage src={partner?.photo_url} />
             <AvatarFallback>{partner?.name?.[0]}</AvatarFallback>
           </Avatar>
-          <div className="min-w-0"><p className="font-black text-sm truncate text-black">{partner?.name || 'Loading...'}</p><p className="text-[8px] font-bold text-green-500 uppercase tracking-widest">Online</p></div>
+          <div className="min-w-0"><p className="font-black text-sm truncate text-black">{partner?.name || 'Loading...'}</p><p className="text-[8px] font-bold text-green-600 uppercase tracking-widest">Online</p></div>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" onClick={() => handleCall('voice')} className="rounded-full text-blue-500"><Phone className="w-5 h-5" /></Button>
-          <Button variant="ghost" size="icon" onClick={() => handleCall('video')} className="rounded-full text-blue-500"><Video className="w-5 h-5" /></Button>
+          <Button variant="ghost" size="icon" onClick={() => handleCall('voice')} className="rounded-full text-red-800"><Phone className="w-5 h-5" /></Button>
+          <Button variant="ghost" size="icon" onClick={() => handleCall('video')} className="rounded-full text-red-800"><Video className="w-5 h-5" /></Button>
         </div>
       </header>
 
@@ -342,7 +341,7 @@ function ChatsContent() {
 
           return (
             <div key={m.id} className={cn("max-w-[85%] flex flex-col gap-1", isMe ? "self-end items-end" : "self-start items-start")}>
-              <div className={cn("p-4 rounded-2xl text-sm font-medium shadow-sm flex flex-col gap-2", isMe ? "bg-[#00A2FF] text-white rounded-br-none" : "bg-white text-black rounded-bl-none border border-black/5")}>
+              <div className={cn("p-4 rounded-2xl text-sm font-medium shadow-sm flex flex-col gap-2", isMe ? "bg-[#8B0000] text-white rounded-br-none" : "bg-white text-black rounded-bl-none border border-black/5")}>
                 {m.image_url && (
                   <div className="relative aspect-square w-full min-w-[200px] rounded-xl overflow-hidden mb-2 cursor-pointer active:scale-95 transition-transform" onClick={() => setPreviewImage(m.image_url)}>
                     <Image src={m.image_url} alt="Shared Photo" fill className="object-cover" sizes="250px" />
@@ -352,7 +351,7 @@ function ChatsContent() {
               </div>
               {isMe && me?.has_read_receipts && (
                 <div className="flex items-center gap-1 px-1">
-                   {isSeen ? <CheckCheck className="w-3 h-3 text-blue-500" /> : <Check className="w-3 h-3 text-gray-300" />}
+                   {isSeen ? <CheckCheck className="w-3 h-3 text-red-800" /> : <Check className="w-3 h-3 text-gray-300" />}
                    <span className="text-[8px] font-black uppercase text-gray-400 tracking-widest">{isSeen ? 'Seen' : 'Sent'}</span>
                 </div>
               )}
@@ -370,7 +369,7 @@ function ChatsContent() {
       <footer className="p-4 border-t bg-white shrink-0 pb-[calc(env(safe-area-inset-bottom,20px)+8px)]">
         <div className="max-w-5xl mx-auto w-full space-y-4">
           {selectedImage && (
-            <div className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-[#00A2FF] animate-in zoom-in-95">
+            <div className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-[#8B0000] animate-in zoom-in-95">
               <Image src={selectedImage} alt="Preview" fill className="object-cover" />
               <button onClick={() => setSelectedImage(null)} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1"><X className="w-3 h-3" /></button>
             </div>
@@ -378,7 +377,7 @@ function ChatsContent() {
           
           <div className="flex items-center gap-2">
             <input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === 'Enter' && !isSending && handleSend()} className="flex-1 bg-gray-50 rounded-2xl px-4 py-3 outline-none font-medium text-sm border border-black/5" placeholder="Type message..." />
-            <Button onClick={handleSend} size="icon" disabled={(!newMessage.trim() && !selectedImage) || isSending} className="rounded-full h-12 w-12 bg-[#00A2FF] text-white shrink-0 shadow-lg active:scale-90 transition-all">
+            <Button onClick={handleSend} size="icon" disabled={(!newMessage.trim() && !selectedImage) || isSending} className="rounded-full h-12 w-12 bg-[#8B0000] text-white shrink-0 shadow-lg active:scale-90 transition-all">
               {isSending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             </Button>
           </div>
@@ -386,13 +385,13 @@ function ChatsContent() {
           <div className="flex items-center gap-6 px-1">
             <Sheet onOpenChange={(open) => !open && setLastGiftSent(null)}>
               <SheetTrigger asChild>
-                <button className="flex items-center gap-2 text-pink-500 active:scale-95 transition-transform"><Gift className="w-6 h-6" /><span className="text-[10px] font-black uppercase tracking-widest">Send Gift</span></button>
+                <button className="flex items-center gap-2 text-red-600 active:scale-95 transition-transform"><Gift className="w-6 h-6" /><span className="text-[10px] font-black uppercase tracking-widest">Send Gift</span></button>
               </SheetTrigger>
               <SheetContent side="bottom" className="rounded-t-[3rem] p-6 border-none bg-black text-white h-[70vh] flex flex-col overflow-hidden">
-                <SheetHeader className="shrink-0 mb-6"><div className="flex items-center justify-between px-4"><div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/5"><Coins className="w-3.5 h-3.5 text-yellow-500 fill-current" /><span className="text-xs font-black">{coins}</span></div><SheetTitle className="text-center font-black uppercase text-[10px] tracking-[0.2em] text-gray-400">Gifts</SheetTitle><Button onClick={() => router.push('/recharge')} variant="ghost" size="sm" className="h-8 rounded-full bg-[#00A2FF] text-white text-[9px] font-black uppercase px-4 shadow-lg shadow-blue-500/20"><PlusCircle className="w-3 h-3 mr-1" /> Top Up</Button></div></SheetHeader>
+                <SheetHeader className="shrink-0 mb-6"><div className="flex items-center justify-between px-4"><div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/5"><Coins className="w-3.5 h-3.5 text-yellow-500 fill-current" /><span className="text-xs font-black">{coins}</span></div><SheetTitle className="text-center font-black uppercase text-[10px] tracking-[0.2em] text-gray-400">Gifts</SheetTitle><Button onClick={() => router.push('/recharge')} variant="ghost" size="sm" className="h-8 rounded-full bg-[#8B0000] text-white text-[9px] font-black uppercase px-4 shadow-lg shadow-red-500/20"><PlusCircle className="w-3 h-3 mr-1" /> Top Up</Button></div></SheetHeader>
                 <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
                   {lastGiftSent ? (
-                    <div className="flex flex-col items-center justify-center p-8 space-y-6 animate-in zoom-in-95"><div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center text-5xl shadow-xl border border-white/5">{lastGiftSent.icon}</div><div className="text-center"><p className="text-lg font-black text-white uppercase tracking-tight">Gift Sent!</p></div><Button onClick={() => handleSendGift(lastGiftSent)} disabled={isSending} className="w-full h-14 rounded-full bg-pink-500 text-white font-black uppercase tracking-widest text-[10px] shadow-lg active:scale-95">{isSending ? <Loader2 className="animate-spin" /> : "Send One More"}</Button><Button variant="ghost" onClick={() => setLastGiftSent(null)} className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Send different</Button></div>
+                    <div className="flex flex-col items-center justify-center p-8 space-y-6 animate-in zoom-in-95"><div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center text-5xl shadow-xl border border-white/5">{lastGiftSent.icon}</div><div className="text-center"><p className="text-lg font-black text-white uppercase tracking-tight">Gift Sent!</p></div><Button onClick={() => handleSendGift(lastGiftSent)} disabled={isSending} className="w-full h-14 rounded-full bg-red-800 text-white font-black uppercase tracking-widest text-[10px] shadow-lg active:scale-95">{isSending ? <Loader2 className="animate-spin" /> : "Send One More"}</Button><Button variant="ghost" onClick={() => setLastGiftSent(null)} className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Send different</Button></div>
                   ) : (
                     <div className="grid grid-cols-3 gap-3">{GIFTS.map(g => (<button key={g.name} onClick={() => handleSendGift(g)} className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all border border-transparent hover:border-white/10 active:scale-95 group"><span className="text-3xl mb-2 group-hover:scale-110 transition-transform">{g.icon}</span><span className="text-[8px] font-black uppercase text-gray-400 truncate w-full text-center">{g.name}</span><div className="flex items-center gap-1 mt-1"><span className="text-[10px] font-bold text-yellow-500">{g.cost}</span><Coins className="w-2.5 h-2.5 text-yellow-500 fill-current" /></div></button>))}</div>
                   )}
@@ -400,14 +399,14 @@ function ChatsContent() {
               </SheetContent>
             </Sheet>
 
-            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 text-blue-500 active:scale-95 transition-transform"><ImageIcon className="w-6 h-6" /><span className="text-[10px] font-black uppercase tracking-widest">Share Photo</span></button>
+            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 text-red-900 active:scale-95 transition-transform"><ImageIcon className="w-6 h-6" /><span className="text-[10px] font-black uppercase tracking-widest">Share Photo</span></button>
             <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
           </div>
         </div>
       </footer>
 
       <div className={cn("fixed inset-0 z-[200] bg-white/80 backdrop-blur-2xl flex flex-col items-center justify-center p-10 text-center transition-all duration-500", isBlocked ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")}>
-           <div className="w-20 h-20 bg-red-50 rounded-[2.5rem] flex items-center justify-center mb-6 text-red-500 shadow-xl">
+           <div className="w-20 h-20 bg-red-50 rounded-[2.5rem] flex items-center justify-center mb-6 text-red-800 shadow-xl">
              <ShieldAlert className="w-10 h-10" />
            </div>
            <h3 className="text-xl font-black text-black tracking-tight uppercase">Interaction Blocked</h3>
@@ -427,6 +426,6 @@ function ChatsContent() {
 
 export default function ChatsPage() { 
   return (
-    <Suspense fallback={<div className="flex-1 flex items-center justify-center min-h-screen bg-white"><Loader2 className="w-8 h-8 animate-spin text-[#00A2FF]" /></div>}><ChatsContent /></Suspense> 
+    <Suspense fallback={<div className="flex-1 flex items-center justify-center min-h-screen bg-white"><Loader2 className="w-8 h-8 animate-spin text-[#8B0000]" /></div>}><ChatsContent /></Suspense> 
   );
 }

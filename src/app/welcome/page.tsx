@@ -60,7 +60,7 @@ export default function WelcomePage() {
           <h1 className="text-6xl font-logo font-black text-white drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)] tracking-tight">QIVO</h1>
           <div className="flex items-center justify-center gap-3">
              <div className="h-[1px] w-6 bg-white/20" />
-             <div className="w-1.5 h-1.5 bg-[#00A2FF] rounded-full animate-pulse" />
+             <div className="w-1.5 h-1.5 bg-[#8B0000] rounded-full animate-pulse" />
              <div className="h-[1px] w-6 bg-white/20" />
           </div>
         </div>
@@ -72,7 +72,7 @@ export default function WelcomePage() {
               onClick={() => router.push("/auth")}
               className="w-full h-20 rounded-[2.5rem] bg-white text-black hover:bg-white/90 font-black text-xs tracking-[0.2em] uppercase shadow-[0_20px_50px_rgba(255,255,255,0.1)] active:scale-95 transition-all"
             >
-              <Mail className="w-5 h-5 mr-3 text-[#00A2FF]" /> Continue with Email
+              <Mail className="w-5 h-5 mr-3 text-[#8B0000]" /> Continue with Email
             </Button>
 
             <Button 

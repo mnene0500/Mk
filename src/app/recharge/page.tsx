@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -93,12 +92,12 @@ export default function RechargePage() {
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full text-black"><ChevronLeft className="w-6 h-6" /></Button>
           <Dialog open={isCurrencyOpen} onOpenChange={setIsCurrencyOpen}>
-            <DialogTrigger asChild><Button variant="ghost" className="h-9 px-3 rounded-xl border border-gray-100 flex items-center gap-2 bg-gray-50"><Globe className="w-3.5 h-3.5 text-[#00A2FF]" /><span className="text-[10px] font-black uppercase">{currencyInfo.code}</span><ChevronDown className="w-3 h-3 text-gray-400" /></Button></DialogTrigger>
+            <DialogTrigger asChild><Button variant="ghost" className="h-9 px-3 rounded-xl border border-gray-100 flex items-center gap-2 bg-gray-50"><Globe className="w-3.5 h-3.5 text-[#8B0000]" /><span className="text-[10px] font-black uppercase">{currencyInfo.code}</span><ChevronDown className="w-3 h-3 text-gray-400" /></Button></DialogTrigger>
             <DialogContent className="rounded-[2.5rem] p-6 max-h-[80vh] border-none shadow-2xl">
               <DialogHeader><DialogTitle className="text-sm font-black uppercase text-center">Switch Currency</DialogTitle></DialogHeader>
               <div className="grid grid-cols-2 gap-2 mt-4 overflow-y-auto no-scrollbar">
                 {Object.keys(RATES).filter(k => k !== 'Default').map((country) => (
-                  <button key={country} onClick={() => { setManualCountry(country); setIsCurrencyOpen(false); }} className={cn("flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all", currentCountry === country ? "border-blue-500 bg-blue-50" : "border-gray-50 bg-gray-50")}><span className="text-[10px] font-black text-black">{country}</span></button>
+                  <button key={country} onClick={() => { setManualCountry(country); setIsCurrencyOpen(false); }} className={cn("flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all", currentCountry === country ? "border-red-800 bg-red-50" : "border-gray-50 bg-gray-50")}><span className="text-[10px] font-black text-black">{country}</span></button>
                 ))}
               </div>
             </DialogContent>
@@ -120,16 +119,16 @@ export default function RechargePage() {
           {PACKAGES.map((pkg) => {
             const hasBonus = pkg.bonus && bonusEligibility[pkg.id as keyof typeof bonusEligibility];
             return (
-              <button key={pkg.id} onClick={() => setSelectedId(pkg.id)} className={cn("relative flex flex-col items-center justify-center p-6 rounded-[2.5rem] border-4 transition-all h-44", selectedId === pkg.id ? "border-[#00A2FF] bg-white shadow-2xl shadow-blue-100 scale-105 z-10" : "border-transparent bg-gray-50/50 hover:bg-white")}>
+              <button key={pkg.id} onClick={() => setSelectedId(pkg.id)} className={cn("relative flex flex-col items-center justify-center p-6 rounded-[2.5rem] border-4 transition-all h-44", selectedId === pkg.id ? "border-[#8B0000] bg-white shadow-2xl shadow-red-100 scale-105 z-10" : "border-transparent bg-gray-50/50 hover:bg-white")}>
                 {pkg.popular && !hasBonus && <div className="absolute -top-3 px-3 py-1 bg-orange-500 text-white text-[8px] font-black uppercase rounded-full shadow-lg flex items-center gap-1"><Star className="w-2.5 h-2.5 fill-current" /> Best Value</div>}
                 {hasBonus && <div className="absolute -top-3 px-3 py-1 bg-pink-600 text-white text-[8px] font-black uppercase rounded-full shadow-lg flex items-center gap-1"><Gift className="w-2.5 h-2.5 fill-current" /> +{pkg.bonus} Bonus</div>}
                 
                 <div className="flex flex-col items-center gap-1 mb-3">
-                  <Coins className={cn("w-8 h-8 mb-1", selectedId === pkg.id ? "text-[#00A2FF] fill-current" : "text-yellow-500")} />
+                  <Coins className={cn("w-8 h-8 mb-1", selectedId === pkg.id ? "text-[#8B0000] fill-current" : "text-yellow-500")} />
                   <span className="text-xl font-black text-black leading-none">{(pkg.coins).toLocaleString()}</span>
                   <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Coins</span>
                 </div>
-                <span className={cn("text-[11px] font-black py-1.5 px-4 rounded-full", selectedId === pkg.id ? "bg-[#00A2FF] text-white" : "text-gray-400 bg-gray-100")}>{formatPrice(pkg.priceKes)}</span>
+                <span className={cn("text-[11px] font-black py-1.5 px-4 rounded-full", selectedId === pkg.id ? "bg-[#8B0000] text-white" : "text-gray-400 bg-gray-100")}>{formatPrice(pkg.priceKes)}</span>
               </button>
             )
           })}
@@ -145,7 +144,7 @@ export default function RechargePage() {
       </main>
 
       <footer className="fixed bottom-0 inset-x-0 p-6 bg-white/95 backdrop-blur-xl border-t border-black/5 z-[80] pb-[calc(env(safe-area-inset-bottom,24px)+8px)] shadow-[0_-10px_30px_rgba(0,0,0,0.04)]">
-        <Button onClick={handleRecharge} disabled={isProcessing || !selectedId} className="w-full h-16 rounded-full bg-[#00A2FF] text-white font-black tracking-widest text-sm shadow-xl active:scale-95 transition-all">
+        <Button onClick={handleRecharge} disabled={isProcessing || !selectedId} className="w-full h-16 rounded-full bg-[#8B0000] text-white font-black tracking-widest text-sm shadow-xl active:scale-95 transition-all">
           {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : <div className="flex items-center gap-2"><Zap className="w-4 h-4 fill-current text-yellow-300" /> Recharge {selectedPackage ? formatPrice(selectedPackage.priceKes) : ""}</div>}
         </Button>
       </footer>

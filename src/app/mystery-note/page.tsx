@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -88,7 +87,7 @@ export default function MysteryNotePage() {
   }
 
   return (
-    <div className="flex-1 bg-blue-50 min-h-screen flex flex-col select-none relative overflow-hidden animate-in fade-in duration-500">
+    <div className="flex-1 bg-red-50 min-h-screen flex flex-col select-none relative overflow-hidden animate-in fade-in duration-500">
       <header className="px-4 h-16 flex items-center justify-between bg-transparent z-50">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full text-black hover:bg-black/5">
           <ChevronLeft className="w-8 h-8" />
@@ -101,10 +100,10 @@ export default function MysteryNotePage() {
 
       <main className="flex-1 px-6 pt-4 pb-12 space-y-10 overflow-y-auto no-scrollbar relative z-[60]">
         <div className="space-y-2 px-2 text-center">
-          <div className="w-20 h-20 bg-[#00A2FF] rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-xl active:scale-90 transition-transform">
+          <div className="w-20 h-20 bg-[#8B0000] rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-xl active:scale-90 transition-transform">
              <Zap className="w-10 h-10 text-white fill-current" />
           </div>
-          <h1 className="text-4xl font-black text-black tracking-tighter leading-none uppercase italic">Message <span className="text-[#00A2FF]">Blast</span></h1>
+          <h1 className="text-4xl font-black text-black tracking-tighter leading-none uppercase italic">Message <span className="text-[#8B0000]">Blast</span></h1>
           <p className="text-[10px] font-black text-gray-400 tracking-[0.4em] uppercase">Targeted Global Transmission</p>
         </div>
 
@@ -125,7 +124,7 @@ export default function MysteryNotePage() {
                 placeholder="Broadcast your mood, a question, or a greeting..." 
                 value={message} 
                 onChange={(e) => setMessage(e.target.value)} 
-                className="bg-gray-50 rounded-[2.5rem] min-h-[180px] border-none text-slate-900 font-bold p-8 text-base shadow-inner focus-visible:ring-2 focus-visible:ring-[#00A2FF]/10 transition-all placeholder:text-slate-300 relative z-30" 
+                className="bg-gray-50 rounded-[2.5rem] min-h-[180px] border-none text-slate-900 font-bold p-8 text-base shadow-inner focus-visible:ring-2 focus-visible:ring-red-900/10 transition-all placeholder:text-slate-300 relative z-30" 
               />
             </div>
           </div>
@@ -141,7 +140,7 @@ export default function MysteryNotePage() {
                     className={cn(
                       "px-6 py-3 rounded-2xl font-black text-xs transition-all border active:scale-90",
                       recipientCount === n 
-                        ? "bg-[#00A2FF] text-white border-[#00A2FF] shadow-lg shadow-blue-200" 
+                        ? "bg-[#8B0000] text-white border-[#8B0000] shadow-lg shadow-red-200" 
                         : "bg-gray-50 text-gray-400 border-transparent hover:bg-gray-100"
                     )}
                   >

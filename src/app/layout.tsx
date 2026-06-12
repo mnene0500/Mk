@@ -1,4 +1,3 @@
-
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Inter, Pacifico } from 'next/font/google';
@@ -41,7 +40,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
-  themeColor: '#00A2FF',
+  themeColor: '#8B0000',
 };
 
 export default function RootLayout({
