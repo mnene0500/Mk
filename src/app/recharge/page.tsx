@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, Coins, ShieldCheck, Loader2, MessageSquare, ExternalLink, Zap, Check, History, Globe, ChevronDown, Star } from "lucide-react"
+import { ChevronLeft, Coins, ShieldCheck, Loader2, MessageSquare, ExternalLink, Zap, Check, History, Globe, ChevronDown, Star, Gift } from "lucide-react"
 import { useUser } from "@/firebase/auth/use-user"
 import { useToast } from "@/hooks/use-toast"
 import { initiatePesaPalPayment } from "@/app/actions/payment-actions"
@@ -15,9 +15,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 
 const PACKAGES = [
   { id: "p1", label: "500", coins: 500, priceKes: 80 },
-  { id: "p2", label: "1000", coins: 1000, priceKes: 120, popular: true },
+  { id: "p2", label: "1000", coins: 1000, priceKes: 120, popular: true, bonus: 50 },
   { id: "p8", label: "2000", coins: 2000, priceKes: 240 },
-  { id: "p3", label: "5000", coins: 5000, priceKes: 600 },
+  { id: "p3", label: "5000", coins: 5000, priceKes: 600, bonus: 100 },
   { id: "p4", label: "7000", coins: 7000, priceKes: 800 },
   { id: "p5", label: "10000", coins: 10000, priceKes: 1000 },
   { id: "p6", label: "15000", coins: 15000, priceKes: 1500 },
@@ -44,10 +44,28 @@ export default function RechargePage() {
   const [profile, setProfile] = useState<any>(null)
   const [manualCountry, setManualCountry] = useState<string | null>(null)
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false)
+  const [bonusEligibility, setBonusEligibility] = useState({ p2: true, p3: true })
 
   useEffect(() => {
     if (!user?.id) return
     supabase.from('users').select('country').eq('uid', user.id).single().then(({ data }) => setProfile(data))
+
+    const checkEligibility = async () => {
+      const { data } = await supabase
+        .from('processed_payments')
+        .select('amount')
+        .eq('user_id', user.id)
+        .in('amount', [120, 600]);
+      
+      if (data) {
+        const amounts = data.map(p => Number(p.amount));
+        setBonusEligibility({
+          p2: !amounts.includes(120),
+          p3: !amounts.includes(600)
+        });
+      }
+    };
+    checkEligibility();
   }, [user?.id])
 
   const currentCountry = manualCountry || profile?.country || 'Kenya'
@@ -99,17 +117,22 @@ export default function RechargePage() {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          {PACKAGES.map((pkg) => (
-            <button key={pkg.id} onClick={() => setSelectedId(pkg.id)} className={cn("relative flex flex-col items-center justify-center p-6 rounded-[2.5rem] border-4 transition-all h-44", selectedId === pkg.id ? "border-[#00A2FF] bg-white shadow-2xl shadow-blue-100 scale-105 z-10" : "border-transparent bg-gray-50/50 hover:bg-white")}>
-              {pkg.popular && <div className="absolute -top-3 px-3 py-1 bg-orange-500 text-white text-[8px] font-black uppercase rounded-full shadow-lg flex items-center gap-1"><Star className="w-2.5 h-2.5 fill-current" /> Best Value</div>}
-              <div className="flex flex-col items-center gap-1 mb-3">
-                <Coins className={cn("w-8 h-8 mb-1", selectedId === pkg.id ? "text-[#00A2FF] fill-current" : "text-yellow-500")} />
-                <span className="text-xl font-black text-black leading-none">{pkg.coins.toLocaleString()}</span>
-                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Coins</span>
-              </div>
-              <span className={cn("text-[11px] font-black py-1.5 px-4 rounded-full", selectedId === pkg.id ? "bg-[#00A2FF] text-white" : "text-gray-400 bg-gray-100")}>{formatPrice(pkg.priceKes)}</span>
-            </button>
-          ))}
+          {PACKAGES.map((pkg) => {
+            const hasBonus = pkg.bonus && bonusEligibility[pkg.id as keyof typeof bonusEligibility];
+            return (
+              <button key={pkg.id} onClick={() => setSelectedId(pkg.id)} className={cn("relative flex flex-col items-center justify-center p-6 rounded-[2.5rem] border-4 transition-all h-44", selectedId === pkg.id ? "border-[#00A2FF] bg-white shadow-2xl shadow-blue-100 scale-105 z-10" : "border-transparent bg-gray-50/50 hover:bg-white")}>
+                {pkg.popular && !hasBonus && <div className="absolute -top-3 px-3 py-1 bg-orange-500 text-white text-[8px] font-black uppercase rounded-full shadow-lg flex items-center gap-1"><Star className="w-2.5 h-2.5 fill-current" /> Best Value</div>}
+                {hasBonus && <div className="absolute -top-3 px-3 py-1 bg-pink-600 text-white text-[8px] font-black uppercase rounded-full shadow-lg flex items-center gap-1"><Gift className="w-2.5 h-2.5 fill-current" /> +{pkg.bonus} Bonus</div>}
+                
+                <div className="flex flex-col items-center gap-1 mb-3">
+                  <Coins className={cn("w-8 h-8 mb-1", selectedId === pkg.id ? "text-[#00A2FF] fill-current" : "text-yellow-500")} />
+                  <span className="text-xl font-black text-black leading-none">{(pkg.coins).toLocaleString()}</span>
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Coins</span>
+                </div>
+                <span className={cn("text-[11px] font-black py-1.5 px-4 rounded-full", selectedId === pkg.id ? "bg-[#00A2FF] text-white" : "text-gray-400 bg-gray-100")}>{formatPrice(pkg.priceKes)}</span>
+              </button>
+            )
+          })}
         </div>
 
         <Button onClick={() => router.push('/coin-sellers')} variant="ghost" className="w-full h-20 rounded-[2.5rem] bg-black mt-8 flex items-center justify-between px-8 text-white font-bold shadow-2xl">

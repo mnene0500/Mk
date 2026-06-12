@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 
 /**
  * @fileOverview Production PesaPal V3 Integration.
- * Strictly uses Vercel environment variables for gateway credentials.
+ * Optimized: Exact coin mapping and one-time first purchase bonuses.
  */
 
 const PESAPAL_BASE_URL = "https://pay.pesapal.com/v3";
@@ -99,10 +99,10 @@ export async function verifyPaymentAction(orderTrackingId: string, merchantRefer
       const { data: pending } = await supabase.from('pending_payments').select('*').eq('order_id', merchantReference).single();
       if (!pending) throw new Error("Payment record matching this reference not found.");
 
-      let coins = 0;
       const amt = Number(pending.amount);
+      let coins = 0;
       
-      // MAPPING LOGIC
+      // EXACT MAPPING LOGIC
       if (amt === 80) coins = 500;
       else if (amt === 120) coins = 1000;
       else if (amt === 240) coins = 2000;
@@ -112,6 +112,20 @@ export async function verifyPaymentAction(orderTrackingId: string, merchantRefer
       else if (amt === 1500) coins = 15000;
       else if (amt === 2000) coins = 20000;
       else coins = Math.floor(amt * 8.33);
+
+      // FIRST TIME BONUS CHECK
+      const { data: previous } = await supabase
+        .from('processed_payments')
+        .select('id')
+        .eq('user_id', pending.user_id)
+        .eq('amount', amt)
+        .limit(1)
+        .maybeSingle();
+
+      if (!previous) {
+        if (amt === 120) coins += 50; // 1000 Package
+        if (amt === 600) coins += 100; // 5000 Package
+      }
 
       const { error: rpcErr } = await supabase.rpc("increment_coins", { p_user_id: pending.user_id, p_amount: coins });
       if (rpcErr) throw rpcErr;
