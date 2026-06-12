@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input"
 import { createAgencyAction, joinAgencyAction, leaveAgencyAction } from "@/app/actions/matchflow-actions"
 import { useBalance } from "@/lib/providers/BalanceProvider"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alertDialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { cn } from "@/lib/utils"
 
 let cachedProfile: any = null;
@@ -112,7 +112,6 @@ export default function MePage() {
   const isEligibleForAgency = profile?.gender === 'female' && profile?.country === 'Kenya' && isVerified
   const isAgencyMember = profile?.agency_status === 'approved'
   
-  // Use metadata fallback to prevent "flicker"
   const displayPhoto = profile?.photo_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || "";
   const cacheBust = profile?.updated_at ? new Date(profile.updated_at).getTime() : Date.now()
 
