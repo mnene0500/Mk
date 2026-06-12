@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast"
 
 /**
  * @fileOverview Hardened Video/Voice Call Screen.
- * Optimized: Fixed camera switcher and ringtone integration.
+ * Fixed: Video flip removed (no mirroring), ringtone sync improved.
  */
 export default function CallPage({ params }: { params: Promise<{ chatId: string }> }) {
   const { chatId } = use(params)
@@ -70,11 +70,11 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
     }
   }, [])
 
-  // MANAGE RINGTONE PLAYBACK
+  // MANAGE RINGTONE PLAYBACK (Stop when connected)
   useEffect(() => {
     if (isRinging && !remoteUser && joined) {
       ringtoneRef.current?.play().catch(() => {
-        console.warn("Autoplay blocked: user interaction required for ringtone.")
+        console.warn("Autoplay blocked: interaction required for ringtone.")
       })
     } else {
       ringtoneRef.current?.pause()
@@ -296,7 +296,7 @@ export default function CallPage({ params }: { params: Promise<{ chatId: string 
           "absolute transition-all duration-500 overflow-hidden border-2 border-white/20 shadow-2xl z-20", 
           remoteUser ? "top-12 right-6 w-32 aspect-[3/4] rounded-3xl" : "inset-0 rounded-none z-[5]"
         )}>
-          <div ref={localVideoRef} className={cn("w-full h-full bg-zinc-800", (cameraOff || !rtc.current.localVideoTrack) && "opacity-0", facingMode === 'user' && "scale-x-[-1]")} />
+          <div ref={localVideoRef} className={cn("w-full h-full bg-zinc-800", (cameraOff || !rtc.current.localVideoTrack) && "opacity-0")} />
           {(cameraOff || !rtc.current.localVideoTrack) && (
             <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/80 backdrop-blur-md">
                <VideoOff className="w-8 h-8 text-white/20" />
