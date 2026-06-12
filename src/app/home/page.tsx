@@ -123,13 +123,13 @@ export default function HomePage() {
       <div className="bg-blue-50/50 pt-8 pb-6 px-4">
         <div className="grid grid-cols-2 gap-3 relative">
           {/* QIVO STAMP (Subtle) */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[120px] font-black text-blue-200/10 pointer-events-none select-none italic tracking-tighter z-0">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[100px] font-black text-blue-200/10 pointer-events-none select-none italic tracking-tighter z-0">
             QIVO
           </div>
 
           <button 
             onClick={() => router.push('/mystery-note')} 
-            className="relative z-10 aspect-square bg-gradient-to-br from-blue-600 to-blue-500 rounded-[1.8rem] p-5 flex flex-col items-start justify-between text-white active:scale-95 transition-all shadow-xl shadow-blue-200/40"
+            className="relative z-10 h-32 bg-gradient-to-br from-blue-600 to-blue-500 rounded-[1.5rem] p-5 flex flex-col items-start justify-between text-white active:scale-95 transition-all shadow-xl shadow-blue-200/40"
           >
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
               <FileText className="w-5 h-5 text-white" />
@@ -139,7 +139,7 @@ export default function HomePage() {
 
           <button 
             onClick={() => router.push('/tasks')} 
-            className="relative z-10 aspect-square bg-gradient-to-br from-purple-600 to-fuchsia-500 rounded-[1.8rem] p-5 flex flex-col items-start justify-between text-white active:scale-95 transition-all shadow-xl shadow-purple-200/40"
+            className="relative z-10 h-32 bg-gradient-to-br from-purple-600 to-fuchsia-500 rounded-[1.5rem] p-5 flex flex-col items-start justify-between text-white active:scale-95 transition-all shadow-xl shadow-purple-200/40"
           >
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
               <Target className="w-5 h-5 text-white" />
@@ -183,7 +183,7 @@ export default function HomePage() {
       <main className="px-3 pt-6 pb-24 bg-white">
         {loading && users.length === 0 ? (
           <div className="grid grid-cols-2 gap-3">
-            {[1,2,3,4].map(i => <div key={i} className="aspect-[3/4] bg-gray-50 rounded-[1.2rem] animate-pulse" />)}
+            {[1,2,3,4].map(i => <div key={i} className="aspect-[4/5] bg-gray-50 rounded-[1.2rem] animate-pulse" />)}
           </div>
         ) : users.length === 0 ? (
           <div className="py-40 text-center opacity-40 uppercase font-black text-[10px] tracking-widest">No profiles found</div>
@@ -192,7 +192,7 @@ export default function HomePage() {
             {users.map((u) => {
               if (!u) return null;
               return (
-                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[3/4] rounded-[1.2rem] shadow-md active:scale-[0.98] transition-all" onClick={() => router.push(`/users/${u.uid}`)}>
+                <Card key={u.uid} className="relative overflow-hidden border-none aspect-[4/5] rounded-[1.2rem] shadow-md active:scale-[0.98] transition-all" onClick={() => router.push(`/users/${u.uid}`)}>
                   <Image src={u.photo_url} alt={u.name} fill className="object-cover" sizes="50vw" priority />
                   
                   {/* OVERLAY GRADIENT */}
@@ -200,7 +200,7 @@ export default function HomePage() {
                   
                   {/* CHAT BADGE */}
                   <div className="absolute top-3 right-3 z-10">
-                    <div className="bg-[#00A2FF] text-white text-[8px] font-black uppercase px-3 py-1.5 rounded-full shadow-lg border border-white/20 tracking-widest">
+                    <div className="bg-[#00A2FF] text-white text-[12px] font-black uppercase px-3 py-1.5 rounded-full shadow-lg border border-white/20 tracking-widest">
                       CHAT
                     </div>
                   </div>
