@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Premium Social Experience",
     start_url: "/",
     scope: "/",
-    id: "/",
+    id: "qivo-pwa-v1-production",
     display: "standalone",
     background_color: "#ffffff",
     theme_color: "#8B0000",
@@ -31,6 +31,21 @@ export default function manifest(): MetadataRoute.Manifest {
         type: "image/png",
         purpose: "any"
       }
-    ]
+    ],
+    shortcuts: [
+      {
+        name: "Chats",
+        url: "/chats",
+        description: "Open your direct messages",
+        icons: [{ src: "/icon-192.png", sizes: "192x192" }]
+      },
+      {
+        name: "Recharge",
+        url: "/recharge",
+        description: "Buy coins and gifts",
+        icons: [{ src: "/icon-192.png", sizes: "192x192" }]
+      }
+    ],
+    categories: ["social", "entertainment"]
   }
 }
