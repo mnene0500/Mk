@@ -23,13 +23,29 @@ export default function PlayBillingRechargePage() {
   const product = PLAY_PRODUCTS[packageId] || PLAY_PRODUCTS.p1
   const packageName = process.env.NEXT_PUBLIC_GOOGLE_PLAY_PACKAGE_NAME || "com.example.qivo"
 
+  const PLAY_PRICE_OVERRIDES: Record<string, number> = {
+    // SKU => Play Billing price (KES)
+    qivo_coins_500: 100,
+    qivo_coins_1000: 200,
+    qivo_coins_2000: 300,
+    qivo_coins_5000: 800,
+    qivo_coins_7000: 1000,
+    qivo_coins_10000: 1500,
+    qivo_coins_15000: 1800,
+    qivo_coins_20000: 2500,
+  }
+
+  const playPriceKes = PLAY_PRICE_OVERRIDES[product.sku] ?? Math.ceil(product.priceKes * 1.25 / 10) * 10
+
   const playBillingInstructions = useMemo(() => {
-    return [`
+    return [
+      `
       Google Play Billing must be implemented in your Android native app.
       On Google Play, create a managed product with SKU ${product.sku}.
       In the native app, launch the Play Billing flow for that product.
       After purchase, send the Android purchase token to your backend at /api/play-billing/verify.
-    `],
+    `,
+    ]
   }, [product.sku])
 
   return (
@@ -51,7 +67,7 @@ export default function PlayBillingRechargePage() {
             <p className="font-semibold">Selected package:</p>
             <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4">
               <p className="text-xl font-black">{product.coins.toLocaleString()} Coins</p>
-              <p className="text-sm text-gray-500">Price: KES {product.priceKes}</p>
+              <p className="text-sm text-gray-500">Price: KES {product.priceKes} — <span className="font-semibold">Play Billing: KES {playPriceKes}</span></p>
               <p className="text-sm text-gray-500">Play Store SKU: <span className="font-semibold">{product.sku}</span></p>
             </div>
 
@@ -80,7 +96,7 @@ export default function PlayBillingRechargePage() {
               Back to Recharge
             </Button>
             <Button variant="ghost" className="w-full h-16 rounded-full border border-gray-200 text-black font-black uppercase tracking-widest text-sm">
-              Open Android App to Purchase
+              Open Android App to Purchase — KES {playPriceKes}
             </Button>
           </div>
         </div>

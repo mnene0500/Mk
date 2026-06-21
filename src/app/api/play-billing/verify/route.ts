@@ -13,6 +13,17 @@ const PLAY_BILLING_PRODUCTS: Record<string, { sku: string; coins: number; priceK
   p7: { sku: "qivo_coins_20000", coins: 20000, priceKes: 2000 }
 }
 
+const PLAY_PRICE_OVERRIDES: Record<string, number> = {
+  qivo_coins_500: 100,
+  qivo_coins_1000: 200,
+  qivo_coins_2000: 300,
+  qivo_coins_5000: 800,
+  qivo_coins_7000: 1000,
+  qivo_coins_10000: 1500,
+  qivo_coins_15000: 1800,
+  qivo_coins_20000: 2500,
+}
+
 function getGoogleAuth() {
   const serviceAccountJson = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_KEY
   const packageName = process.env.GOOGLE_PLAY_PACKAGE_NAME
@@ -63,6 +74,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Purchase not completed." }, { status: 400 })
     }
 
+    // Verify the amount paid matches the expected Play Billing price for this SKU.
+    const playPriceKes = PLAY_PRICE_OVERRIDES[packageConfig.sku] ?? Math.ceil(packageConfig.priceKes * 1.25 / 10) * 10
+
+    // Google Play reports price in micros (1,000,000 micros = 1 unit of currency).
+    const priceAmountMicros = (purchase.data as any).priceAmountMicros || (purchase.data as any).priceAmountMicros
+    let paidKes: number | null = null
+    if (priceAmountMicros) {
+      const micros = Number(priceAmountMicros)
+      if (!Number.isFinite(micros)) {
+        console.warn("Unable to parse priceAmountMicros from Google Play purchase", priceAmountMicros)
+      } else {
+        paidKes = Math.round(micros / 1_000_000)
+      }
+    }
+
+    if (paidKes !== null) {
+      if (paidKes !== playPriceKes) {
+        console.warn(`Play Billing price mismatch for token ${purchaseToken}: paid ${paidKes} KES, expected ${playPriceKes} KES`)
+        return NextResponse.json({ success: false, error: `Paid amount ${paidKes} KES does not match expected price ${playPriceKes} KES.` }, { status: 400 })
+      }
+    }
+
     const supabase = getSupabaseAdmin()
     const { data: existing } = await supabase
       .from("processed_payments")
@@ -79,12 +112,13 @@ export async function POST(request: Request) {
       console.error("Google Play Billing credit error", rpcErr)
       return NextResponse.json({ success: false, error: "Unable to credit coins." }, { status: 500 })
     }
+    
 
     await Promise.all([
       supabase.from("processed_payments").insert({
         order_tracking_id: purchaseToken,
         user_id: userId,
-        amount: packageConfig.priceKes,
+        amount: paidKes ?? playPriceKes,
         coins: packageConfig.coins,
         payment_method: "Play Billing"
       }),
@@ -92,7 +126,7 @@ export async function POST(request: Request) {
         user_id: userId,
         amount: packageConfig.coins,
         type: "purchase",
-        description: `Google Play Billing Top-up: ${packageConfig.priceKes} KES`,
+        description: `Google Play Billing Top-up: ${paidKes ?? playPriceKes} KES`,
         timestamp: Date.now()
       })
     ])
