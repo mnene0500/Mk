@@ -163,11 +163,8 @@ export default function RechargePage() {
           <Button onClick={handlePesaPalRecharge} disabled={isProcessing || !selectedId} className="w-full h-16 rounded-full bg-[#8B0000] text-white font-black tracking-widest text-sm shadow-xl active:scale-95 transition-all">
             {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : <div className="flex items-center gap-2"><Zap className="w-4 h-4 fill-current text-yellow-300" /> Pay with PesaPal</div>}
           </Button>
-          <Button onClick={handlePlayBillingRecharge} disabled={isPlayBillingProcessing || !selectedId} className="w-full h-16 rounded-full bg-white border border-black text-black font-black tracking-widest text-sm shadow-xl active:scale-95 transition-all">
-            {isPlayBillingProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 fill-current text-yellow-300" /> Pay with Play Billing</div>}
-          </Button>
           <Button onClick={() => router.push(selectedPackage ? `/coin-sellers?selectedPackage=${selectedPackage.label}&amount=${selectedPackage.coins}` : '/coin-sellers')} className="w-full h-16 rounded-full bg-black text-white font-black tracking-widest text-sm shadow-xl active:scale-95 transition-all">
-            <div className="flex items-center gap-2"><MessageSquare className="w-4 h-4 fill-current text-yellow-300" /> Pay with Coinseller</div>
+            <div className="flex items-center gap-2"><MessageSquare className="w-4 h-4 fill-current text-yellow-300" /> Pay to Coinseller</div>
           </Button>
         </div>
         {!isPesaPalCountry && selectedPackage && (
