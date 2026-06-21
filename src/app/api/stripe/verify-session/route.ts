@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
-const stripeSecret = process.env.STRIPE_SECRET_KEY;
-if (!stripeSecret) {
-  throw new Error("Missing STRIPE_SECRET_KEY in environment.");
+function getStripe() {
+  const stripeSecret = process.env.STRIPE_SECRET_KEY;
+  if (!stripeSecret) {
+    throw new Error("Missing STRIPE_SECRET_KEY in environment.");
+  }
+  return new Stripe(stripeSecret, { apiVersion: "2023-11-15" });
 }
-const stripe = new Stripe(stripeSecret, { apiVersion: "2023-11-15" });
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -16,6 +18,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const stripe = getStripe();
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ["payment_intent"]
     });

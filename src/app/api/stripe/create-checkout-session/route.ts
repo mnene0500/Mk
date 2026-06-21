@@ -2,19 +2,15 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
-const stripeSecret = process.env.STRIPE_SECRET_KEY;
-const stripePublishable = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://qivo10.vercel.app";
 
-if (!stripeSecret) {
-  throw new Error("Missing STRIPE_SECRET_KEY in environment.");
+function getStripe() {
+  const stripeSecret = process.env.STRIPE_SECRET_KEY;
+  if (!stripeSecret) {
+    throw new Error("Missing STRIPE_SECRET_KEY in environment.");
+  }
+  return new Stripe(stripeSecret, { apiVersion: "2023-11-15" });
 }
-
-if (!stripePublishable) {
-  throw new Error("Missing NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY in environment.");
-}
-
-const stripe = new Stripe(stripeSecret, { apiVersion: "2023-11-15" });
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -35,6 +31,7 @@ export async function POST(request: Request) {
     );
   }
 
+  const stripe = getStripe();
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ["card"],
     line_items: [

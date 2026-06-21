@@ -4,19 +4,25 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const runtime = "edge";
 
-const stripeSecret = process.env.STRIPE_SECRET_KEY;
-const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-if (!stripeSecret) {
-  throw new Error("Missing STRIPE_SECRET_KEY in environment.");
-}
-if (!stripeWebhookSecret) {
-  throw new Error("Missing STRIPE_WEBHOOK_SECRET in environment.");
+function getStripe() {
+  const stripeSecret = process.env.STRIPE_SECRET_KEY;
+  if (!stripeSecret) {
+    throw new Error("Missing STRIPE_SECRET_KEY in environment.");
+  }
+  return new Stripe(stripeSecret, { apiVersion: "2023-11-15" });
 }
 
-const stripe = new Stripe(stripeSecret, { apiVersion: "2023-11-15" });
+function getWebhookSecret() {
+  const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!stripeWebhookSecret) {
+    throw new Error("Missing STRIPE_WEBHOOK_SECRET in environment.");
+  }
+  return stripeWebhookSecret;
+}
 
 export async function POST(request: Request) {
+  const stripe = getStripe();
+  const stripeWebhookSecret = getWebhookSecret();
   const payload = await request.text();
   const signature = request.headers.get("stripe-signature");
 
